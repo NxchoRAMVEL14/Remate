@@ -1,0 +1,138 @@
+/* Remate · estilos propios de cada pantalla */
+
+.two { display: grid; gap: 22px; grid-template-columns: 1fr; align-items: start; }
+@media (min-width: 820px) { .two { grid-template-columns: 1fr 1fr; } }
+
+/* Cifras del grupo */
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.kpi { background: var(--surface); border-radius: var(--r-m); padding: 12px 14px; }
+.kpi .n { display: block; font-family: var(--font-display); font-weight: 900; font-size: 2.3rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.kpi .l { color: var(--ink-2); font-size: .85rem; }
+
+/* Próximo entrenamiento */
+.next h2 { font-size: 2.2rem; margin: 2px 0 6px; }
+.next .when { font-weight: 700; opacity: .92; }
+.next .chip { background: rgba(255,255,255,.18); color: #fff; }
+.next .cluster { margin-top: 12px; position: relative; z-index: 1; }
+.next .btn:not(.ball) { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.4); color: #fff; }
+.next .btn:not(.ball):hover { background: rgba(255,255,255,.22); border-color: #fff; }
+
+/* Distribución por nivel */
+.dist { display: grid; gap: 8px; }
+.dist-row { display: grid; grid-template-columns: 34px 1fr 28px; gap: 10px; align-items: center; }
+.dist-row .name { font-weight: 700; }
+.dist-row .name small { display: block; font-weight: 400; color: var(--ink-2); font-size: .8rem; }
+.dist-row .count { text-align: right; font-family: var(--font-display); font-weight: 800; font-size: 1.3rem; }
+
+/* Habilidades de un jugador */
+.skill { display: grid; gap: 4px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.skill:last-child { border-bottom: 0; }
+.skill .head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.skill .phase { color: var(--ink-2); font-size: .9rem; }
+
+/* Plan de un entrenamiento */
+.blocks { background: var(--surface); border-radius: var(--r-m); overflow: hidden; }
+.block { display: grid; grid-template-columns: 34px 1fr auto; gap: 4px 12px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.block:last-child { border-bottom: 0; }
+.block .i { font-family: var(--font-display); font-weight: 900; font-size: 1.6rem; color: var(--court); text-align: center; line-height: 1; }
+.block .t { min-width: 0; display: grid; gap: 2px; }
+.block .t a, .block .t strong { font-weight: 700; color: var(--ink); text-decoration: none; }
+.block .t a:hover { text-decoration: underline; }
+.block .ctl { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; justify-content: flex-end; }
+.block .ctl .iconbtn { width: 38px; height: 38px; }
+.block .mins { width: 64px; min-height: 40px; text-align: center; padding: 4px; }
+.block .bnote { grid-column: 2 / -1; color: var(--ink-2); font-size: .9rem; }
+.balance { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* Escalera de niveles */
+.ladder { display: grid; gap: 10px; }
+.lv-item { background: var(--surface); border-radius: var(--r-l); overflow: hidden; border: 2px solid transparent; }
+.lv-item.now { border-color: var(--ball); }
+.lv-item summary { display: flex; align-items: center; gap: 14px; padding: 14px 16px; cursor: pointer; list-style: none; min-height: 64px; }
+.lv-item summary::-webkit-details-marker { display: none; }
+.lv-item summary .big { font-family: var(--font-display); font-weight: 900; font-size: 2.6rem; line-height: .9; color: var(--court); min-width: 30px; text-align: center; }
+.lv-item.now summary .big { color: var(--ink); background: var(--ball); border-radius: 10px; padding: 4px 8px; }
+.lv-item summary .tt { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.lv-item summary .tt strong { font-family: var(--font-display); font-size: 1.35rem; font-weight: 800; }
+.lv-item summary .tt span { color: var(--ink-2); font-size: .9rem; }
+.lv-item[open] summary .chev { transform: rotate(90deg); }
+.lv-item summary .chev { transition: transform .15s; color: var(--ink-2); }
+.lv-body { padding: 4px 16px 18px; display: grid; gap: 16px; }
+.lv-body h3 { margin-bottom: 6px; }
+.lv-body ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.profile { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px 18px; }
+.profile div { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.avatars { display: flex; gap: 6px; flex-wrap: wrap; }
+.avatars a { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; background: var(--surface-2); color: var(--ink); border-radius: 999px; padding: 3px 12px 3px 3px; font-size: .9rem; font-weight: 700; }
+
+/* Retos */
+.reto { display: grid; gap: 6px; padding: 14px; border-bottom: 1px solid var(--line); }
+.reto:last-child { border-bottom: 0; }
+.reto .head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.reto .xp { font-family: var(--font-display); font-weight: 900; font-size: 1.4rem; color: var(--court); white-space: nowrap; }
+.reto.done { opacity: .75; }
+
+/* Ejercicio */
+.ex-meta { display: flex; gap: 6px; flex-wrap: wrap; }
+.ex-body { display: grid; gap: 18px; }
+.ex-body h3 { margin-bottom: 4px; }
+.ex-body ol, .ex-body ul { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
+.court-wrap { display: grid; gap: 6px; max-width: 420px; }
+.court-wrap figcaption { color: var(--ink-2); font-size: .85rem; }
+.versus { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.versus > div { background: var(--surface-2); border-radius: var(--r-m); padding: 12px 14px; }
+.versus h3 { font-size: 1.1rem; }
+.versus p { margin: 0; }
+
+/* Aviso de "viendo como jugador" y estado de sincronía */
+.viewas { position: sticky; top: 58px; z-index: 19; background: var(--ball); color: var(--ball-on); display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px var(--gutter); font-weight: 700; }
+.viewas .btn { min-height: 36px; background: var(--ball-on); color: var(--ball); border-color: var(--ball-on); }
+.sync { font-size: .78rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: rgba(255,255,255,.18); color: #fff; white-space: nowrap; }
+.sync.warn { background: var(--ball); color: var(--ball-on); }
+
+/* Listas de texto con aire */
+.plain { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+.help h3 { margin: 18px 0 6px; }
+.help p, .help li { max-width: 68ch; }
+.srcs li { font-size: .92rem; }
+.daypick { display: flex; gap: 6px; flex-wrap: wrap; }
+.daypick label { cursor: pointer; }
+.daypick input { position: absolute; opacity: 0; pointer-events: none; }
+.daypick span { display: inline-grid; place-items: center; min-width: 48px; min-height: 44px; padding: 0 10px; border-radius: var(--r-m); border: 2px solid var(--line); background: var(--surface); font-weight: 700; }
+.daypick input:checked + span { background: var(--court); border-color: var(--court); color: #fff; }
+.daypick input:focus-visible + span { outline: 3px solid var(--ball); outline-offset: 2px; }
+
+/* Impresión del plan */
+.print-only { display: none; }
+@media print {
+  .print-only { display: block; }
+  .blocks .ctl { display: none !important; }
+  .viewas, .sync { display: none !important; }
+}
+
+/* Tarjeta del jugador */
+.card-player .legend { font-size: .82rem; opacity: .85; margin: 0 0 10px; max-width: 46ch; }
+.card-player .stats b { display: block; font-size: 2.1rem; line-height: 1; color: var(--ball); }
+
+/* Modo cancha: barra de bloques */
+.segs { display: flex; gap: 3px; }
+.segs i { height: 8px; border-radius: 4px; background: rgba(255,255,255,.22); }
+.segs i.done { background: var(--ball); }
+.segs i.cur { background: #fff; }
+.timer .btn { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.35); color: #fff; }
+.timer .btn.ball { background: var(--ball); border-color: var(--ball); color: var(--ball-on); }
+.timer .iconbtn { color: #fff; }
+.timer .ctrl .btn span { font-size: .95rem; }
+@media (max-width: 520px) { .timer .ctrl .btn:not(.ball) span { display: none; } .timer .ctrl .btn:not(.ball) { min-width: 48px; padding: 8px 10px; } }
+
+/* Aviso de vista previa a todo lo ancho */
+.main > .viewas { margin: calc(var(--gutter) * -1) calc(var(--gutter) * -1) var(--gutter); }
+
+/* Bloques del plan en pantallas angostas: los controles pasan a su propia fila */
+@media (max-width: 640px) {
+  .block { grid-template-columns: 34px 1fr; }
+  .block .ctl { grid-column: 2; justify-content: flex-start; }
+}
+
+/* Modo cancha en celular: Iniciar/Pausa ocupa su propia fila */
+@media (max-width: 520px) { .timer .ctrl .btn.ball { flex: 1 1 100%; } }

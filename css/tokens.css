@@ -1,0 +1,88 @@
+/* Remate · tokens de diseño. Paleta tomada del balón (azul y amarillo) y de la cancha. */
+@font-face { font-family: 'Big Shoulders Display'; font-weight: 800; font-style: normal; font-display: swap;
+  src: url('../fonts/big-shoulders-display-latin-800-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Big Shoulders Display'; font-weight: 900; font-style: normal; font-display: swap;
+  src: url('../fonts/big-shoulders-display-latin-900-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Atkinson Hyperlegible'; font-weight: 400; font-style: normal; font-display: swap;
+  src: url('../fonts/atkinson-hyperlegible-latin-400-normal.woff2') format('woff2'); }
+@font-face { font-family: 'Atkinson Hyperlegible'; font-weight: 700; font-style: normal; font-display: swap;
+  src: url('../fonts/atkinson-hyperlegible-latin-700-normal.woff2') format('woff2'); }
+
+:root {
+  /* Claro: tiza fría, tinta azul marino */
+  --bg: #EEF2F6;
+  --surface: #FFFFFF;
+  --surface-2: #E3E9F0;
+  --ink: #0C2340;
+  --ink-2: #4A5D77;
+  --line: #CBD5E1;
+  --court: #1B4FA8;          /* azul de cancha: acciones principales */
+  --court-deep: #12356F;     /* franja de encabezado */
+  --court-on: #FFFFFF;
+  --link: #1B4FA8;
+  --ball: #F7C600;           /* amarillo del balón: lo que hay que mirar */
+  --ball-on: #0C2340;
+  --ok: #16794D;   --ok-bg: #DDF1E6;
+  --warn: #8A5A00; --warn-bg: #FBEFC8;
+  --bad: #B3321B;  --bad-bg: #FBE0DA;
+  --info: #1B4FA8; --info-bg: #DCE7F8;
+  --floor: #1F5FBF;          /* piso de la cancha en los diagramas */
+  --floor-free: #164690;     /* zona libre */
+  --floor-line: #FFFFFF;
+
+  --font-display: 'Big Shoulders Display', 'Arial Narrow', 'Roboto Condensed', sans-serif;
+  --font-body: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --r-s: 4px;
+  --r-m: 10px;
+  --r-l: 20px;
+  --gutter: 16px;
+  --tab-h: 64px;
+  --lift: 0 10px 30px rgba(12, 35, 64, .18);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0A1626; --surface: #12233A; --surface-2: #1B3250; --ink: #E8EEF6; --ink-2: #A9BAD0; --line: #2A4263;
+    --court: #2F6BDB; --court-deep: #0F2A55; --link: #8DB4FF;
+    --ok: #55C98F; --ok-bg: #123A2A; --warn: #F2C45A; --warn-bg: #3B2F0E; --bad: #FF8F78; --bad-bg: #44201A;
+    --info: #8DB4FF; --info-bg: #17315C;
+    --floor: #2A62C4; --floor-free: #1A4A9C;
+    --lift: 0 10px 30px rgba(0, 0, 0, .5);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0A1626; --surface: #12233A; --surface-2: #1B3250; --ink: #E8EEF6; --ink-2: #A9BAD0; --line: #2A4263;
+  --court: #2F6BDB; --court-deep: #0F2A55; --link: #8DB4FF;
+  --ok: #55C98F; --ok-bg: #123A2A; --warn: #F2C45A; --warn-bg: #3B2F0E; --bad: #FF8F78; --bad-bg: #44201A;
+  --info: #8DB4FF; --info-bg: #17315C;
+  --floor: #2A62C4; --floor-free: #1A4A9C;
+  --lift: 0 10px 30px rgba(0, 0, 0, .5);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 400 1rem/1.5 var(--font-body);
+  -webkit-tap-highlight-color: transparent;
+}
+h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); font-weight: 800; line-height: 1.05; letter-spacing: .01em; }
+h1 { font-size: 2.1rem; }
+h2 { font-size: 1.55rem; }
+h3 { font-size: 1.2rem; }
+p { margin: 0 0 .75em; max-width: 70ch; }
+a { color: var(--link); }
+button, input, select, textarea { font: inherit; color: inherit; }
+img, svg { max-width: 100%; }
+:focus-visible { outline: 3px solid var(--ball); outline-offset: 2px; border-radius: var(--r-s); }
+[hidden] { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.muted { color: var(--ink-2); }
+.num { font-family: var(--font-display); font-weight: 800; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
