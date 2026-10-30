@@ -51,14 +51,16 @@ export function addToSessionSheet(ex) {
 }
 
 export default function ejercicio(ctx) {
-  const ex = getExercise(ctx.args[0], state.data.customEx);
+  let ex = getExercise(ctx.args[0], state.data.customEx);
+  if (ex?.lab && ctx.role !== 'coach') ex = null;                       // los del laboratorio son solo del entrenador
+  const back = ex?.lab ? '#/lab/salto/programa' : '#/ejercicios';
   if (!ex) return { title: 'Ejercicio', back: '#/ejercicios', el: h('div', { class: 'page' }, empty('No encontré ese ejercicio', 'Puede que se haya borrado.', h('a', { class: 'btn', href: '#/ejercicios' }, 'Ver ejercicios'))) };
   const coach = ctx.role === 'coach';
-  const tools = coach ? h('div', { class: 'cluster' },
+  const tools = coach && !ex.lab ? h('div', { class: 'cluster' },
     h('button', { class: 'btn primary', type: 'button', onclick: () => addToSessionSheet(ex) }, ic('plus', 18), 'Agregar a un entrenamiento'),
     ex.custom ? h('button', { class: 'btn', type: 'button', onclick: () => customExerciseSheet(ex) }, ic('pencil', 18), 'Editar') : null,
     ex.custom ? h('button', { class: 'btn danger', type: 'button', onclick: async () => {
       if (await confirmSheet({ title: '¿Borrar este ejercicio?', text: 'Si está en algún plan, ese bloque quedará sin ejercicio.', ok: 'Borrar', danger: true })) { remove('customEx', ex.dbId); toast('Ejercicio borrado'); location.hash = '#/ejercicios'; }
     } }, ic('trash-2', 18), 'Borrar') : null) : null;
-  return { title: ex.name, back: '#/ejercicios', el: h('div', { class: 'page' }, tools, exerciseDetail(ex)) };
+  return { title: ex.name, back, el: h('div', { class: 'page' }, ex.lab ? note('Ejercicio de tu laboratorio de salto. Tus jugadores no lo ven.') : null, tools, exerciseDetail(ex)) };
 }

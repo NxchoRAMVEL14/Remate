@@ -1,7 +1,7 @@
 /* Remate · componentes y diseño de pantallas */
 
 /* ---------- Estructura ---------- */
-.app { min-height: 100dvh; display: grid; grid-template-rows: auto 1fr; }
+.app { min-height: 100dvh; display: grid; grid-template-rows: auto 1fr; grid-template-columns: minmax(0, 1fr); }
 .top {
   position: sticky; top: 0; z-index: 20; color: #fff; background-color: var(--court-deep);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='140' viewBox='0 0 420 140'%3E%3Cg fill='none' stroke='%23fff' stroke-opacity='.15' stroke-width='3'%3E%3Cpath d='M-10 96H430M300 -10V150'/%3E%3C/g%3E%3C/svg%3E");
@@ -12,9 +12,9 @@
 .top h1 { font-size: 1.7rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .top .iconbtn { color: #fff; }
 .top .sub { font-size: .8rem; opacity: .85; margin-top: -2px; }
-.main { padding: var(--gutter) var(--gutter) calc(var(--tab-h) + 28px + env(safe-area-inset-bottom)); }
-.page { max-width: 920px; margin: 0 auto; display: grid; gap: 22px; }
-.stack { display: grid; gap: 12px; }
+.main { min-width: 0; padding: var(--gutter) var(--gutter) calc(var(--tab-h) + 28px + env(safe-area-inset-bottom)); }
+.page { max-width: 920px; margin: 0 auto; display: grid; gap: 22px; grid-template-columns: minmax(0, 1fr); }
+.stack { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
 .cluster { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .split { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
@@ -32,7 +32,7 @@
 .nav a[aria-current="page"] { color: var(--ink); font-weight: 700; }
 .nav a[aria-current="page"]::before { content: ""; position: absolute; top: 0; left: 28%; right: 28%; height: 4px; background: var(--ball); border-radius: 0 0 4px 4px; }
 @media (min-width: 900px) {
-  .app { grid-template-columns: 220px 1fr; grid-template-rows: auto 1fr; }
+  .app { grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: auto 1fr; }
   .top { grid-column: 1 / -1; }
   .nav { position: sticky; top: 58px; grid-row: 2; align-self: start; height: calc(100dvh - 58px); flex-direction: column; justify-content: flex-start; border-top: 0; border-right: 1px solid var(--line); padding: 14px 10px; gap: 4px; }
   .nav a { flex: none; display: flex; justify-content: flex-start; align-items: center; gap: 12px; padding: 10px 14px; min-height: 44px; border-radius: var(--r-m); font-size: .98rem; }

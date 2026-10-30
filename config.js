@@ -3,6 +3,6 @@
 // Para conectar la nube: Supabase → Project Settings → API. Copia "Project URL" y la clave
 // "anon public" (o "publishable"). Esa clave es pública: la protege la seguridad por filas (RLS) del esquema SQL.
 export const CONFIG = {
-  SUPABASE_URL: "https://dvehbawawaibanvedkcm.supabase.co",        // por ejemplo: https://abcdefghijk.supabase.co
-  SUPABASE_ANON_KEY: "sb_publishable_un8vlLwhL-IFeVkyRscseA_-pETY2Jy",   // por ejemplo: eyJhbGciOi...  (o sb_publishable_...)
+  SUPABASE_URL: '',        // por ejemplo: https://abcdefghijk.supabase.co
+  SUPABASE_ANON_KEY: '',   // por ejemplo: eyJhbGciOi...  (o sb_publishable_...)
 };

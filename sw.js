@@ -1,5 +1,5 @@
 // Service worker de Remate: primero la red (así una versión nueva llega sola) y, sin internet, lo guardado.
-const CACHE = 'remate-v1';
+const CACHE = 'remate-v3';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {

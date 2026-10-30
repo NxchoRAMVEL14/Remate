@@ -29,6 +29,8 @@ export default function ejercicios(ctx) {
   [q, sk, lv, kd, mt].forEach((x) => x.addEventListener('input', paint));
   paint();
   const add = ctx.role === 'coach' ? h('button', { class: 'btn primary sm', type: 'button', onclick: () => customExerciseSheet(null, (row) => { if (row) location.hash = `#/ejercicio/c-${row.id}`; }) }, ic('plus', 16), 'Ejercicio propio') : null;
-  return { title: 'Ejercicios', el: h('div', { class: 'page' }, h('section', {}, sectionTitle('Biblioteca', add),
+  const home = h('a', { class: 'labcard', href: '#/casa' }, h('span', { class: 'lc-ic' }, ic('house', 26)),
+    h('span', { class: 'lc-t' }, h('strong', {}, 'Para hacer en casa'), h('span', {}, ctx.role === 'coach' ? 'Rutinas opcionales que ven tus jugadores: físico, técnica con y sin balón.' : 'Opcional: físico, técnica con balón y sin balón, a tu nivel.')), ic('chevron-right', 20));
+  return { title: 'Ejercicios', el: h('div', { class: 'page' }, home, h('section', {}, sectionTitle('Biblioteca', add),
     h('div', { class: 'stack' }, q, h('div', { class: 'grid' }, sk, lv, kd, mt), count, rows))) };
 }

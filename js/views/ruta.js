@@ -9,7 +9,7 @@ import { dots, sectionTitle, note, jersey } from './ui.js';
 
 export default function ruta(ctx) {
   const ui = ctx.ui; ui.tab ??= 'niveles';
-  if (['niveles', 'retos'].includes(ctx.args[0])) ui.tab = ctx.args[0];
+  if (!ui.init) { ui.init = true; if (['niveles', 'retos'].includes(ctx.args[0])) ui.tab = ctx.args[0]; }
   const tabs = [['niveles', 'Niveles'], ['retos', 'Retos']];
   const panel = h('div', { class: 'stack', role: 'tabpanel' });
   const bar = h('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Ruta' }, tabs.map(([id, t]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(ui.tab === id), onclick: () => { ui.tab = id; paint(); } }, t)));

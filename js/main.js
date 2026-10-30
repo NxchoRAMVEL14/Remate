@@ -16,14 +16,30 @@ import ajustes from './views/ajustes.js';
 import ayuda from './views/ayuda.js';
 import inicio from './views/inicio.js';
 import entrenos from './views/entrenos.js';
+import partidos from './views/partidos.js';
+import partido from './views/partido.js';
+import lab from './views/lab.js';
+import reportes from './views/reportes.js';
+import mas from './views/mas.js';
+import casa from './views/casa.js';
+import mejoras, { ideaSheet } from './views/mejoras.js';
+import { casaReady } from './store.js';
 
-const COACH = { hoy, jugadores, jugador, sesiones, sesion, ejercicios, ejercicio, ruta, ajustes, ayuda };
-const PLAYER = { inicio, ruta, entrenos, ejercicios, ejercicio, ajustes, ayuda };
+const COACH = { hoy, jugadores, jugador, sesiones, sesion, ejercicios, ejercicio, ruta, ajustes, ayuda, partidos, partido, lab, reportes, mas, casa, mejoras };
+const PLAYER = { inicio, ruta, entrenos, partidos, ejercicios, ejercicio, casa, ajustes, ayuda };
+// [ruta, texto, ícono, dónde se ve]: 'wide' solo en pantalla grande (barra lateral), 'narrow' solo en celular.
 const NAV = {
-  coach: [['hoy', 'Hoy', 'house'], ['jugadores', 'Jugadores', 'users'], ['sesiones', 'Entrenos', 'calendar-days'], ['ejercicios', 'Ejercicios', 'book-open'], ['ruta', 'Ruta', 'flag']],
-  player: [['inicio', 'Inicio', 'house'], ['entrenos', 'Entrenos', 'calendar-days'], ['ejercicios', 'Ejercicios', 'book-open'], ['ruta', 'Ruta', 'flag']],
+  coach: [['hoy', 'Hoy', 'house'], ['jugadores', 'Jugadores', 'users'], ['sesiones', 'Entrenos', 'calendar-days'], ['partidos', 'Partidos', 'volleyball'],
+    ['ejercicios', 'Ejercicios', 'book-open', 'wide'], ['ruta', 'Ruta', 'flag', 'wide'], ['lab', 'Laboratorio', 'zap', 'wide'], ['reportes', 'Reportes', 'file-text', 'wide'],
+    ['mejoras', 'Mejoras', 'lightbulb', 'wide'], ['ajustes', 'Ajustes', 'settings', 'wide'], ['ayuda', 'Ayuda', 'circle-help', 'wide'],
+    ['mas', 'Más', 'layout-grid', 'narrow']],
+  player: [['inicio', 'Inicio', 'house'], ['entrenos', 'Entrenos', 'calendar-days'], ['partidos', 'Partidos', 'volleyball'], ['ejercicios', 'Ejercicios', 'book-open'], ['ruta', 'Ruta', 'flag']],
 };
-const PARENT = { jugador: 'jugadores', sesion: 'sesiones', ejercicio: 'ejercicios' };   // sección que se ilumina en la navegación
+const PARENT = { jugador: 'jugadores', sesion: 'sesiones', ejercicio: 'ejercicios', partido: 'partidos', casa: 'ejercicios' };   // sección que se ilumina en la navegación
+const UNDER_MAS = new Set(['ejercicios', 'ruta', 'lab', 'reportes', 'ajustes', 'ayuda', 'mejoras', 'mas']);
+// Pantalla en la que estás → sección de la mejora (para anotarla rápido desde el foco del encabezado).
+const IDEA_AREA = { hoy: 'hoy', jugadores: 'jugadores', jugador: 'jugadores', sesiones: 'entrenos', sesion: 'entrenos', partidos: 'partidos', partido: 'partidos',
+  casa: 'casa', lab: 'laboratorio', reportes: 'reportes', ruta: 'ruta', ejercicios: 'ejercicios', ejercicio: 'ejercicios', ajustes: 'ajustes' };          // en celular, estas iluminan "Más"
 
 const root = $('#root');
 const uiState = new Map();
@@ -65,10 +81,13 @@ function render({ fresh = false } = {}) {
     h('div', { style: { flex: 1, minWidth: 0 } }, h('h1', { id: 'page-title' }, view.title), view.sub ? h('div', { class: 'sub' }, view.sub) : null),
     sync,
     (view.actions || []).map((a) => (a.href ? h('a', { class: 'iconbtn', href: a.href, 'aria-label': a.label, title: a.label }, ic(a.icon)) : h('button', { class: 'iconbtn', type: 'button', 'aria-label': a.label, title: a.label, onclick: a.onClick }, ic(a.icon)))),
-    h('a', { class: 'iconbtn', href: '#/ayuda', 'aria-label': 'Ayuda', title: 'Ayuda' }, ic('circle-help')),
-    h('a', { class: 'iconbtn', href: '#/ajustes', 'aria-label': 'Ajustes', title: 'Ajustes' }, ic('settings')));
-  const navEl = h('nav', { class: 'nav', 'aria-label': 'Secciones' }, NAV[role].map(([id, label, icon]) =>
-    h('a', { href: `#/${id}`, 'aria-current': id === nav ? 'page' : null }, ic(icon, 22), h('span', {}, label))));
+    // Entrenador: un foco para anotar una mejora de la app desde cualquier pantalla (Ayuda y Ajustes viven en Más y en la barra lateral).
+    role === 'coach' ? h('button', { class: 'iconbtn', type: 'button', 'aria-label': 'Anotar una mejora para la app', title: 'Anotar una mejora para la app',
+      onclick: () => (casaReady() ? ideaSheet(null, { area: IDEA_AREA[name] || 'otra' }) : (location.hash = '#/mejoras')) }, ic('lightbulb'))
+      : [h('a', { class: 'iconbtn', href: '#/ayuda', 'aria-label': 'Ayuda', title: 'Ayuda' }, ic('circle-help')),
+        h('a', { class: 'iconbtn', href: '#/ajustes', 'aria-label': 'Ajustes', title: 'Ajustes' }, ic('settings'))]);
+  const navEl = h('nav', { class: 'nav', 'aria-label': 'Secciones' }, NAV[role].map(([id, label, icon, where]) =>
+    h('a', { href: `#/${id}`, class: where ? `${where}-only` : null, 'aria-current': id === nav || (id === 'mas' && UNDER_MAS.has(nav)) ? 'page' : null }, ic(icon, 22), h('span', {}, label))));
   const banner = state.viewAs ? h('div', { class: 'viewas', role: 'status' }, h('span', {}, `Vista previa: así lo ve ${me.name}`),
     h('button', { class: 'btn sm', type: 'button', onclick: () => { const id = state.viewAs; state.viewAs = null; location.hash = `#/jugador/${id}`; } }, 'Salir')) : null;
   const main = h('main', { class: 'main', id: 'main', tabindex: '-1', 'aria-labelledby': 'page-title' }, banner, view.el);

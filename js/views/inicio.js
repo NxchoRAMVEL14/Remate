@@ -7,6 +7,7 @@ import { CHALLENGES } from '../content/challenges.js';
 import { getExercise } from '../content/exercises.js';
 import { dots, sectionTitle, empty, note, statusChip, sessionWhen } from './ui.js';
 import { playerCard, playerStats } from './card.js';
+import { homeWeek } from './casa.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
 
@@ -40,6 +41,12 @@ export default function inicio(ctx) {
         h('span', { class: 'row-main' }, h('strong', {}, r.name), h('span', { class: 'row-sub' }, r.have ? `Vas en fase ${r.have}, se pide fase ${r.need || 1}` : 'Aún sin evaluar')),
         h('span', { class: 'row-end' }, dots(r.have, r.need), h('span', { class: `chip ${r.ok ? 'ok' : 'warn'}` }, r.ok ? 'Listo' : r.have ? `Falta ${r.need - r.have}` : 'Pendiente')))))));
   }
+
+  // en casa (opcional)
+  const hw = homeWeek(me.id);
+  el.append(h('a', { class: 'panel', href: '#/casa', style: { textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '12px' } },
+    ic('house', 26), h('span', { class: 'row-main' }, h('strong', {}, 'Entrena en casa (opcional)'),
+      h('span', { class: 'row-sub' }, hw.days ? `Esta semana llevas ${plural(hw.days, 'día', 'días')}. ¡Sigue así!` : 'Rutinas cortas de físico y técnica, con o sin balón.')), ic('chevron-right', 18)));
 
   // retos
   const pend = state.data.claims.filter((c) => c.player_id === me.id && c.status === 'solicitada').length;

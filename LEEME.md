@@ -1,10 +1,21 @@
 # Remate: guía para subirlo (GitHub + Supabase)
 
-Remate es una app para entrenar voleibol de sala con chavos de prepa, del primer toque al nivel competitivo. Se instala en el celular como Escuadra (PWA). Esta es la **primera entrega: el núcleo** (jugadores, niveles, ejercicios, entrenamientos y asistencia). Sin configurar nada, abre en **modo demo** con datos de ejemplo.
+Remate es una app para entrenar voleibol de sala con chavos de prepa, del primer toque al nivel competitivo. Se instala en el celular como Escuadra (PWA). Esta es la **versión 2.1**: el núcleo (jugadores, niveles, ejercicios, entrenamientos y asistencia) más **partidos con estadística en vivo**, **reportes imprimibles**, tu **laboratorio** (salto vertical, visión de juego y coaching), **En casa** (rutinas opcionales para tus jugadores) y tu lista privada de **Mejoras**. Sin configurar nada, abre en **modo demo** con datos de ejemplo.
+
+> **¿Ya subiste una versión anterior?** Salta a la sección **0. Actualizar desde una versión anterior**.
 
 Tiempo estimado: 25 minutos. Orden recomendado: 1) Supabase, 2) GitHub, 3) conectar las dos.
 
 ---
+
+## 0. Actualizar desde una versión anterior
+
+1. **Supabase primero:** SQL Editor → New query → pega **todo** `sql/instalar.sql` (el nuevo) → **Run**. No borra nada: solo agrega las tablas nuevas. Si lo corres dos veces no pasa nada.
+2. **GitHub después:** arrastra **todo** el contenido de la carpeta nueva al repositorio, igual que la primera vez, y da **Commit changes**. GitHub reemplaza los archivos que cambiaron. **Antes, guarda tu `config.js`** (o vuelve a pegar tu URL y clave después), porque el del ZIP viene vacío.
+3. Abre la app y recarga dos veces (la primera baja la versión nueva). Si tus jugadores ya la tienen instalada, se actualiza sola la siguiente vez que la abran con internet.
+   **El ícono nuevo (balón de voleibol):** Android lo cambia solo después de unos días; en iPhone hay que borrar el acceso de la pantalla de inicio y volver a agregarlo.
+4. Si actualizas los archivos antes de correr el SQL, no se rompe nada: Laboratorio, Partidos, En casa y Mejoras muestran un aviso rojo y no guardan hasta que corras el SQL.
+5. Si probaste el **modo demo** en ese navegador, ve a **Ajustes → Reiniciar demo** para ver los ejemplos nuevos (partidos, saltos, bitácora).
 
 ## 1. Supabase (la base de datos)
 
@@ -19,7 +30,7 @@ Crea un proyecto **nuevo y separado** de Escuadra y Brida: aquí habrá datos de
 ## 2. GitHub (para publicar la app)
 
 1. Crea un repositorio nuevo, por ejemplo `remate`. Públicos funcionan gratis con GitHub Pages; uno privado necesita plan de pago.
-2. Descomprime el ZIP en tu computadora. Entra a la carpeta y selecciona **todo lo que hay dentro** (index.html, css, js, fonts, icons, vendor, sql, etc.). Arrástralo a la página del repositorio (*uploading an existing file*) y da **Commit changes**. Tiene 64 archivos, debajo del límite de 100 por carga.
+2. Descomprime el ZIP en tu computadora. Entra a la carpeta y selecciona **todo lo que hay dentro** (index.html, css, js, fonts, icons, vendor, sql, etc.). Arrástralo a la página del repositorio (*uploading an existing file*) y da **Commit changes**. Tiene 88 archivos, debajo del límite de 100 por carga.
    Importante: `index.html` debe quedar en la raíz del repositorio, no dentro de otra carpeta.
 3. En el repositorio: **Settings → Pages**. En *Source* elige **Deploy from a branch**, rama **main**, carpeta **/ (root)** y guarda. En uno o dos minutos aparece la dirección, algo como `https://tuusuario.github.io/remate/`.
 4. Esa es la dirección que abres en el celular. Si usas confirmación de correo, es la que pones como *Site URL* en Supabase.
@@ -52,6 +63,12 @@ Marca cada paso. Si algo falla, anota **qué tocaste y qué mensaje salió**.
 - [ ] El jugador pide un reto; a ti te aparece en **Hoy** para aprobarlo.
 - [ ] Apagas el internet del celular, haces un cambio (por ejemplo, pasar lista) y lo vuelves a encender: arriba debe decir *por enviar* y luego desaparecer.
 - [ ] Instalas la app: en Chrome, menú → *Agregar a pantalla principal*; en iPhone, Compartir → *Agregar a inicio*.
+- [ ] **Partidos → Nuevo partido**. En *Captura* tocas un jugador y luego *Ace*: el marcador sube a 1-0. *Deshacer* lo regresa.
+- [ ] Terminas el partido y el jugador ve el resultado y **solo sus números** en su sección *Partidos*.
+- [ ] **Más → Laboratorio → Salto vertical → Mis datos**: anotas tu alcance de pie y registras una prueba.
+- [ ] **Más → Reportes**: abres el reporte de un jugador, escribes un comentario y lo imprimes o guardas en PDF.
+- [ ] El jugador abre **Inicio → Entrena en casa**, toca *La hice* en una rutina y tú lo ves en **Ejercicios → Para hacer en casa**.
+- [ ] Tocas el **foco** de arriba, anotas una mejora y aparece en **Más → Mejoras de la app**.
 
 Probar sin tocar Supabase: deja `config.js` vacío y abre la app, o usa **Probar el modo demo** en la pantalla de entrada. El demo guarda todo solo en ese navegador.
 
@@ -63,6 +80,12 @@ Probar sin tocar Supabase: deja `config.js` vacío y abre la app, o usa **Probar
 - **Publicar un entrenamiento** lo hace visible para los jugadores. Al pasar lista, el entrenamiento queda como hecho y publicado, para que cada quien vea su asistencia.
 - **Modo cancha** (dentro de un entrenamiento) es un cronómetro por bloques con aviso sonoro que mantiene la pantalla encendida.
 - **Descargar asistencia (Excel)** está en Ajustes. También hay respaldo en archivo.
+- **Partidos:** toca al jugador y luego lo que hizo (saque, recepción 0 a 3, ataque, bloqueo, defensa). Con el *marcador automático* cada ace, remate, bloqueo o error suma el punto solo. Cuando un set llega a 25 (15 el decisivo) con diferencia de 2, aparece *Cerrar set*. Si alguien más lleva el marcador oficial, tú puedes capturar solo las acciones.
+- **Laboratorio** (en *Más*): solo tú lo ves. Programa de salto de 12 semanas (2 sesiones por semana), entrenador de visión de juego y bitácora de coaching.
+- **Tus polainas de 5 kg por tobillo** se usan solo en ejercicios de fuerza de cadera sin impacto. Nunca para saltar.
+- **Reportes** (en *Más*): por jugador y del grupo, listos para imprimir o guardar en PDF.
+- **En casa**: 22 ejercicios opcionales (físico, técnica con balón y sin balón) y 3 rutinas listas, con la dosis según el nivel de cada jugador. Registrar lo que hicieron es opcional; tú ves quién entrena en casa.
+- **Mejoras** (el foco de arriba o *Más → Mejoras de la app*): tu lista privada. Marca como *Lista para pedir* lo que quieras en la siguiente versión, toca *Copiar* y pégalo en el chat.
 
 ## 6. Cómo cambiar niveles, exámenes y ejercicios
 
@@ -75,6 +98,12 @@ Los números de Remate son **propuestas de partida**, no verdades científicas: 
 | Descripción de cada fase de cada habilidad | `js/content/skills.js` |
 | Plantillas de entrenamiento | `js/content/templates.js` |
 | Ejercicios incluidos | `js/content/ex-*.js` |
+| Ejercicios de tu laboratorio de salto | `js/content/lab-ex.js` |
+| Programa de salto (series, repeticiones, topes de saltos) | `js/content/lab-salto.js` |
+| Situaciones de visión de juego | `js/content/vision.js` |
+| Autoevaluación y guías de coaching | `js/content/coaching.js` |
+| Ejercicios y rutinas para casa | `js/content/casa.js` |
+| Ideas sugeridas en Mejoras | `js/content/ideas.js` |
 
 Los **ejercicios propios** no necesitan editar archivos: se crean desde la pantalla **Ejercicios → Ejercicio propio** y se guardan en tu cuenta.
 
@@ -88,15 +117,18 @@ La app incluye una pantalla **Ayuda** con las fuentes y sus enlaces. Resumen:
 - Entrenar la toma de decisiones: metaanálisis en voleibol, 2020.
 - Fuerza en menores: declaración de posición de la NSCA, 2009.
 - Lesiones frecuentes en jóvenes: Children's Hospital Colorado.
-- Reglas: FIVB 2025-2028.
+- Reglas: FIVB 2025-2028 (y las pruebas de reglas de la FIVB para 2026, publicadas por NORCECA).
+- Estadística de partido: escala de recepción 0 a 3 y eficiencia de ataque, las medidas más comunes en voleibol.
 
 Los ejercicios y plantillas son creación de Remate sobre esas bases. No sustituyen a un médico ni a un entrenador titulado.
 
-## 8. Qué sigue (siguientes entregas)
+## 8. Límites del plan gratuito de Supabase (lo que te puede pasar)
 
-1. **Laboratorio**: tu salto vertical (con protocolo y registro), visión de juego y coaching.
-2. **Partidos y estadística**: saque, recepción, ataque y rotaciones.
-3. **Reportes** para padres y escuela.
+- **50,000 usuarios activos al mes, 500 MB de base de datos.** Para un equipo de prepa sobra: cada jugador ocupa del orden de decenas de KB por temporada (cálculo propio de Remate, no de Supabase).
+- **Máximo 2 proyectos activos** en el plan gratuito. Si ya tienes Escuadra y Brida, para crear Remate tendrás que pausar uno o usar otra cuenta.
+- **El proyecto se pausa tras 1 semana sin uso.** En vacaciones puede pasar; se reactiva desde el panel de Supabase.
+- **30 altas de jugador por hora desde la misma conexión** (límite de entradas anónimas por IP). Si todo el equipo entra el mismo día con el wifi de la escuela, que lo hagan en dos tandas o con datos del celular.
+- **Correos de confirmación:** el servidor de correo incluido de Supabase envía muy pocos por hora. Por eso conviene desactivar *Confirm email* mientras pruebas.
 
 ## 9. Un consejo para pedirme cambios
 

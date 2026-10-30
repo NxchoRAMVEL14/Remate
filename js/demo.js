@@ -1,8 +1,9 @@
-// Datos de ejemplo para el modo demo: 12 jugadores ficticios, 14 entrenamientos hechos y 4 por venir.
+// Datos de ejemplo para el modo demo: 12 jugadores ficticios, 14 entrenamientos hechos, 4 por venir, partidos y laboratorio.
 import { SKILL_IDS } from './content/skills.js';
 import { LEVELS } from './content/levels.js';
 import { TEMPLATES } from './content/templates.js';
 import { todayStr, addDays, parseDate, newJoinCode } from './util.js';
+import { makeDemoPhase2 } from './demo-lab.js';
 
 function rng(seed) { // generador determinista, para que el demo siempre se vea igual
   let a = seed >>> 0;
@@ -84,5 +85,5 @@ export function makeDemoData() {
   ];
   return { groups, players, sessions, attendance, ratings, exams, claims, notes: [
     { id: 'demo-n1', owner_id: 'demo', player_id: 'demo-p9', body: 'Platicar con ella: ha faltado dos veces seguidas.', created_at: iso(Date.now() - 864e5) },
-  ], customEx: [] };
+  ], customEx: [], ...makeDemoPhase2({ R, players, sessions, gid }) };
 }

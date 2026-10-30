@@ -5,8 +5,18 @@ import { client, fetchAll, isNetworkError, friendly } from './cloud.js';
 export const TABLES = {
   groups: 'groups', players: 'players', sessions: 'sessions', attendance: 'attendance', ratings: 'ratings',
   exams: 'level_exams', claims: 'challenge_claims', notes: 'player_notes', customEx: 'custom_exercises',
+  // fase 2: partidos y laboratorio
+  matches: 'matches', matchLogs: 'match_logs', matchStats: 'match_stats', coachProfile: 'coach_profile', jumpTests: 'jump_tests',
+  jumpSessions: 'jump_sessions', coachLogs: 'coach_logs', coachAssess: 'coach_assessments', decisions: 'decision_attempts',
+  // fase 3: entrenamiento en casa y mejoras de la app
+  homeLogs: 'home_logs', ideas: 'app_ideas',
 };
 export const KEYS = Object.keys(TABLES);
+// Lo que solo ve el entrenador (el jugador ni lo pide) y lo que llegó con la fase 2 (puede faltar si aún no corren el SQL nuevo).
+const COACH_ONLY = new Set(['notes', 'matchLogs', 'coachProfile', 'jumpTests', 'jumpSessions', 'coachLogs', 'coachAssess', 'decisions', 'ideas']);
+const PHASE2 = new Set(['matches', 'matchLogs', 'matchStats', 'coachProfile', 'jumpTests', 'jumpSessions', 'coachLogs', 'coachAssess', 'decisions']);
+const PHASE3 = new Set(['homeLogs', 'ideas']);
+const isMissingTable = (e) => e?.code === 'PGRST205' || e?.code === '42P01' || /could not find the table|schema cache|does not exist/i.test(e?.message || '');
 const emptyData = () => Object.fromEntries(KEYS.map((k) => [k, []]));
 
 export const state = {
@@ -15,6 +25,8 @@ export const state = {
   user: null, email: '', me: null,   // me = fila del jugador cuando entra con código
   viewAs: null,                      // id de jugador que el entrenador está previsualizando
   data: emptyData(), pending: 0, online: true, lastError: null,
+  lab: true,                         // false si la base de datos aún no tiene las tablas de la fase 2
+  casa: true,                        // false si aún no tiene las de la fase 3 (en casa y mejoras)
 };
 
 // ---------- almacenamiento seguro ----------
@@ -46,7 +58,19 @@ const DEFAULTS = {
   claims: () => ({ status: 'solicitada', note: '', resolved_at: null, claimed_at: new Date().toISOString() }),
   notes: () => ({}),
   customEx: () => ({}),
+  matches: () => ({ sets: [], status: 'en_juego', kind: 'amistoso', best_of: 3, venue: '', note: '', match_date: todayStr() }),
+  matchLogs: () => ({ log: [] }),
+  matchStats: () => ({ counts: {} }),
+  coachProfile: () => ({ data: {} }),
+  jumpTests: () => ({ attempts: [], note: '', test_date: todayStr() }),
+  jumpSessions: () => ({ blocks: [], contacts: 0, note: '', session_date: todayStr() }),
+  coachLogs: () => ({ worked: '', change: '', note: '', log_date: todayStr(), kind: 'entrenamiento' }),
+  coachAssess: () => ({ scores: {}, goal: '', note: '', assessed_on: todayStr() }),
+  decisions: () => ({}),
+  homeLogs: () => ({ done_on: todayStr(), kind: 'rutina', note: '', minutes: null, feeling: null }),
+  ideas: () => ({ body: '', area: 'otra', priority: 'media', status: 'idea', done_at: null }),
 };
+const NO_CREATED_AT = new Set(['claims', 'coachProfile']);   // esas tablas no tienen la columna created_at
 
 // ---------- operaciones ----------
 const find = (key, id) => state.data[key].find((r) => r.id === id);
@@ -54,7 +78,7 @@ function ownerId() { return state.role === 'player' ? (state.me?.owner_id || sta
 
 export function add(key, row) {
   const full = { id: uid(), owner_id: ownerId(), ...DEFAULTS[key](), ...row };
-  if (key !== 'claims') full.created_at = full.created_at || new Date().toISOString();
+  if (!NO_CREATED_AT.has(key)) full.created_at = full.created_at || new Date().toISOString();
   state.data[key].push(full);
   persist({ op: 'add', key, row: structuredClone(full) });
   emit();
@@ -70,8 +94,9 @@ export function patch(key, id, changes) {
 export function remove(key, id) {
   state.data[key] = state.data[key].filter((r) => r.id !== id);
   const d = state.data;
-  if (key === 'players') for (const k of ['attendance', 'ratings', 'exams', 'claims', 'notes']) d[k] = d[k].filter((r) => r.player_id !== id);
-  if (key === 'sessions') d.attendance = d.attendance.filter((r) => r.session_id !== id);
+  if (key === 'players') for (const k of ['attendance', 'ratings', 'exams', 'claims', 'notes', 'matchStats', 'homeLogs']) d[k] = d[k].filter((r) => r.player_id !== id);
+  if (key === 'sessions') { d.attendance = d.attendance.filter((r) => r.session_id !== id); d.coachLogs.forEach((r) => { if (r.session_id === id) r.session_id = null; }); }
+  if (key === 'matches') { for (const k of ['matchLogs', 'matchStats']) d[k] = d[k].filter((r) => r.match_id !== id); d.coachLogs.forEach((r) => { if (r.match_id === id) r.match_id = null; }); }
   persist({ op: 'remove', key, id });
   emit();
 }
@@ -104,6 +129,18 @@ export const getSession = (id) => find('sessions', id);
 export const sessions = () => [...state.data.sessions].sort((a, b) => `${a.session_date}${a.start_time || ''}`.localeCompare(`${b.session_date}${b.start_time || ''}`));
 export const pendingClaims = () => state.data.claims.filter((c) => c.status === 'solicitada');
 
+// ---------- fase 2: laboratorio y partidos ----------
+// En la nube, las pantallas nuevas solo guardan si ya corriste el SQL actualizado.
+export const labReady = () => state.mode !== 'cloud' || state.lab;
+export const casaReady = () => state.mode !== 'cloud' || state.casa;
+export const profileRow = () => state.data.coachProfile[0] || null;
+export const profile = () => profileRow()?.data || {};
+export function saveProfile(changes) {
+  const r = profileRow(), data = { ...(r?.data || {}), ...changes };
+  if (r) return patch('coachProfile', r.id, { data, updated_at: new Date().toISOString() });
+  return add('coachProfile', { data });
+}
+
 // ---------- guardado ----------
 let demoTimer;
 function saveDemo() { ls.set(DEMO_KEY, JSON.stringify({ v: 1, data: state.data })); }
@@ -115,7 +152,24 @@ function saveOutbox() { ls.set(outKey(), JSON.stringify(outbox)); state.pending 
 
 function persist(op) {
   if (state.mode === 'demo') { scheduleDemoSave(); return; }
-  outbox.push(op); saveOutbox(); saveCache();
+  // Varios cambios a la misma fila se juntan en uno (captura en vivo, minutos que se ajustan...).
+  // Se busca hacia atrás saltando solo cambios a otras filas; si en medio hay un alta o un borrado, no se junta.
+  let merged = false;
+  if (op.op === 'patch') {
+    const stop = flushing ? 1 : 0;                       // el primero de la cola puede estar enviándose
+    for (let i = outbox.length - 1; i >= stop; i--) {
+      const q = outbox[i];
+      const same = q.key === op.key && (q.op === 'add' ? q.row.id === op.id : q.id === op.id);
+      if (same) {
+        if (q.op === 'patch') { Object.assign(q.changes, op.changes); merged = true; }
+        else if (q.op === 'add') { Object.assign(q.row, op.changes); merged = true; }
+        break;
+      }
+      if (q.op !== 'patch') break;
+    }
+  }
+  if (!merged) outbox.push(op);
+  saveOutbox(); saveCache();
   flush();
 }
 
@@ -135,6 +189,10 @@ async function applyOp(op) {
       } else if (op.key === 'attendance') {                                               // ya había asistencia de ese día
         ({ error } = await c.from(t).update({ status: op.row.status, note: op.row.note })
           .eq('session_id', op.row.session_id).eq('player_id', op.row.player_id));
+      } else if (op.key === 'matchStats') {                                               // ya había estadística de ese jugador y partido
+        ({ error } = await c.from(t).update({ counts: op.row.counts }).eq('match_id', op.row.match_id).eq('player_id', op.row.player_id));
+      } else if (op.key === 'coachProfile') {                                             // ya existía tu perfil (otro celular)
+        ({ error } = await c.from(t).update({ data: op.row.data }).eq('owner_id', op.row.owner_id));
       }
     }
     return error;
@@ -168,10 +226,18 @@ export async function refresh() {
   await flush();
   if (outbox.length) return false;                      // no pisar cambios que aún no se envían
   try {
-    const keys = KEYS.filter((k) => state.role === 'coach' || k !== 'notes');
-    const res = await Promise.all(keys.map((k) => fetchAll(TABLES[k])));
+    const keys = KEYS.filter((k) => state.role === 'coach' || !COACH_ONLY.has(k));
+    let missing = false, missing3 = false;
+    const res = await Promise.all(keys.map(async (k) => {
+      try { return await fetchAll(TABLES[k]); }
+      catch (e) {
+        if (PHASE2.has(k) && isMissingTable(e)) { missing = true; return []; }
+        if (PHASE3.has(k) && isMissingTable(e)) { missing3 = true; return []; }
+        throw e;
+      }
+    }));
     const next = emptyData(); keys.forEach((k, i) => { next[k] = res[i]; });
-    state.data = next; state.online = true;
+    state.data = next; state.online = true; state.lab = !missing; state.casa = !missing3;
     if (state.role === 'player') state.me = next.players.find((p) => p.user_id === state.user.id) || next.players[0] || null;
     saveCache(); emit();
     return true;
@@ -208,7 +274,7 @@ export function clearLocal() {
   for (const k of ls.keys()) if (k.startsWith('remate.cache.') || k.startsWith('remate.outbox.')) ls.del(k);
   ls.del(MODE_KEY);
   outbox = [];
-  Object.assign(state, { ready: false, mode: null, role: null, user: null, email: '', me: null, viewAs: null, data: emptyData(), pending: 0, lastError: null });
+  Object.assign(state, { ready: false, mode: null, role: null, user: null, email: '', me: null, viewAs: null, data: emptyData(), pending: 0, lastError: null, lab: true, casa: true });
 }
 export const pendingCount = () => outbox.length;
 
