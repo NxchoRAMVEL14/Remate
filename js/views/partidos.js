@@ -1,9 +1,10 @@
 // Partidos: lista de la temporada, récord y alta de un partido nuevo. El jugador ve resultados y sus propios números.
 import { h, ic, toast, openSheet, fmtDate, todayStr, plural } from '../util.js';
-import { state, add, patch, group, labReady } from '../store.js';
+import { state, add, patch, group, labReady, isStaff } from '../store.js';
 import { KINDS, result, metrics, addCounts, fmtEff } from '../match-calc.js';
 import { sectionTitle, note, empty, field, options } from './ui.js';
 import { missingSqlNote } from './lab.js';
+import { rsvpCounts, rsvpControl, zoneSection, RSVP } from './partido-summary.js';
 
 export const matchesSorted = () => state.data.matches.slice().sort((a, b) => `${b.match_date}${b.created_at}`.localeCompare(`${a.match_date}${a.created_at}`));
 
@@ -30,7 +31,7 @@ export function matchSheet(m = null, onSaved) {
   });
 }
 
-const resultChip = (m) => {
+export const resultChip = (m) => {
   if (m.status === 'planeado') return h('span', { class: 'chip info' }, 'Próximo');
   const r = result(m);
   if (m.status === 'en_juego') return h('span', { class: 'chip warn' }, `En juego ${r.text}`);
@@ -38,11 +39,14 @@ const resultChip = (m) => {
 };
 
 export default function partidos(ctx) {
-  return ctx.role === 'coach' ? coach() : jugador(ctx);
+  return ctx.role === 'coach' || ctx.role === 'assistant' ? coach(ctx) : jugador(ctx);
 }
 
-function coach() {
-  const list = matchesSorted(), ro = !labReady();
+// Chips de la convocatoria de un partido por venir.
+const rsvpChips = (m) => { const c = rsvpCounts(m); return c.list.length ? h('span', { class: 'chip' }, `Van ${c.voy}${c.duda ? ` · duda ${c.duda}` : ''}${c.no ? ` · no ${c.no}` : ''}`) : null; };
+
+function coach(ctx) {
+  const list = matchesSorted(), ro = !labReady(), isCoach = ctx.role === 'coach';
   const done = list.filter((m) => m.status === 'terminado');
   const wins = done.filter((m) => result(m).win).length;
   const sets = done.reduce((a, m) => { const r = result(m); return { us: a.us + r.us, them: a.them + r.them }; }, { us: 0, them: 0 });
@@ -58,17 +62,27 @@ function coach() {
       return h('a', { class: 'row', href: `#/partido/${m.id}` },
         h('span', { class: 'jersey off', 'aria-hidden': 'true' }, ic('volleyball', 22)),
         h('span', { class: 'row-main' }, h('strong', {}, `Contra ${m.rival}`), h('span', { class: 'row-sub' }, [fmtDate(m.match_date, { weekday: 'short', day: 'numeric', month: 'short' }), KINDS[m.kind], r.detail || null].filter(Boolean).join(' · '))),
-        h('span', { class: 'row-end' }, resultChip(m), ic('chevron-right', 18)));
+        h('span', { class: 'row-end' }, m.status !== 'terminado' ? rsvpChips(m) : null, resultChip(m), ic('chevron-right', 18)));
     })) : empty('Sin partidos todavía', 'Crea un partido para llevar el marcador por set y capturar en vivo lo que hace cada jugador: saques, recepciones, ataques, bloqueos y defensas.'),
-    note('Tus jugadores ven el resultado de cada partido y solo sus propios números. El registro jugada por jugada es solo tuyo.'));
+    done.length ? zoneSection(state.data.matchLogs.filter((l) => done.some((m) => m.id === l.match_id)).flatMap((l) => l.log || []), ctx, { title: 'Mapa de la temporada' }) : null,
+    isCoach ? note('Tus jugadores ven el resultado de cada partido, contestan la convocatoria y ven solo sus propios números. El registro jugada por jugada lo ven solo tú y tus ayudantes.')
+      : note('Como ayudante puedes crear partidos y capturarlos. El entrenador ve todo lo que captures.'));
   return { title: 'Partidos', el };
 }
 
 function jugador(ctx) {
   const me = ctx.me, list = matchesSorted().filter((m) => m.status !== 'planeado' || m.match_date >= todayStr());
+  const next = list.filter((m) => m.status !== 'terminado' && m.match_date >= todayStr()).reverse();
+  const captain = isStaff();
   const mine = state.data.matchStats.filter((s) => s.player_id === me?.id);
   const tot = metrics(addCounts(...mine.map((s) => s.counts)));
   const el = h('div', { class: 'page' },
+    captain ? h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', onclick: () => matchSheet(null, (m) => { location.hash = `#/partido/${m.id}`; }) }, ic('plus', 18), 'Nuevo partido (capitán)')) : null,
+    next.length && me ? h('section', { class: 'stack' }, sectionTitle('Convocatoria'),
+      next.map((m) => h('div', { class: 'panel stack' },
+        h('div', { class: 'split' }, h('strong', {}, `Contra ${m.rival}`), h('span', { class: 'row-sub' }, fmtDate(m.match_date, { weekday: 'long', day: 'numeric', month: 'long' }))),
+        m.venue ? h('span', { class: 'row-sub' }, m.venue) : null,
+        rsvpControl(m, me, ctx.readonly)))) : null,
     mine.length ? h('section', { class: 'stack' }, sectionTitle('Tu temporada'),
       h('div', { class: 'kpis' },
         h('div', { class: 'kpi' }, h('span', { class: 'n' }, String(tot.points)), h('span', { class: 'l' }, 'Puntos (ace, remate y bloqueo)')),
@@ -76,12 +90,12 @@ function jugador(ctx) {
         h('div', { class: 'kpi' }, h('span', { class: 'n' }, tot.svIn != null ? `${tot.svIn}%` : '—'), h('span', { class: 'l' }, 'Saques dentro')))) : null,
     list.length ? h('div', { class: 'rows' }, list.map((m) => {
       const s = mine.find((x) => x.match_id === m.id), mm = s ? metrics(s.counts) : null, r = result(m);
-      return h('div', { class: 'row' }, h('span', { class: 'jersey off', 'aria-hidden': 'true' }, ic('volleyball', 22)),
+      return h('a', { class: 'row', href: `#/partido/${m.id}` }, h('span', { class: 'jersey off', 'aria-hidden': 'true' }, ic('volleyball', 22)),
         h('span', { class: 'row-main' }, h('strong', {}, `Contra ${m.rival}`),
           h('span', { class: 'row-sub' }, [fmtDate(m.match_date, { weekday: 'short', day: 'numeric', month: 'short' }), r.detail || null].filter(Boolean).join(' · ')),
           mm ? h('span', { class: 'row-sub' }, `Tú: ${plural(mm.points, 'punto', 'puntos')}, ${plural(mm.aces, 'ace', 'aces')}, ${plural(mm.kills, 'remate', 'remates')}, ${plural(mm.blocks, 'bloqueo', 'bloqueos')}${mm.recs ? `, recepción ${mm.recAvg} de 3` : ''}`) : null,
           m.note ? h('span', { class: 'row-sub' }, m.note) : null),
-        h('span', { class: 'row-end' }, resultChip(m)));
+        h('span', { class: 'row-end' }, m.video?.url ? ic('video', 18) : null, resultChip(m), ic('chevron-right', 18)));
     })) : empty('Sin partidos todavía', 'Aquí verás los resultados de tu equipo y tus números en cada partido.'));
   return { title: 'Partidos', el };
 }

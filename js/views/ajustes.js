@@ -1,6 +1,8 @@
 // Ajustes: equipo, días de entrenamiento, apariencia, respaldo, privacidad y cuenta.
-import { h, ic, toast, confirmSheet, download, DAYS, DAYS_LONG, plural } from '../util.js';
-import { state, group, settings, saveSettings, patch, players, sessions, exportBackup, importBackup, refresh, pendingCount } from '../store.js';
+import { h, ic, toast, confirmSheet, openSheet, download, copyText, shareText, fmtDate, newJoinCode, DAYS, DAYS_LONG, plural } from '../util.js';
+import { state, group, settings, saveSettings, add, patch, remove, players, sessions, exportBackup, importBackup, refresh, pendingCount, teamReady } from '../store.js';
+import { pushSettings } from './avisos.js';
+import { disablePush } from '../push.js';
 import { attendanceFor, doneSessions } from '../calc.js';
 import { leave, restartDemo } from '../auth.js';
 import { THEMES, getTheme, setTheme } from '../theme.js';
@@ -17,6 +19,7 @@ function attendanceCsv() {
 }
 
 async function signOut(label) {
+  try { await disablePush(); } catch { /* sin notificaciones */ }
   let r = await leave();
   if (r.blocked) {
     if (!(await confirmSheet({ title: 'Hay cambios sin enviar', text: `${plural(r.pending, 'cambio no se ha enviado', 'cambios no se han enviado')} a la nube porque no hay internet. Si sales ahora se pierden. ¿Salir de todos modos?`, ok: 'Salir y perderlos', danger: true }))) return;
@@ -32,7 +35,62 @@ const themeField = () => {
 };
 
 export default function ajustes(ctx) {
-  return ctx.role === 'coach' ? coach(ctx) : jugador(ctx);
+  return ctx.role === 'coach' ? coach(ctx) : ctx.role === 'assistant' ? asistente() : jugador(ctx);
+}
+
+// ---------- Equipo de apoyo: asistentes adultos y capitanes ----------
+const inviteText = (st) => `Te invito como asistente de ${group()?.name || 'mi equipo'} en Remate (para pasar lista y capturar partidos). Abre ${location.origin}${location.pathname}, elige "Soy asistente", entra o crea tu cuenta con tu correo y escribe el código ${st.invite_code}.`;
+function inviteSheet(st) {
+  openSheet({ title: `Invitación de ${st.name}`, body: h('div', { class: 'stack' },
+    h('div', { class: 'code' }, st.invite_code),
+    h('p', { style: { margin: 0 } }, 'Dale este código a tu asistente. Lo usa una sola vez: elige "Soy asistente", entra con su correo y escribe el código.'),
+    h('div', { class: 'cluster' }, h('button', { class: 'btn', type: 'button', onclick: () => copyText(st.invite_code) }, ic('copy', 18), 'Copiar código'),
+      h('button', { class: 'btn', type: 'button', onclick: () => shareText(inviteText(st)) }, ic('share-2', 18), 'Compartir invitación'))),
+    actions: [{ label: 'Listo', kind: 'primary' }] });
+}
+function newStaffSheet() {
+  const name = h('input', { type: 'text', maxlength: 60, placeholder: 'Por ejemplo: Profe Luis' });
+  openSheet({ title: 'Invitar asistente', body: h('div', { class: 'stack' }, field('Nombre del asistente', name),
+    note('Podrá pasar lista y capturar partidos. No verá notas privadas, evaluaciones, reportes ni tu laboratorio. Puedes quitarle el acceso cuando quieras.')),
+    actions: [{ label: 'Cancelar' }, { label: 'Crear invitación', kind: 'primary', onClick: () => {
+      if (!name.value.trim()) { toast('Escribe su nombre'); return false; }
+      const st = add('staff', { group_id: group()?.id, name: name.value.trim() });
+      setTimeout(() => inviteSheet(st), 50); return true;
+    } }] });
+}
+function supportSection() {
+  const staff = state.data.staff.slice().sort((a, b) => a.name.localeCompare(b.name, 'es'));
+  const caps = players().filter((p) => p.captain);
+  return h('section', { class: 'stack' }, sectionTitle('Equipo de apoyo'),
+    !teamReady() ? note('Para tener asistentes y capitanes, corre en Supabase el instalar.sql de esta versión.', 'warn') : null,
+    h('p', { style: { margin: 0 } }, 'Ayudantes que pueden pasar lista y capturar partidos. Nunca ven notas privadas, evaluaciones, reportes ni tu laboratorio.'),
+    h('h3', {}, 'Capitanes'),
+    caps.length ? h('div', { class: 'rows' }, caps.map((p) => h('a', { class: 'row', href: `#/jugador/${p.id}` }, h('span', { class: 'row-main' }, h('strong', {}, p.name), h('span', { class: 'row-sub' }, 'Entra con su mismo código')), ic('chevron-right', 18))))
+      : h('p', { class: 'row-sub', style: { margin: 0 } }, 'Ninguno. Márcalo en la ficha del jugador con la casilla "Capitán".'),
+    h('h3', {}, 'Asistentes adultos'),
+    staff.length ? h('div', { class: 'rows' }, staff.map((st) => h('div', { class: 'row', style: { flexWrap: 'wrap' } },
+      h('span', { class: 'row-main', style: { flex: '1 1 180px' } }, h('strong', {}, st.name),
+        h('span', { class: 'row-sub' }, !st.active ? 'Sin acceso' : st.user_id ? `Activo desde el ${fmtDate(String(st.joined_at || st.created_at).slice(0, 10), { day: 'numeric', month: 'short' })}` : `Invitación pendiente: ${st.invite_code}`)),
+      h('span', { class: 'row-end', style: { marginLeft: 'auto' } },
+        st.active && !st.user_id ? h('button', { class: 'btn sm', type: 'button', onclick: () => inviteSheet(st) }, 'Invitación') : null,
+        h('button', { class: 'btn sm', type: 'button', onclick: () => { patch('staff', st.id, { active: !st.active }); toast(st.active ? 'Acceso quitado' : 'Acceso devuelto'); } }, st.active ? 'Quitar acceso' : 'Devolver acceso'),
+        h('button', { class: 'btn sm', type: 'button', title: 'Genera un código nuevo; el celular anterior pierde el acceso', onclick: async () => {
+          if (!(await confirmSheet({ title: '¿Código nuevo?', text: `${st.name} tendrá que volver a entrar con el código nuevo.`, ok: 'Generar' }))) return;
+          patch('staff', st.id, { invite_code: newJoinCode(), user_id: null, joined_at: null, active: true }); setTimeout(() => inviteSheet(state.data.staff.find((x) => x.id === st.id)), 50);
+        } }, 'Código nuevo'),
+        h('button', { class: 'iconbtn', type: 'button', 'aria-label': `Quitar a ${st.name}`, onclick: async () => { if (await confirmSheet({ title: `¿Quitar a ${st.name}?`, text: 'Pierde el acceso. Lo que capturó se queda.', ok: 'Quitar', danger: true })) remove('staff', st.id); } }, ic('trash-2', 16))))))
+      : h('p', { class: 'row-sub', style: { margin: 0 } }, 'Ninguno todavía.'),
+    h('div', { class: 'cluster' }, h('button', { class: 'btn', type: 'button', disabled: teamReady() ? null : true, onclick: newStaffSheet }, ic('user-plus', 18), 'Invitar asistente')));
+}
+
+function asistente() {
+  return { title: 'Ajustes', el: h('div', { class: 'page' },
+    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField()),
+    h('section', { class: 'stack' }, sectionTitle('Notificaciones'), pushSettings()),
+    h('section', { class: 'stack' }, sectionTitle('Cuenta'),
+      h('p', { style: { margin: 0 } }, `Entraste como asistente${state.email ? ` (${state.email})` : ''} de ${group()?.name || 'tu equipo'}. Ves la lista del equipo, pasas lista y capturas partidos; no ves datos privados de los jugadores.`),
+      h('div', { class: 'cluster' }, h('button', { class: 'btn', type: 'button', onclick: () => signOut() }, ic('log-out', 18), 'Cerrar sesión'),
+        h('a', { class: 'btn ghost', href: '#/ayuda' }, ic('circle-help', 18), 'Ayuda')))) };
 }
 
 function coach() {
@@ -57,6 +115,7 @@ function coach() {
       h('div', { class: 'field' }, h('span', { class: 'label' }, 'Días de entrenamiento'), days),
       h('div', { class: 'grid' }, field('Hora de inicio', start), field('Duración (min)', mins)),
       field('Retardos que cuentan como 1 falta', late, 'Pon 0 para que los retardos nunca se conviertan en faltas. Las faltas justificadas no restan.')),
+    supportSection(),
     h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField()),
     h('section', { class: 'stack' }, sectionTitle('Tus datos'),
       state.mode === 'cloud' ? h('p', { style: { margin: 0 } }, pendingCount() ? `${plural(pendingCount(), 'cambio espera', 'cambios esperan')} conexión para enviarse.` : state.online ? 'Todo está guardado en la nube.' : 'Sin internet: los cambios se guardan en este celular y se envían al volver la conexión.') : note('Modo demo: los datos son de ejemplo y viven solo en este navegador. Para usar Remate con tus jugadores, conéctalo a Supabase (el LEEME explica cómo).', 'warn'),
@@ -84,6 +143,7 @@ function jugador(ctx) {
   const me = ctx.me;
   return { title: 'Ajustes', el: h('div', { class: 'page' },
     h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField()),
+    ctx.readonly ? null : h('section', { class: 'stack' }, sectionTitle('Notificaciones'), pushSettings()),
     h('section', { class: 'stack' }, sectionTitle('Tu información'),
       h('p', { style: { margin: 0 } }, `Tu entrenador guarda tu nombre o apodo${me ? ` (${me.name})` : ''}, tu posición, tus evaluaciones y tu asistencia. No guarda teléfono, domicilio ni fotos. Solo tú y tu entrenador ven tu avance. Si quieres que se corrija o se borre algo, pídeselo a tu entrenador.`)),
     ctx.readonly ? note('Vista previa: aquí no se cierra la sesión del jugador.', 'warn') : h('section', { class: 'stack' }, sectionTitle('Este celular'),

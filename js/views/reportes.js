@@ -7,6 +7,8 @@ import { LEVELS } from '../content/levels.js';
 import { radarSVG } from '../radar.js';
 import { metrics, addCounts, result, fmtEff } from '../match-calc.js';
 import { sectionTitle, note, empty, dots, playerRow } from './ui.js';
+import { PTESTS, testTrend } from '../content/pruebas.js';
+import { badgesFor } from '../badges.js';
 
 const printBtn = () => h('button', { class: 'btn primary', type: 'button', onclick: () => window.print() }, ic('printer', 18), 'Imprimir o guardar PDF');
 const seasonMatches = () => state.data.matches.filter((m) => m.status === 'terminado');
@@ -75,6 +77,11 @@ function playerReport(id) {
           mm.serves ? h('tr', {}, h('th', { scope: 'row' }, 'Saque'), h('td', {}, `${mm.svIn}% dentro de ${mm.serves}`)) : null,
           mm.recs ? h('tr', {}, h('th', { scope: 'row' }, 'Recepción'), h('td', {}, `Promedio ${mm.recAvg} de 3, ${mm.recPos}% buena o perfecta (${mm.recs} recepciones)`)) : null,
           mm.atts ? h('tr', {}, h('th', { scope: 'row' }, 'Ataque'), h('td', {}, `Eficiencia ${fmtEff(mm.atEff)}, ${mm.kills} puntos en ${mm.atts} remates`)) : null))) : null,
+      (() => { const pt = d.playerTests.filter((t) => t.player_id === p.id), ks = Object.keys(PTESTS).filter((x) => pt.some((t) => t.kind === x));
+        return ks.length ? h('section', { class: 'stack' }, h('h3', {}, 'Pruebas físicas'),
+          h('table', { class: 'stbl' }, h('tbody', {}, ks.map((x) => { const tr = testTrend(pt, x);
+            return h('tr', {}, h('th', { scope: 'row' }, PTESTS[x].name), h('td', {}, `${Number(tr.last)} ${PTESTS[x].unit}${tr.n > 1 ? ` (primera: ${Number(tr.first)} ${PTESTS[x].unit}; cambio ${tr.d > 0 ? '+' : ''}${tr.d})` : ''}`)); })))) : null; })(),
+      (() => { const { earned } = badgesFor(p, d, st); return earned.length ? h('section', { class: 'stack' }, h('h3', {}, 'Insignias'), h('p', { style: { margin: 0 } }, earned.map((b) => `${b.name} (${b.desc})`).join(' · '))) : null; })(),
       h('section', { class: 'stack' }, h('h3', {}, 'Comentario del entrenador'), comment, printed,
         !labReady() ? note('Para guardar comentarios, corre el SQL actualizado en Supabase.', 'warn') : null),
       h('footer', { class: 'rp-foot' }, 'Las fases van de 1 (Iniciación) a 4 (Refinamiento). Los niveles van de 1 a 6 y solo se suben con examen. Generado con Remate.')));

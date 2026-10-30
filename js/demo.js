@@ -83,7 +83,9 @@ export function makeDemoData() {
     { id: 'demo-e2', owner_id: 'demo', player_id: 'demo-p5', level: 4, passed: true, results: {}, note: '', taken_at: addDays(today, -26), created_at: iso(Date.now() - 26 * 864e5) },
     { id: 'demo-e3', owner_id: 'demo', player_id: 'demo-p1', level: 4, passed: false, results: {}, note: 'Le faltó consistencia en la colocación a zona 2.', taken_at: addDays(today, -12), created_at: iso(Date.now() - 12 * 864e5) },
   ];
+  const { seasonPlan, ...phase } = makeDemoPhase2({ R, players, sessions, gid });
+  groups[0].settings.season_plan = seasonPlan;
   return { groups, players, sessions, attendance, ratings, exams, claims, notes: [
     { id: 'demo-n1', owner_id: 'demo', player_id: 'demo-p9', body: 'Platicar con ella: ha faltado dos veces seguidas.', created_at: iso(Date.now() - 864e5) },
-  ], customEx: [], ...makeDemoPhase2({ R, players, sessions, gid }) };
+  ], customEx: [], ...phase };
 }

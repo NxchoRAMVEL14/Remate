@@ -97,3 +97,63 @@ export function result(match) {
   const us = sets.filter((s) => s.us > s.them).length, them = sets.filter((s) => s.them > s.us).length;
   return { us, them, win: match.status === 'terminado' ? us > them : null, text: `${us}-${them}`, detail: sets.map((s) => `${s.us}-${s.them}`).join(', ') };
 }
+
+// ---------- Rotaciones, side-out y break point ----------
+// Alineación por set: matches.lineups[set] = { slots: [id en zona 1, zona 2, ..., zona 6], libero, serve: 'us' | 'them' }.
+// La rotación es en sentido de las manecillas: el de zona 2 pasa a zona 1 (a sacar), el de 1 a 6, etc.
+export const rotate = (slots) => [slots[1], slots[2], slots[3], slots[4], slots[5], slots[0]];
+export const ZONE_ORDER = { front: [4, 3, 2], back: [5, 6, 1] };     // así se ve la cancha desde tu banca, con la red arriba
+
+// Etiqueta de la rotación: por la zona del colocador si hay uno en cancha; si no, por el número de rotaciones.
+function rotKey(slots, setters, n) {
+  const i = slots ? slots.findIndex((id) => setters.has(id)) : -1;
+  return i >= 0 ? `C${i + 1}` : `R${(n % 6) + 1}`;
+}
+export const rotLabel = (k) => (k?.[0] === 'C' ? `Colocador en zona ${k.slice(1)}` : `Rotación ${k?.slice(1)}`);
+
+// Repite el partido jugada por jugada: quién sacaba en cada rally, en qué rotación estábamos y quién lo ganó.
+// players: lista con { id, position } para reconocer al colocador.
+export function replay(log = [], lineups = [], players = []) {
+  const setters = new Set(players.filter((p) => p.position === 'colocador').map((p) => p.id));
+  let set = 0, lu = lineups?.[0], slots = lu?.slots?.length === 6 ? [...lu.slots] : null, serving = lu?.serve || null, n = 0;
+  const rallies = [];
+  for (const e of log) {
+    if (e.a === 'set_end') { set++; lu = lineups?.[set]; slots = lu?.slots?.length === 6 ? [...lu.slots] : null; serving = lu?.serve || null; n = 0; continue; }
+    if (e.a === 'sub') { if (slots) { const i = slots.indexOf(e.out); if (i >= 0) slots[i] = e.p; } continue; }
+    // Si no sabemos quién saca, una acción de saque o de recepción nuestra lo dice.
+    if (!serving && /^sv_/.test(e.a)) serving = 'us';
+    if (!serving && /^rc_/.test(e.a)) serving = 'them';
+    if (e.pt !== 'us' && e.pt !== 'them') continue;
+    rallies.push({ set, serving, key: slots ? rotKey(slots, setters, n) : null, won: e.pt === 'us' });
+    if (serving && e.pt !== serving && e.pt === 'us' && slots) { slots = rotate(slots); n++; }
+    else if (serving && e.pt !== serving && e.pt === 'us') n++;
+    serving = e.pt;                                                  // quien gana el rally saca el siguiente
+  }
+  return { rallies, cur: { set, slots, serving, key: slots ? rotKey(slots, setters, n) : null, libero: lu?.libero || null, lineup: lu || null } };
+}
+
+// Side-out: puntos ganados cuando recibimos. Break point: puntos ganados cuando sacamos.
+export function phaseStats(rallies) {
+  const rec = rallies.filter((r) => r.serving === 'them'), srv = rallies.filter((r) => r.serving === 'us');
+  const pct = (a) => (a.length ? Math.round((a.filter((r) => r.won).length / a.length) * 100) : null);
+  return { so: pct(rec), soN: rec.length, soW: rec.filter((r) => r.won).length, bp: pct(srv), bpN: srv.length, bpW: srv.filter((r) => r.won).length };
+}
+export function byRotation(rallies) {
+  const m = new Map();
+  for (const r of rallies) { if (!r.key) continue; const x = m.get(r.key) || []; x.push(r); m.set(r.key, x); }
+  return [...m.entries()].map(([key, list]) => ({ key, n: list.length, won: list.filter((r) => r.won).length, diff: list.filter((r) => r.won).length * 2 - list.length, ...phaseStats(list) }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+}
+
+// ---------- Mapa de saque y ataque ----------
+// Zonas del rival vistas desde tu lado: arriba el fondo (1, 6, 5), abajo junto a la red (2, 3, 4).
+export const RIVAL_GRID = [[1, 6, 5], [2, 3, 4]];
+export const ZONE_ACTIONS = new Set(['sv_ace', 'sv_in', 'at_k', 'at_in']);
+export function zoneCounts(log = [], kind = 'sv', playerId = null) {
+  const c = {}; for (let z = 1; z <= 6; z++) c[z] = { n: 0, pts: 0 };
+  for (const e of log) {
+    if (!e.z || !e.a?.startsWith(`${kind}_`) || (playerId && e.p !== playerId)) continue;
+    c[e.z].n++; if (e.a === 'sv_ace' || e.a === 'at_k') c[e.z].pts++;
+  }
+  return c;
+}

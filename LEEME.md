@@ -1,6 +1,6 @@
 # Remate: guía para subirlo (GitHub + Supabase)
 
-Remate es una app para entrenar voleibol de sala con chavos de prepa, del primer toque al nivel competitivo. Se instala en el celular como Escuadra (PWA). Esta es la **versión 2.1**: el núcleo (jugadores, niveles, ejercicios, entrenamientos y asistencia) más **partidos con estadística en vivo**, **reportes imprimibles**, tu **laboratorio** (salto vertical, visión de juego y coaching), **En casa** (rutinas opcionales para tus jugadores) y tu lista privada de **Mejoras**. Sin configurar nada, abre en **modo demo** con datos de ejemplo.
+Remate es una app para entrenar voleibol de sala con chavos de prepa, del primer toque al nivel competitivo. Se instala en el celular como Escuadra (PWA). Esta es la **versión 3**: el núcleo (jugadores, niveles, ejercicios, entrenamientos y asistencia), **partidos con estadística en vivo, rotaciones, side-out y break point, mapa de saque y ataque y video**, **convocatoria**, **ayudantes** (capitán y asistente adulto), **pruebas físicas**, **insignias**, **planeador de temporada**, **avisos** (en la app, WhatsApp y notificación al celular), **reportes imprimibles**, tu **laboratorio** (salto vertical, visión de juego y coaching), **En casa** con tareas por jugador y tu lista privada de **Mejoras**. Sin configurar nada, abre en **modo demo** con datos de ejemplo.
 
 > **¿Ya subiste una versión anterior?** Salta a la sección **0. Actualizar desde una versión anterior**.
 
@@ -11,11 +11,12 @@ Tiempo estimado: 25 minutos. Orden recomendado: 1) Supabase, 2) GitHub, 3) conec
 ## 0. Actualizar desde una versión anterior
 
 1. **Supabase primero:** SQL Editor → New query → pega **todo** `sql/instalar.sql` (el nuevo) → **Run**. No borra nada: solo agrega las tablas nuevas. Si lo corres dos veces no pasa nada.
-2. **GitHub después:** arrastra **todo** el contenido de la carpeta nueva al repositorio, igual que la primera vez, y da **Commit changes**. GitHub reemplaza los archivos que cambiaron. **Antes, guarda tu `config.js`** (o vuelve a pegar tu URL y clave después), porque el del ZIP viene vacío.
+2. **GitHub después:** arrastra **todo** el contenido de la carpeta nueva al repositorio, igual que la primera vez, y da **Commit changes**. GitHub reemplaza los archivos que cambiaron. El `config.js` de este ZIP ya trae la URL y la clave de tu proyecto Remate.
 3. Abre la app y recarga dos veces (la primera baja la versión nueva). Si tus jugadores ya la tienen instalada, se actualiza sola la siguiente vez que la abran con internet.
    **El ícono nuevo (balón de voleibol):** Android lo cambia solo después de unos días; en iPhone hay que borrar el acceso de la pantalla de inicio y volver a agregarlo.
 4. Si actualizas los archivos antes de correr el SQL, no se rompe nada: Laboratorio, Partidos, En casa y Mejoras muestran un aviso rojo y no guardan hasta que corras el SQL.
-5. Si probaste el **modo demo** en ese navegador, ve a **Ajustes → Reiniciar demo** para ver los ejemplos nuevos (partidos, saltos, bitácora).
+5. Si probaste el **modo demo** en ese navegador, ve a **Ajustes → Reiniciar demo** para ver los ejemplos nuevos.
+6. **Notificaciones al celular:** además del SQL, necesitan la función `avisos` en Supabase (la carpeta `supabase/functions/avisos` del ZIP). Si Claude la instaló por ti con la conexión a Supabase, no tienes que hacer nada. Si no: Supabase → **Edge Functions → Deploy a new function → Via Editor**, nombre `avisos`, pega el contenido de `index.ts` y da **Deploy**. Sin la función, los avisos igual aparecen en la app y por WhatsApp.
 
 ## 1. Supabase (la base de datos)
 
@@ -30,7 +31,7 @@ Crea un proyecto **nuevo y separado** de Escuadra y Brida: aquí habrá datos de
 ## 2. GitHub (para publicar la app)
 
 1. Crea un repositorio nuevo, por ejemplo `remate`. Públicos funcionan gratis con GitHub Pages; uno privado necesita plan de pago.
-2. Descomprime el ZIP en tu computadora. Entra a la carpeta y selecciona **todo lo que hay dentro** (index.html, css, js, fonts, icons, vendor, sql, etc.). Arrástralo a la página del repositorio (*uploading an existing file*) y da **Commit changes**. Tiene 88 archivos, debajo del límite de 100 por carga.
+2. Descomprime el ZIP en tu computadora. Entra a la carpeta y selecciona **todo lo que hay dentro** (index.html, css, js, fonts, icons, vendor, sql, etc.). Arrástralo a la página del repositorio (*uploading an existing file*) y da **Commit changes**. Tiene 96 archivos, debajo del límite de 100 por carga.
    Importante: `index.html` debe quedar en la raíz del repositorio, no dentro de otra carpeta.
 3. En el repositorio: **Settings → Pages**. En *Source* elige **Deploy from a branch**, rama **main**, carpeta **/ (root)** y guarda. En uno o dos minutos aparece la dirección, algo como `https://tuusuario.github.io/remate/`.
 4. Esa es la dirección que abres en el celular. Si usas confirmación de correo, es la que pones como *Site URL* en Supabase.
@@ -69,6 +70,11 @@ Marca cada paso. Si algo falla, anota **qué tocaste y qué mensaje salió**.
 - [ ] **Más → Reportes**: abres el reporte de un jugador, escribes un comentario y lo imprimes o guardas en PDF.
 - [ ] El jugador abre **Inicio → Entrena en casa**, toca *La hice* en una rutina y tú lo ves en **Ejercicios → Para hacer en casa**.
 - [ ] Tocas el **foco** de arriba, anotas una mejora y aparece en **Más → Mejoras de la app**.
+- [ ] En un partido nuevo pones la **alineación** del set 1: la cancha muestra a los 6 y quién saca. Al terminar, el **Resumen** muestra side-out, break point y la tabla por rotación.
+- [ ] Marcas a un jugador como **Capitán** en su ficha: en su celular aparece **Modo capitán** y puede pasar lista.
+- [ ] En **Ajustes → Equipo de apoyo** invitas a un asistente; él elige **Soy asistente**, entra con su correo y el código, y solo ve **Asistir, Partidos, Avisos y Ejercicios**.
+- [ ] Un jugador contesta **Voy** a un partido próximo y tú lo ves en la **Convocatoria**.
+- [ ] Publicas un **aviso** desde **Hoy**: aparece en el Inicio de los jugadores. Si un jugador activó las notificaciones en Ajustes, le llega al celular.
 
 Probar sin tocar Supabase: deja `config.js` vacío y abre la app, o usa **Probar el modo demo** en la pantalla de entrada. El demo guarda todo solo en ese navegador.
 
@@ -86,6 +92,16 @@ Probar sin tocar Supabase: deja `config.js` vacío y abre la app, o usa **Probar
 - **Reportes** (en *Más*): por jugador y del grupo, listos para imprimir o guardar en PDF.
 - **En casa**: 22 ejercicios opcionales (físico, técnica con balón y sin balón) y 3 rutinas listas, con la dosis según el nivel de cada jugador. Registrar lo que hicieron es opcional; tú ves quién entrena en casa.
 - **Mejoras** (el foco de arriba o *Más → Mejoras de la app*): tu lista privada. Marca como *Lista para pedir* lo que quieras en la siguiente versión, toca *Copiar* y pégalo en el chat.
+- **Rotaciones:** al empezar cada set, *Poner alineación* (zonas 1 a 6, líbero y quién saca). La cancha de la captura sigue la rotación sola y registra los cambios. Con eso el resumen te dice **side-out** (puntos ganados recibiendo), **break point** (ganados sacando) y la **rotación más débil**.
+- **Marcar zona:** enciéndelo en la captura y, después de un saque o un ataque, toca dónde cayó. El resumen y la lista de partidos muestran el **mapa** del equipo o de cada jugador.
+- **Video:** en el resumen del partido pega el enlace de YouTube (puede ser *No listado*) o Drive y agrega **marcas** con su minuto. En YouTube, la marca abre el video justo ahí. También puedes poner video a cada ejercicio.
+- **Convocatoria:** los partidos próximos aparecen a tus jugadores con *Voy / En duda / No voy*. Tú ves quién falta por contestar y puedes recordarles por WhatsApp.
+- **Ayudantes:** el **capitán** (casilla en la ficha del jugador) entra con su mismo código; el **asistente adulto** entra con correo y el código de invitación de *Ajustes → Equipo de apoyo*. Los dos pasan lista y capturan partidos; nunca ven notas, evaluaciones, reportes, pruebas de otros ni tu laboratorio. Lo que capturan queda a tu nombre. Puedes quitarles el acceso cuando quieras.
+- **Pruebas físicas** (*Jugadores → Pruebas físicas*): salto, alcance de remate, agilidad (prueba T), plancha y estatura. Captura rápida para todo el equipo y gráfica de avance por jugador; cada jugador ve solo las suyas.
+- **Tarea de casa:** en la ficha del jugador o en *En casa*, elige rutinas o ejercicios y cuántas veces por semana. El jugador la ve arriba de todo en su sección *En casa*.
+- **Planear temporada** (*Entrenamientos*): bloques de 3 a 6 semanas con enfoque y una o dos plantillas que se alternan. *Crear entrenamientos* los pone en tus días de entrenamiento sin tocar los que ya existen.
+- **Insignias:** se ganan solas por constancia y logros (racha de asistencia, semanas entrenando en casa, retos, aces, recepciones perfectas, salto...). Las ven el jugador y tú.
+- **Avisos:** *Hoy → Avisar al equipo*. El aviso aparece en el Inicio de los jugadores y ayudantes, se puede mandar por WhatsApp y llega como notificación a quien la activó en *Ajustes* (en iPhone, con la app instalada en la pantalla de inicio). Al cambiar la fecha u hora de un entrenamiento publicado, Remate te ofrece avisar.
 
 ## 6. Cómo cambiar niveles, exámenes y ejercicios
 
@@ -104,6 +120,8 @@ Los números de Remate son **propuestas de partida**, no verdades científicas: 
 | Autoevaluación y guías de coaching | `js/content/coaching.js` |
 | Ejercicios y rutinas para casa | `js/content/casa.js` |
 | Ideas sugeridas en Mejoras | `js/content/ideas.js` |
+| Pruebas físicas y cómo medirlas | `js/content/pruebas.js` |
+| Insignias y sus escalones | `js/badges.js` |
 
 Los **ejercicios propios** no necesitan editar archivos: se crean desde la pantalla **Ejercicios → Ejercicio propio** y se guardan en tu cuenta.
 
@@ -119,6 +137,8 @@ La app incluye una pantalla **Ayuda** con las fuentes y sus enlaces. Resumen:
 - Lesiones frecuentes en jóvenes: Children's Hospital Colorado.
 - Reglas: FIVB 2025-2028 (y las pruebas de reglas de la FIVB para 2026, publicadas por NORCECA).
 - Estadística de partido: escala de recepción 0 a 3 y eficiencia de ataque, las medidas más comunes en voleibol.
+- Prueba de agilidad T: Pauole y colaboradores, *J Strength Cond Res*, 2000 (protocolo en topendsports.com).
+- Notificaciones: Web Push con una función de Supabase (Edge Functions).
 
 Los ejercicios y plantillas son creación de Remate sobre esas bases. No sustituyen a un médico ni a un entrenador titulado.
 

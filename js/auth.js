@@ -7,12 +7,32 @@ import { cleanCode } from './util.js';
 const LAST_KEY = 'remate.last';
 
 async function ensureGroup() {
-  if (state.role !== 'coach' || group()) return;
+  if (state.role !== 'coach' || group() || state.lastError) return;
   add('groups', { name: 'Mi equipo', settings: { days: [2, 4], start: '17:00', minutes: 90, late_per_absence: 3 } });
 }
 
-async function startFrom(user) {
-  const role = user.is_anonymous ? 'player' : 'coach';
+// Con correo puede ser entrenador o asistente: es asistente si tiene una invitación activa y no tiene equipo propio.
+async function roleOf(user) {
+  if (user.is_anonymous) return 'player';
+  try {
+    const c = await client();
+    const [own, inv] = await Promise.all([
+      c.from('groups').select('id').eq('owner_id', user.id).limit(1),
+      c.from('staff').select('id').eq('user_id', user.id).eq('active', true).limit(1),
+    ]);
+    if (own.error) throw own.error;
+    if (own.data?.length) return 'coach';
+    if (!inv.error && inv.data?.length) return 'assistant';
+    return 'coach';
+  } catch {
+    // Sin conexión: el último papel con el que entró en este celular.
+    try { const last = JSON.parse(ls.get(LAST_KEY) || 'null'); if (last?.id === user.id && last.role) return last.role; } catch { /* nada */ }
+    return 'coach';
+  }
+}
+
+async function startFrom(user, known) {
+  const role = known || await roleOf(user);
   ls.set(MODE_KEY, 'cloud');
   ls.set(LAST_KEY, JSON.stringify({ id: user.id, email: user.email || '', role }));
   beginCloud({ user, role });
@@ -29,7 +49,7 @@ export async function boot() {
     const { data } = await c.auth.getSession();
     const user = data?.session?.user;
     if (user) {
-      const role = user.is_anonymous ? 'player' : 'coach';
+      const role = await roleOf(user);
       ls.set(LAST_KEY, JSON.stringify({ id: user.id, email: user.email || '', role }));
       beginCloud({ user, role });
       const hadData = state.data.groups.length || state.data.players.length;
@@ -47,6 +67,23 @@ export async function boot() {
 }
 
 export function startDemo() { beginDemo(makeDemoData); }
+
+// Asistente adulto: entra (o crea su cuenta) con correo y usa el código de invitación de su entrenador.
+export async function assistantJoin(email, password, raw, { signup = false } = {}) {
+  const code = cleanCode(raw);
+  if (code.length !== 6) throw new Error('El código de invitación tiene 6 caracteres.');
+  const c = await client();
+  clearLocal();
+  const r = signup ? await c.auth.signUp({ email: String(email).trim(), password }) : await c.auth.signInWithPassword({ email: String(email).trim(), password });
+  if (r.error) throw new Error(friendly(r.error));
+  if (!r.data.session) { const e = new Error('Cuenta creada. Confirma tu correo con el enlace que te enviamos y luego entra con tu código.'); e.info = true; throw e; }
+  const { data, error } = await c.rpc('join_staff', { p_code: code });
+  if (error || !data?.length) {
+    await c.auth.signOut();
+    throw new Error(error ? friendly(error) : 'Ese código de invitación no existe o ya lo usó otra persona. Pídele uno nuevo a tu entrenador.');
+  }
+  await startFrom(r.data.session.user, 'assistant');
+}
 export function restartDemo() { resetDemo(makeDemoData); }
 
 export async function coachSignIn(email, password) {

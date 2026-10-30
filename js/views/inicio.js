@@ -7,7 +7,11 @@ import { CHALLENGES } from '../content/challenges.js';
 import { getExercise } from '../content/exercises.js';
 import { dots, sectionTitle, empty, note, statusChip, sessionWhen } from './ui.js';
 import { playerCard, playerStats } from './card.js';
-import { homeWeek } from './casa.js';
+import { homeWeek, planOf } from './casa.js';
+import { unseenBanner } from './avisos.js';
+import { badgesEl } from './insignias.js';
+import { isStaff } from '../store.js';
+import { PTESTS, testTrend } from '../content/pruebas.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
 
@@ -16,7 +20,10 @@ export default function inicio(ctx) {
   if (!me) return { title: 'Inicio', el: h('div', { class: 'page' }, empty('Tu cuenta ya no está ligada a un jugador', 'Pasa cuando tu entrenador generó un código nuevo o cambió tus datos. Pídele tu código actual y vuelve a entrar.',
     h('a', { class: 'btn primary', href: '#/ajustes' }, 'Ir a Ajustes'))) };
   const stats = playerStats(me), { gap, att } = stats;
-  const el = h('div', { class: 'page' }, playerCard(me, stats));
+  const el = h('div', { class: 'page' }, unseenBanner(ctx),
+    isStaff() ? h('a', { class: 'labcard', href: '#/asistir' }, h('span', { class: 'lc-ic' }, ic('clipboard-check', 26)),
+      h('span', { class: 'lc-t' }, h('strong', {}, 'Modo capitán'), h('span', {}, 'Pasa lista y captura los partidos del equipo.')), ic('chevron-right', 20)) : null,
+    playerCard(me, stats));
 
   // próximo entrenamiento publicado
   const next = nextSession(sessions());
@@ -42,11 +49,24 @@ export default function inicio(ctx) {
         h('span', { class: 'row-end' }, dots(r.have, r.need), h('span', { class: `chip ${r.ok ? 'ok' : 'warn'}` }, r.ok ? 'Listo' : r.have ? `Falta ${r.need - r.have}` : 'Pendiente')))))));
   }
 
+  // insignias
+  el.append(badgesEl(me));
+
+  // pruebas físicas
+  const myTests = state.data.playerTests.filter((t) => t.player_id === me.id);
+  if (myTests.length) {
+    const kinds = Object.keys(PTESTS).filter((k) => k !== 'estatura' && myTests.some((t) => t.kind === k));
+    el.append(h('a', { class: 'panel', href: '#/pruebas', style: { textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '12px' } },
+      ic('ruler', 26), h('span', { class: 'row-main' }, h('strong', {}, 'Tus pruebas físicas'),
+        h('span', { class: 'row-sub' }, kinds.map((k) => { const tr = testTrend(myTests, k); return `${PTESTS[k].short}: ${Number(tr.last)} ${PTESTS[k].unit}${tr.n > 1 && tr.d ? ` (${tr.d > 0 ? '+' : ''}${tr.d})` : ''}`; }).join(' · ') || 'Ver tus resultados')), ic('chevron-right', 18)));
+  }
+
   // en casa (opcional)
-  const hw = homeWeek(me.id);
+  const hw = homeWeek(me.id), hp = planOf(me);
   el.append(h('a', { class: 'panel', href: '#/casa', style: { textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '12px' } },
     ic('house', 26), h('span', { class: 'row-main' }, h('strong', {}, 'Entrena en casa (opcional)'),
-      h('span', { class: 'row-sub' }, hw.days ? `Esta semana llevas ${plural(hw.days, 'día', 'días')}. ¡Sigue así!` : 'Rutinas cortas de físico y técnica, con o sin balón.')), ic('chevron-right', 18)));
+      h('span', { class: 'row-sub' }, hp.items.length ? `Tu entrenador te dejó tarea de casa (${plural(hp.items.length, 'cosa', 'cosas')}).${hw.days ? ` Esta semana llevas ${plural(hw.days, 'día', 'días')}.` : ''}` : hw.days ? `Esta semana llevas ${plural(hw.days, 'día', 'días')}. ¡Sigue así!` : 'Rutinas cortas de físico y técnica, con o sin balón.')),
+      hp.items.length ? h('span', { class: 'chip ball' }, 'Tarea') : null, ic('chevron-right', 18)));
 
   // retos
   const pend = state.data.claims.filter((c) => c.player_id === me.id && c.status === 'solicitada').length;

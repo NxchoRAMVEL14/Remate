@@ -16,7 +16,11 @@ const COACH_STEPS = [
   'En Más → Laboratorio está tu espacio: tu programa de salto vertical, tu entrenador de visión de juego y tu bitácora de coaching. Nadie más lo ve.',
   'En Más → Reportes imprimes o guardas en PDF el reporte de cada jugador o del grupo.',
   'El foco de arriba (en cualquier pantalla) anota una mejora para la app en tu lista privada de Mejoras. Cuando quieras pedirlas, cópialas y pégalas en el chat.',
-  'En Ejercicios → Para hacer en casa ves las rutinas opcionales que tienen tus jugadores y quién está entrenando en casa.',
+  'En Ejercicios → Para hacer en casa ves las rutinas opcionales que tienen tus jugadores y quién está entrenando en casa. Desde ahí (o la ficha) le dejas a cada uno su tarea de casa.',
+  'Ayudantes: marca a un jugador como Capitán en su ficha, o invita a un asistente adulto en Ajustes → Equipo de apoyo. Pueden pasar lista y capturar partidos; nunca ven notas, evaluaciones, reportes ni tu laboratorio.',
+  'En un partido, pon la alineación de cada set: Remate sigue la rotación y te dice side-out, break point y en qué rotación pierden más puntos.',
+  'En Entrenamientos → Planear temporada divides la temporada en bloques con enfoque; cada bloque crea sus entrenamientos con las plantillas que elijas.',
+  'Avisos: desde Hoy publicas un aviso que aparece en el Inicio de tus jugadores, se puede mandar por WhatsApp y llega como notificación a quien la activó.',
 ];
 const PLAYER_STEPS = [
   'En Inicio ves tu tarjeta: tu nivel, tu radar de habilidades y lo que falta para subir.',
@@ -25,6 +29,8 @@ const PLAYER_STEPS = [
   'En Ruta ves los seis niveles y los retos. Cuando cumplas un reto, pide la aprobación; tu entrenador lo revisa.',
   'En Partidos ves los resultados de tu equipo y tus propios números en cada partido. Los de tus compañeros no se muestran.',
   'En Inicio → Entrena en casa hay rutinas opcionales de físico y de técnica con y sin balón, a tu nivel. Si quieres, registra lo que hiciste: solo tú y tu entrenador lo ven.',
+  'En Partidos contestas la convocatoria (Voy, En duda, No voy) y ves el video y tus números de cada partido.',
+  'En Inicio ves tus insignias, tus pruebas físicas y los avisos del entrenador. En Ajustes puedes activar las notificaciones.',
 ];
 
 export default function ayuda(ctx) {
@@ -65,7 +71,10 @@ export default function ayuda(ctx) {
         h('li', {}, 'Lesiones frecuentes en jóvenes voleibolistas (tobillo, rodilla, espalda baja, hombro): ', link('https://www.childrenscolorado.org/just-ask-childrens/articles/common-volleyball-injuries-in-young-athletes/', 'Children’s Hospital Colorado'), '. Base de los ejercicios de aterrizaje y prevención.'),
         h('li', {}, 'Reglas de juego: ', link('https://www.fivb.com/volleyball/the-game/official-volleyball-rules/', 'reglas oficiales FIVB 2025-2028'), '.'),
         h('li', {}, 'Pruebas de reglas de la FIVB para 2026 (por ejemplo, ocho sustituciones por set en algunas competencias): ', link('https://norceca.info/fivb-board-of-administration-approves-rule-tests-for-2026-competitions/', 'NORCECA'), '.'),
-        h('li', {}, 'Escala de recepción de 0 a 3 y eficiencia de ataque: son las medidas más comunes en la estadística de voleibol; la forma exacta de capturarlas en Remate es propia.'))),
+        h('li', {}, 'Escala de recepción de 0 a 3 y eficiencia de ataque: son las medidas más comunes en la estadística de voleibol; la forma exacta de capturarlas en Remate es propia.'),
+        h('li', {}, 'Prueba de agilidad T: ', link('https://www.topendsports.com/testing/tests/t-test.htm', 'descripción del protocolo'), ', con la referencia de Pauole y colaboradores (J Strength Cond Res, 2000) sobre su confiabilidad.'),
+        h('li', {}, 'Notificaciones: usan Web Push con una función de Supabase (', link('https://supabase.com/docs/guides/functions', 'Edge Functions'), '). En iPhone solo llegan con la app instalada en la pantalla de inicio.'),
+        h('li', {}, 'Side-out, break point, insignias, bloques de temporada y tareas de casa: propuestas de Remate basadas en práctica común de entrenamiento, no en un estudio.'))),
     h('section', { class: 'note warn' }, h('strong', {}, 'Importante: '), 'Remate no sustituye a un médico ni a un entrenador titulado. Si un jugador siente dolor, se detiene. Si dudas de una carga o de una lesión, consulta a un profesional.'));
   return { title: 'Ayuda', el };
 }

@@ -212,7 +212,7 @@ details > summary { cursor: pointer; min-height: 32px; display: flex; align-item
 .pad-g { background: var(--surface); border-radius: var(--r-m); padding: 10px; display: grid; gap: 6px; }
 .pad-t { font-weight: 700; font-size: .9rem; color: var(--ink-2); }
 .pad-b { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); gap: 6px; }
-.act { min-height: 50px; min-width: 0; border-radius: var(--r-m); border: 2px solid var(--line); background: var(--surface-2); color: var(--ink); font-weight: 700; font-size: .9rem; cursor: pointer; padding: 4px 4px; display: grid; place-items: center; line-height: 1.15; overflow-wrap: anywhere; }
+.act { min-height: 50px; min-width: 0; border-radius: var(--r-m); border: 2px solid var(--line); background: var(--surface-2); color: var(--ink); font-weight: 700; font-size: .84rem; cursor: pointer; padding: 4px 2px; display: grid; place-items: center; line-height: 1.15; overflow-wrap: normal; hyphens: auto; }
 .act b { font-family: var(--font-display); font-size: 1.3rem; }
 .act small { font-weight: 400; font-size: .72rem; color: var(--ink-2); }
 .act.ok { border-color: var(--ok); background: var(--ok-bg); }
@@ -267,3 +267,77 @@ details > summary { cursor: pointer; min-height: 32px; display: flex; align-item
 .hx > summary .ic { flex: none; color: var(--ink-2); transition: transform .15s; }
 .hx[open] > summary .ic { transform: rotate(180deg); }
 .hx-body { padding: 0 14px 14px; }
+
+/* ---------- Entrada: tres tipos de cuenta ---------- */
+.gate .seg { display: flex; }
+.gate .seg button { flex: 1; padding: 8px 6px; font-size: .92rem; }
+
+/* ---------- Cancha en vivo (rotación) ---------- */
+.court-live { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; background: var(--floor); border-radius: var(--r-m); padding: 30px 8px 8px; }
+.cl-net { position: absolute; top: 6px; left: 8px; right: 8px; height: 16px; border-bottom: 3px dashed rgba(255,255,255,.75); color: #fff; font-size: .7rem; font-weight: 700; text-align: center; letter-spacing: .1em; text-transform: uppercase; }
+.court-z { position: relative; display: grid; }
+.court-z .rp { width: 100%; }
+.cz-n { position: absolute; top: 4px; left: 6px; z-index: 1; font-size: .72rem; font-weight: 700; color: var(--ink-2); display: inline-flex; }
+.bench .rp { min-height: 44px; padding: 4px 10px; grid-auto-flow: column; gap: 6px; }
+.bench .rp .rp-n { font-size: 1.15rem; }
+.rp.lib { border-color: var(--ball); }
+.lineup-ask { border: 2px dashed var(--line); }
+
+/* Alineación (hoja) */
+.lu-grid { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; background: var(--surface-2); border-radius: var(--r-m); padding: 28px 8px 8px; }
+.lu-net { position: absolute; top: 6px; left: 8px; right: 8px; border-bottom: 3px dashed var(--ink-2); font-size: .7rem; font-weight: 700; text-align: center; color: var(--ink-2); text-transform: uppercase; letter-spacing: .1em; }
+.lu-cell { display: grid; gap: 3px; font-size: .8rem; font-weight: 700; color: var(--ink-2); }
+.lu-cell select { min-width: 0; font-size: .9rem; padding: 6px 4px; }
+
+/* Zona del saque o ataque */
+.zone-pick { display: grid; gap: 6px; background: var(--floor); border-radius: var(--r-m); padding: 8px; }
+.zp-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.zp { min-height: 74px; border-radius: var(--r-m); border: 2px solid rgba(255,255,255,.5); background: rgba(255,255,255,.12); color: #fff; cursor: pointer; display: grid; place-items: center; align-content: center; gap: 2px; }
+.zp b { font-family: var(--font-display); font-size: 1.9rem; line-height: 1; }
+.zp small { font-size: .72rem; opacity: .85; }
+.zp:hover, .zp:focus-visible { background: var(--ball); color: var(--ball-on); border-color: var(--ball); }
+.zp-net { border-top: 3px dashed rgba(255,255,255,.8); color: #fff; font-size: .7rem; font-weight: 700; text-align: center; letter-spacing: .1em; text-transform: uppercase; padding-top: 2px; }
+
+/* Mapa de zonas */
+.zmap { display: grid; gap: 6px; max-width: 420px; }
+.zm-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; background: var(--surface); border-radius: var(--r-m); padding: 4px; border: 1px solid var(--line); }
+.zm-cell { position: relative; min-height: 84px; border-radius: 8px; padding: 6px 8px; display: grid; align-content: space-between; color: var(--ink); background: color-mix(in srgb, var(--court) calc(var(--a, 0) * 100%), var(--surface-2)); }
+.zm-cell b { font-family: var(--font-display); font-size: 1.8rem; line-height: 1; }
+.zm-z, .zm-p { font-size: .74rem; font-weight: 700; }
+.zmap figcaption { color: var(--ink-2); font-size: .82rem; }
+.zm-net { border-top: 3px dashed var(--ink-2); color: var(--ink-2); font-size: .7rem; font-weight: 700; text-align: center; letter-spacing: .1em; text-transform: uppercase; }
+.stbl tr.hl th, .stbl tr.hl td { background: var(--warn-bg); }
+
+/* ---------- Insignias ---------- */
+.badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.badge { background: var(--surface); border-radius: var(--r-m); padding: 10px 12px; display: grid; gap: 2px; justify-items: start; border: 2px solid transparent; }
+.badge.t3 { border-color: var(--ball); }
+.badge strong { font-family: var(--font-display); font-size: 1.15rem; font-weight: 800; line-height: 1.1; }
+.badge span:last-child { color: var(--ink-2); font-size: .8rem; }
+.bd-ic { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--ball); color: var(--ball-on); flex: none; }
+.bd-ic.off { width: 34px; height: 34px; background: var(--surface-2); color: var(--ink-2); }
+.badge.t1 .bd-ic { background: var(--surface-2); color: var(--ink); }
+.row-main .bar { margin-top: 4px; height: 6px; }
+
+/* ---------- Avisos ---------- */
+.notices { gap: 8px; }
+.notice { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; background: var(--warn-bg); border-radius: var(--r-m); padding: 12px 14px; border-left: 5px solid var(--ball); }
+.notice .row-main { flex: 1 1 200px; }
+.nt-ic { color: var(--warn); margin-top: 2px; }
+
+/* ---------- Varios ---------- */
+.chipcheck { min-height: 36px; padding: 2px 10px 2px 6px; border-radius: 999px; background: var(--surface-2); font-size: .9rem; }
+.chipcheck input { width: 18px; height: 18px; }
+.plan-row { gap: 8px; flex-wrap: wrap; }
+.plan-row select { width: auto; }
+.plan.panel { border: 2px solid var(--ball); }
+.tests-entry .row { flex-wrap: nowrap; }
+.tst-in { width: 92px; text-align: center; }
+.tst-in.bad { border-color: var(--bad); }
+.block-card.now { border: 2px solid var(--ball); }
+.rsvp { display: flex; }
+.rsvp button { flex: 1; }
+.check.captain { font-size: .92rem; font-weight: 700; padding: 0 6px; }
+
+.tablewrap .stbl td { white-space: nowrap; }
+.zm-cell { color: var(--ink); }

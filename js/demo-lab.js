@@ -61,9 +61,14 @@ export function makeDemoPhase2({ R, players, sessions, gid }) {
   const matches = [], matchLogs = [], matchStats = [];
   for (const m of defs) {
     const log = simulate(R, starters, 3, m.edges);
+    // Zonas de saque y ataque (patrón fijo para que el demo siempre se vea igual).
+    const Z = [1, 5, 6, 1, 5, 2, 4, 1, 6, 5, 3, 1, 5, 6, 4];
+    log.forEach((e, i) => { if (['sv_ace', 'sv_in', 'at_k', 'at_in'].includes(e.a)) e.z = Z[i % Z.length]; });
     const sc = score(log, 3);
+    const slots = ['demo-p1', 'demo-p3', 'demo-p4', 'demo-p2', 'demo-p6', 'demo-p7'];   // colocadora en 1, opuesto en 4, puntas en 2 y 5, centrales en 3 y 6
+    const lineups = [{ slots, libero: 'demo-p5', serve: 'us' }, { slots, libero: 'demo-p5', serve: 'them' }, { slots, libero: 'demo-p5', serve: 'us' }];
     matches.push({ id: m.id, owner_id: own, group_id: gid, match_date: addDays(today, m.d), rival: m.rival, venue: m.venue, kind: m.kind, best_of: 3,
-      sets: storedSets(sc), status: 'terminado', note: '', created_at: iso(-m.d) });
+      sets: storedSets(sc), status: 'terminado', note: '', lineups, video: {}, created_at: iso(-m.d) });
     matchLogs.push({ id: `${m.id}-log`, owner_id: own, match_id: m.id, log, created_at: iso(-m.d) });
     for (const pid of playersIn(log)) matchStats.push({ id: `${m.id}-${pid}`, owner_id: own, match_id: m.id, player_id: pid, counts: countsFor(log, pid), created_at: iso(-m.d) });
   }
@@ -115,5 +120,30 @@ export function makeDemoPhase2({ R, players, sessions, gid }) {
     { id: 'demo-i2', owner_id: own, title: 'Side-out y break point', body: 'Porcentaje de puntos ganados cuando recibimos y cuando sacamos, en el resumen del partido.', area: 'partidos', priority: 'alta', status: 'lista', done_at: null, created_at: iso(1) },
   ];
 
-  return { matches, matchLogs, matchStats, coachProfile, jumpTests, jumpSessions, coachLogs, coachAssess, decisions, homeLogs, ideas };
+  // ---------- fase 4: convocatoria, pruebas, avisos, ayudantes, tarea de casa y temporada ----------
+  const rsvps = [['demo-p1', 'voy'], ['demo-p2', 'voy'], ['demo-p3', 'voy'], ['demo-p4', 'duda'], ['demo-p5', 'voy'], ['demo-p8', 'no'], ['demo-p11', 'voy']]
+    .map(([pid, status], i) => ({ id: `demo-rv-${i}`, owner_id: own, match_id: 'demo-m3', player_id: pid, status, note: '', updated_at: iso(1), created_at: iso(1) }));
+  const PT = (pid, d, kind, value) => ({ id: `demo-pt-${pid}-${kind}-${d}`, owner_id: own, player_id: pid, test_date: addDays(today, d), kind, value, note: '', created_at: iso(-d) });
+  const playerTests = [];
+  [['demo-p1', 31, 30.5, 228, 11.9, 55], ['demo-p2', 45, 47.5, 302, 10.4, 90], ['demo-p3', 34, 36.0, 262, 11.2, 70], ['demo-p4', 41, 41.5, 296, 11.0, 60], ['demo-p5', 33, 35.5, 245, 10.8, 95], ['demo-p6', 38, 40.0, 281, 10.9, 65]]
+    .forEach(([pid, a, b, reach, agil, plank]) => {
+      playerTests.push(PT(pid, -70, 'cmj', a), PT(pid, -8, 'cmj', b), PT(pid, -70, 'alcance', reach - 4), PT(pid, -8, 'alcance', reach),
+        PT(pid, -70, 'agilidad', Math.round((agil + 0.4) * 100) / 100), PT(pid, -8, 'agilidad', agil), PT(pid, -70, 'plancha', plank - 15), PT(pid, -8, 'plancha', plank));
+    });
+  const notices = [
+    { id: 'demo-nt1', owner_id: own, group_id: gid, title: 'Convocatoria contra Instituto Juárez', body: 'Contesta en Partidos si vas. Llegar 45 minutos antes.', url: '#/partidos', created_at: iso(1) },
+    { id: 'demo-nt2', owner_id: own, group_id: gid, title: 'Nueva sección: En casa', body: 'Rutinas opcionales de 15 minutos. A algunos les dejé tarea.', url: '#/casa', created_at: iso(3) },
+  ];
+  const staff = [{ id: 'demo-st1', owner_id: own, group_id: gid, name: 'Profe Luis (asistente)', invite_code: 'K7M2QX', user_id: null, active: true, joined_at: null, created_at: iso(2) }];
+  const p1 = players.find((p) => p.id === 'demo-p1'); if (p1) p1.captain = true;
+  const p3 = players.find((p) => p.id === 'demo-p3'); if (p3) p3.home_plan = { items: [{ ref: 'r-fisico', times: 2 }, { ref: 'h-hombro', times: 3 }], note: 'Cuida el hombro: haz la Y, T y W antes de rematar.', updated_at: addDays(today, -6) };
+  const p9 = players.find((p) => p.id === 'demo-p9'); if (p9) p9.home_plan = { items: [{ ref: 'h-equilibrio', times: 3 }, { ref: 'r-balon', times: 2 }], note: 'Equilibrio para que no se repita el esguince.', updated_at: addDays(today, -3) };
+  const blockStart = addDays(weekStart(today), -14);
+  const seasonPlan = [
+    { id: 'demo-b1', name: 'Fundamentos', start: addDays(blockStart, -28), weeks: 4, focus: ['saque', 'recepcion', 'colocacion'], templates: ['t-saque-recepcion-90', 't-rally-90'], note: 'Técnica estable de saque, recepción y colocación.' },
+    { id: 'demo-b2', name: 'Ataque y bloqueo', start: blockStart, weeks: 4, focus: ['remate', 'bloqueo'], templates: ['t-colocacion-ataque-90', 't-defensa-bloqueo-90'], note: 'Aproximación, remate y bloqueo en pareja.' },
+    { id: 'demo-b3', name: 'Competencia', start: addDays(blockStart, 28), weeks: 4, focus: ['juego', 'saque'], templates: ['t-situacional-90'], note: 'Juego situacional antes del torneo.' },
+  ];
+
+  return { matches, matchLogs, matchStats, coachProfile, jumpTests, jumpSessions, coachLogs, coachAssess, decisions, homeLogs, ideas, rsvps, playerTests, notices, staff, seasonPlan };
 }

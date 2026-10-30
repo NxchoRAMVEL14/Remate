@@ -23,10 +23,17 @@ import reportes from './views/reportes.js';
 import mas from './views/mas.js';
 import casa from './views/casa.js';
 import mejoras, { ideaSheet } from './views/mejoras.js';
-import { casaReady } from './store.js';
+import asistir from './views/asistir.js';
+import pruebas from './views/pruebas.js';
+import temporada from './views/temporada.js';
+import avisos from './views/avisos.js';
+import { casaReady, isStaff } from './store.js';
 
-const COACH = { hoy, jugadores, jugador, sesiones, sesion, ejercicios, ejercicio, ruta, ajustes, ayuda, partidos, partido, lab, reportes, mas, casa, mejoras };
-const PLAYER = { inicio, ruta, entrenos, partidos, ejercicios, ejercicio, casa, ajustes, ayuda };
+const COACH = { hoy, jugadores, jugador, sesiones, sesion, ejercicios, ejercicio, ruta, ajustes, ayuda, partidos, partido, lab, reportes, mas, casa, mejoras, pruebas, temporada, avisos };
+const PLAYER = { inicio, ruta, entrenos, partidos, partido, ejercicios, ejercicio, casa, pruebas, avisos, asistir, ajustes, ayuda };
+const ASSISTANT = { asistir, partidos, partido, avisos, ejercicios, ejercicio, ajustes, ayuda };
+const TABLES = { coach: COACH, player: PLAYER, assistant: ASSISTANT };
+const HOME = { coach: '#/hoy', player: '#/inicio', assistant: '#/asistir' };
 // [ruta, texto, ícono, dónde se ve]: 'wide' solo en pantalla grande (barra lateral), 'narrow' solo en celular.
 const NAV = {
   coach: [['hoy', 'Hoy', 'house'], ['jugadores', 'Jugadores', 'users'], ['sesiones', 'Entrenos', 'calendar-days'], ['partidos', 'Partidos', 'volleyball'],
@@ -34,8 +41,9 @@ const NAV = {
     ['mejoras', 'Mejoras', 'lightbulb', 'wide'], ['ajustes', 'Ajustes', 'settings', 'wide'], ['ayuda', 'Ayuda', 'circle-help', 'wide'],
     ['mas', 'Más', 'layout-grid', 'narrow']],
   player: [['inicio', 'Inicio', 'house'], ['entrenos', 'Entrenos', 'calendar-days'], ['partidos', 'Partidos', 'volleyball'], ['ejercicios', 'Ejercicios', 'book-open'], ['ruta', 'Ruta', 'flag']],
+  assistant: [['asistir', 'Asistir', 'clipboard-check'], ['partidos', 'Partidos', 'volleyball'], ['avisos', 'Avisos', 'bell'], ['ejercicios', 'Ejercicios', 'book-open']],
 };
-const PARENT = { jugador: 'jugadores', sesion: 'sesiones', ejercicio: 'ejercicios', partido: 'partidos', casa: 'ejercicios' };   // sección que se ilumina en la navegación
+const PARENT = { jugador: 'jugadores', sesion: 'sesiones', ejercicio: 'ejercicios', partido: 'partidos', casa: 'ejercicios', pruebas: 'jugadores', temporada: 'sesiones', avisos: 'hoy', asistir: 'inicio' };   // sección que se ilumina en la navegación
 const UNDER_MAS = new Set(['ejercicios', 'ruta', 'lab', 'reportes', 'ajustes', 'ayuda', 'mejoras', 'mas']);
 // Pantalla en la que estás → sección de la mejora (para anotarla rápido desde el foco del encabezado).
 const IDEA_AREA = { hoy: 'hoy', jugadores: 'jugadores', jugador: 'jugadores', sesiones: 'entrenos', sesion: 'entrenos', partidos: 'partidos', partido: 'partidos',
@@ -61,8 +69,8 @@ function render({ fresh = false } = {}) {
   let { name, args } = parse();
   if (name === 'ver' && state.role === 'coach' && getPlayer(args[0])) { state.viewAs = args[0]; location.replace('#/inicio'); return; }
   const role = state.viewAs ? 'player' : state.role;
-  const table = role === 'coach' ? COACH : PLAYER;
-  if (!table[name]) { location.replace(role === 'coach' ? '#/hoy' : '#/inicio'); return; }
+  const table = TABLES[role] || PLAYER;
+  if (!table[name] || (name === 'asistir' && role === 'player' && !isStaff())) { location.replace(HOME[role] || '#/inicio'); return; }
   const me = state.viewAs ? getPlayer(state.viewAs) : state.me;
   if (state.viewAs && !me) { state.viewAs = null; location.replace('#/jugadores'); return; }
   const key = [role, name, ...args].join('/');
@@ -86,7 +94,7 @@ function render({ fresh = false } = {}) {
       onclick: () => (casaReady() ? ideaSheet(null, { area: IDEA_AREA[name] || 'otra' }) : (location.hash = '#/mejoras')) }, ic('lightbulb'))
       : [h('a', { class: 'iconbtn', href: '#/ayuda', 'aria-label': 'Ayuda', title: 'Ayuda' }, ic('circle-help')),
         h('a', { class: 'iconbtn', href: '#/ajustes', 'aria-label': 'Ajustes', title: 'Ajustes' }, ic('settings'))]);
-  const navEl = h('nav', { class: 'nav', 'aria-label': 'Secciones' }, NAV[role].map(([id, label, icon, where]) =>
+  const navEl = h('nav', { class: 'nav', 'aria-label': 'Secciones' }, (NAV[role] || NAV.player).map(([id, label, icon, where]) =>
     h('a', { href: `#/${id}`, class: where ? `${where}-only` : null, 'aria-current': id === nav || (id === 'mas' && UNDER_MAS.has(nav)) ? 'page' : null }, ic(icon, 22), h('span', {}, label))));
   const banner = state.viewAs ? h('div', { class: 'viewas', role: 'status' }, h('span', {}, `Vista previa: así lo ve ${me.name}`),
     h('button', { class: 'btn sm', type: 'button', onclick: () => { const id = state.viewAs; state.viewAs = null; location.hash = `#/jugador/${id}`; } }, 'Salir')) : null;
@@ -100,7 +108,7 @@ function schedule() { if (queued) return; queued = true; requestAnimationFrame((
 
 function mountApp() {
   mounted = true;
-  if (!location.hash || location.hash === '#') location.replace(state.role === 'coach' ? '#/hoy' : '#/inicio');
+  if (!location.hash || location.hash === '#') location.replace(HOME[state.role] || '#/inicio');
   render({ fresh: true });
 }
 function mountGate() {

@@ -1,7 +1,7 @@
 // En casa: ejercicios opcionales para el jugador (físicos, técnicos con y sin balón) y su registro.
 // El entrenador ve el mismo contenido y quién está entrenando en casa.
 import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr, addDays, plural } from '../util.js';
-import { state, add, remove, players, casaReady } from '../store.js';
+import { state, add, patch, remove, players, casaReady, teamReady } from '../store.js';
 import { weekStart } from '../lab-calc.js';
 import { CATS, STAGE, HOME, HOME_BY_ID, ROUTINES, FEEL, RULES, refName } from '../content/casa.js';
 import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
@@ -69,6 +69,57 @@ function library(ctx, level, canLog, me) {
     h('details', { class: 'panel' }, h('summary', {}, h('strong', {}, 'Antes de empezar')), h('ul', { class: 'plain', style: { marginTop: '10px' } }, RULES.map((r) => h('li', {}, r)))));
 }
 
+// ---------- Tarea de casa por jugador ----------
+export const planOf = (p) => (p?.home_plan && Array.isArray(p.home_plan.items) ? p.home_plan : { items: [], note: '' });
+
+export function homePlanSheet(p) {
+  const plan = planOf(p), chosen = new Map(plan.items.map((x) => [x.ref, x.times || 2]));
+  const row = (ref, name, sub) => {
+    const cb = h('input', { type: 'checkbox', checked: chosen.has(ref) ? true : null });
+    const times = h('select', { 'aria-label': `Veces por semana: ${name}` }, options([1, 2, 3, 4].map((n) => [n, `${n} por semana`]), chosen.get(ref) || 2));
+    const sync = () => { if (cb.checked) chosen.set(ref, Number(times.value)); else chosen.delete(ref); times.disabled = !cb.checked; };
+    cb.addEventListener('change', sync); times.addEventListener('change', sync); times.disabled = !cb.checked;
+    return h('div', { class: 'row plan-row' }, h('label', { class: 'check', style: { flex: 1 } }, cb, h('span', { class: 'row-main' }, h('strong', {}, name), sub ? h('span', { class: 'row-sub' }, sub) : null)), times);
+  };
+  const text = h('textarea', { rows: 2, maxlength: 300, placeholder: 'Por ejemplo: trabaja el hombro antes de cada partido.' }, plan.note || '');
+  openSheet({
+    title: `Tarea de casa de ${p.name}`,
+    body: h('div', { class: 'stack' },
+      h('p', { class: 'row-sub', style: { margin: 0 } }, `Elige lo que más le conviene. Lo verá primero en su sección En casa, con la dosis de su nivel (${p.level}).`),
+      sectionTitle('Rutinas'), h('div', { class: 'rows' }, ROUTINES.map((r) => row(r.id, r.name, `${r.min} min`))),
+      ...Object.entries(CATS).map(([k, c]) => h('details', {}, h('summary', {}, h('strong', {}, c.name)),
+        h('div', { class: 'rows', style: { marginTop: '6px' } }, HOME.filter((e) => e.cat === k).map((e) => row(e.id, e.name, doseOf(e, p.level)))))),
+      field('Mensaje para el jugador', text)),
+    actions: [{ label: 'Cancelar' },
+      plan.items.length ? { label: 'Quitar tarea', kind: 'danger', onClick: () => { patch('players', p.id, { home_plan: {} }); toast('Tarea quitada'); } } : null,
+      { label: 'Guardar', kind: 'primary', onClick: () => {
+        const items = [...chosen.entries()].map(([ref, times]) => ({ ref, times }));
+        patch('players', p.id, { home_plan: items.length || text.value.trim() ? { items, note: text.value.trim(), updated_at: todayStr() } : {} });
+        toast(items.length ? `Tarea guardada: ${plural(items.length, 'cosa', 'cosas')}` : 'Tarea guardada'); return true;
+      } }].filter(Boolean),
+  });
+}
+
+// Lo que el entrenador le recomienda a este jugador (lo ve el jugador arriba de todo).
+function planSection(me, canLog) {
+  const plan = planOf(me);
+  if (!plan.items.length && !plan.note) return null;
+  const ws = weekStart(todayStr());
+  const doneThisWeek = (ref) => state.data.homeLogs.filter((l) => l.player_id === me.id && l.ref === ref && l.done_on >= ws).length;
+  return h('section', { class: 'panel stack plan' },
+    h('div', { class: 'split' }, h('h2', {}, 'Tu tarea de casa'), plan.updated_at ? h('span', { class: 'row-sub' }, `Desde el ${fmtDate(plan.updated_at, { day: 'numeric', month: 'short' })}`) : null),
+    plan.note ? h('p', { style: { margin: 0 } }, `Tu entrenador: “${plan.note}”`) : null,
+    plan.items.length ? h('div', { class: 'rows' }, plan.items.map((x) => {
+      const ref = x.ref, r = ROUTINES.find((y) => y.id === ref), ex = HOME_BY_ID[ref], d = doneThisWeek(ref);
+      if (!r && !ex) return null;
+      return h('div', { class: 'row' }, h('span', { class: 'row-main' }, h('strong', {}, r ? r.name : ex.name),
+        h('span', { class: 'row-sub' }, `${x.times || 2} por semana${r ? `, ${r.min} min` : `, ${doseOf(ex, me.level)}`} · esta semana: ${d}`)),
+        h('span', { class: 'row-end' }, d >= (x.times || 2) ? h('span', { class: 'chip ok' }, 'Lista') : null,
+          canLog ? h('button', { class: 'btn sm', type: 'button', onclick: () => logSheet(me, r ? 'rutina' : 'ejercicio', ref, r ? r.min : ex.min) }, ic('check', 16), 'Lo hice') : null));
+    })) : null,
+    h('p', { class: 'row-sub', style: { margin: 0 } }, 'Los detalles de cada ejercicio están más abajo.'));
+}
+
 export default function casa(ctx) {
   return ctx.role === 'coach' ? coach(ctx) : jugador(ctx);
 }
@@ -84,6 +135,7 @@ function jugador(ctx) {
       h('p', { style: { margin: 0 } }, `Es opcional. Rutinas cortas, sin aparatos y ajustadas a tu nivel (${me.level}). Lo que hagas aquí se nota en la cancha.`),
       h('p', { class: 'when', style: { margin: 0 } }, wk.days ? `Esta semana: ${plural(wk.days, 'día', 'días')}${wk.minutes ? `, ${wk.minutes} min` : ''}.` : 'Esta semana todavía no registras nada.')),
     !ready ? note('Por ahora no se puede registrar lo que haces en casa. Igual puedes hacer los ejercicios.', 'warn') : null,
+    planSection(me, canLog),
     library(ctx, me.level, canLog, me),
     logs.length ? h('section', { class: 'stack' }, sectionTitle('Lo que has hecho'),
       h('div', { class: 'rows' }, logs.slice(0, 12).map((l) => h('div', { class: 'row' },
@@ -110,9 +162,17 @@ function coach(ctx) {
     h('section', { class: 'stack' }, sectionTitle('Quién entrena en casa', h('span', { class: 'chip' }, 'Últimas 2 semanas')),
       active.length ? h('div', { class: 'rows' }, active.map((r) => h('a', { class: 'row', href: `#/jugador/${r.p.id}` }, jersey(r.p),
         h('span', { class: 'row-main' }, h('strong', {}, r.p.name), h('span', { class: 'row-sub' }, `${plural(r.days, 'día', 'días')}${r.minutes ? `, ${r.minutes} min` : ''} · último: ${fmtDate(r.last)}`)),
-        h('span', { class: 'row-end' }, h('span', { class: `chip ${r.days >= 4 ? 'ok' : 'info'}` }, `${r.days} d`)))))
+        h('span', { class: 'row-end' }, planOf(r.p).items.length ? h('span', { class: 'chip ball', title: 'Tiene tarea de casa' }, 'Tarea') : null, h('span', { class: `chip ${r.days >= 4 ? 'ok' : 'info'}` }, `${r.days} d`)))))
         : empty('Nadie ha registrado todavía', 'Cuéntales a tus jugadores que existe esta sección. Registrar es opcional.'),
       active.length && active.length < rows.length ? h('p', { class: 'row-sub', style: { margin: 0 } }, `Sin registros en estas 2 semanas: ${rows.filter((r) => !r.days).map((r) => r.p.name).join(', ')}.`) : null),
+    h('section', { class: 'stack' }, sectionTitle('Tareas de casa por jugador'),
+      h('p', { class: 'row-sub', style: { margin: 0 } }, 'Asigna a cada jugador lo que más necesita (por ejemplo, hombro a tus rematadores o equilibrio a quien se ha torcido el tobillo).'),
+      !teamReady() ? note('Para asignar tareas, corre en Supabase el instalar.sql de esta versión.', 'warn') : null,
+      h('div', { class: 'rows' }, players().map((p) => { const pl = planOf(p);
+        return h('div', { class: 'row' }, jersey(p, 'sm'), h('span', { class: 'row-main' }, h('strong', {}, p.name),
+          h('span', { class: 'row-sub' }, pl.items.length ? pl.items.map((x) => refName(x.ref)).join(', ') : 'Sin tarea')),
+          h('button', { class: 'btn sm', type: 'button', disabled: teamReady() ? null : true, onclick: () => homePlanSheet(p) }, ic(pl.items.length ? 'pencil' : 'plus', 16), pl.items.length ? 'Cambiar' : 'Asignar'));
+      }))),
     h('div', { class: 'cluster' }, lv),
     library(ctx, Number(ui.level), false, null));
   return { title: 'En casa', sub: 'Lo que ven tus jugadores', back: '#/ejercicios', el };

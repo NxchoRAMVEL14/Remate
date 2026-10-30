@@ -1,7 +1,7 @@
 // Pantalla de entrada: jugador (código), entrenador (correo) o demo.
 import { h } from '../util.js';
 import { cloudConfigured } from '../cloud.js';
-import { coachSignIn, coachSignUp, playerJoin, startDemo } from '../auth.js';
+import { coachSignIn, coachSignUp, playerJoin, startDemo, assistantJoin } from '../auth.js';
 import { note } from './ui.js';
 
 export function renderGate(onDone) {
@@ -29,9 +29,10 @@ export function renderGate(onDone) {
         note('Para conectarla, llena el archivo config.js (el LEEME explica cómo).'));
       return;
     }
-    box.append(h('div', { class: 'seg', role: 'group', 'aria-label': 'Tipo de cuenta' },
+    box.append(h('div', { class: 'seg', role: 'group', 'aria-label': '¿Quién eres?' },
       h('button', { type: 'button', 'aria-pressed': String(tab === 'player'), onclick: () => { tab = 'player'; paint(); } }, 'Soy jugador'),
-      h('button', { type: 'button', 'aria-pressed': String(tab === 'coach'), onclick: () => { tab = 'coach'; paint(); } }, 'Soy entrenador')));
+      h('button', { type: 'button', 'aria-pressed': String(tab === 'coach'), onclick: () => { tab = 'coach'; paint(); } }, 'Soy entrenador'),
+      h('button', { type: 'button', 'aria-pressed': String(tab === 'assistant'), onclick: () => { tab = 'assistant'; paint(); } }, 'Soy asistente')));
     const msg = h('div', { class: 'note bad', 'data-msg': '', role: 'alert', hidden: true });
     if (tab === 'player') {
       const code = h('input', { type: 'text', class: 'codeinput', maxlength: 8, autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false', 'aria-label': 'Código de 6 caracteres', placeholder: 'ABC123' });
@@ -40,6 +41,20 @@ export function renderGate(onDone) {
         h('div', { class: 'field' }, h('label', { for: 'code' }, 'Tu código'), Object.assign(code, { id: 'code' }),
           h('span', { class: 'hint' }, 'Te lo da tu entrenador. Son 6 letras y números.')), msg, go);
       form.addEventListener('submit', busy(go, () => playerJoin(code.value)));
+      box.append(form);
+    } else if (tab === 'assistant') {
+      const email = h('input', { type: 'email', id: 'em', autocomplete: 'email', required: true });
+      const pass = h('input', { type: 'password', id: 'pw', autocomplete: signup ? 'new-password' : 'current-password', required: true, minlength: 6 });
+      const code = h('input', { type: 'text', id: 'inv', class: 'codeinput', maxlength: 8, autocomplete: 'off', autocapitalize: 'characters', spellcheck: 'false', placeholder: 'ABC123' });
+      const go = h('button', { class: 'btn primary', type: 'submit' }, signup ? 'Crear cuenta y entrar' : 'Entrar');
+      const form = h('form', { class: 'stack' },
+        h('p', { class: 'row-sub', style: { margin: 0 } }, 'Para asistentes adultos que ayudan a pasar lista y a capturar partidos. El entrenador te da un código de invitación.'),
+        h('div', { class: 'field' }, h('label', { for: 'em' }, 'Tu correo'), email),
+        h('div', { class: 'field' }, h('label', { for: 'pw' }, 'Contraseña'), pass, signup ? h('span', { class: 'hint' }, 'Mínimo 6 caracteres.') : null),
+        h('div', { class: 'field' }, h('label', { for: 'inv' }, 'Código de invitación'), code),
+        msg, go,
+        h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { signup = !signup; paint(); } }, signup ? 'Ya tengo cuenta' : 'Es mi primera vez: crear cuenta'));
+      form.addEventListener('submit', busy(go, () => assistantJoin(email.value, pass.value, code.value, { signup })));
       box.append(form);
     } else {
       const email = h('input', { type: 'email', id: 'em', autocomplete: 'email', required: true });

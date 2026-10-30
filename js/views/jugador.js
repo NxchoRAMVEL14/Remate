@@ -1,6 +1,10 @@
 // Ficha de un jugador (vista del entrenador): tarjeta, acciones y cuatro pestañas.
 import { h, ic, toast, fmtDate, plural, confirmSheet } from '../util.js';
-import { state, getPlayer, settings, remove, resolveClaim } from '../store.js';
+import { state, getPlayer, settings, remove, resolveClaim, patch, teamReady } from '../store.js';
+import { testsPanel } from './pruebas.js';
+import { badgesEl } from './insignias.js';
+import { homePlanSheet, planOf } from './casa.js';
+import { refName } from '../content/casa.js';
 import { currentRatings, ratingHistory } from '../calc.js';
 import { SKILLS, PHASES } from '../content/skills.js';
 import { required } from '../content/levels.js';
@@ -9,12 +13,13 @@ import { dots, statusChip, sectionTitle, empty, note } from './ui.js';
 import { playerCard, playerStats } from './card.js';
 import { playerFormSheet, deletePlayer, evaluateSheet, examSheet, codeSheet, noteSheet } from './sheets-player.js';
 
-const TABS = [['resumen', 'Resumen'], ['habilidades', 'Habilidades'], ['asistencia', 'Asistencia'], ['notas', 'Notas']];
+const TABS = [['resumen', 'Resumen'], ['habilidades', 'Habilidades'], ['pruebas', 'Pruebas'], ['asistencia', 'Asistencia'], ['notas', 'Notas']];
 
 export default function jugador(ctx) {
   const p = getPlayer(ctx.args[0]);
   if (!p) return { title: 'Jugador', back: '#/jugadores', el: h('div', { class: 'page' }, empty('No encontré a ese jugador', 'Puede que se haya eliminado.', h('a', { class: 'btn', href: '#/jugadores' }, 'Ver jugadores'))) };
   const ui = ctx.ui; ui.tab ??= 'resumen';
+  if (!ui.init) { ui.init = true; if (TABS.some(([id]) => id === ctx.args[1])) ui.tab = ctx.args[1]; }
   const stats = playerStats(p);
   const { gap, att } = stats;
 
@@ -27,6 +32,11 @@ export default function jugador(ctx) {
       h('button', { class: 'btn sm', type: 'button', onclick: () => noteSheet(p) }, ic('pencil', 16), 'Nota'),
       h('button', { class: 'btn sm', type: 'button', onclick: () => playerFormSheet(p) }, ic('settings', 16), 'Editar datos'),
       h('a', { class: 'btn sm', href: `#/ver/${p.id}` }, ic('eye', 16), 'Ver como jugador'),
+      h('button', { class: 'btn sm', type: 'button', disabled: teamReady() ? null : true, onclick: () => homePlanSheet(p) }, ic('house', 16), planOf(p).items.length ? 'Tarea de casa' : 'Dejar tarea de casa'),
+      h('label', { class: 'check captain', title: 'El capitán puede pasar lista y capturar partidos desde su celular' },
+        h('input', { type: 'checkbox', checked: p.captain ? true : null, disabled: teamReady() ? null : true,
+          onchange: (e) => { patch('players', p.id, { captain: e.target.checked }); toast(e.target.checked ? `${p.name} ahora es capitán: puede pasar lista y capturar partidos` : `${p.name} ya no es capitán`, 3200); } }),
+        h('span', {}, 'Capitán (ayudante)')),
       h('button', { class: 'btn sm danger', type: 'button', onclick: async () => { if (await deletePlayer(p)) location.hash = '#/jugadores'; } }, ic('trash-2', 16), 'Eliminar')));
 
   const panel = h('div', { class: 'stack', role: 'tabpanel' });
@@ -34,7 +44,7 @@ export default function jugador(ctx) {
     h('button', { type: 'button', role: 'tab', 'aria-selected': String(ui.tab === id), onclick: () => { ui.tab = id; paint(); } }, label)));
   function paint() {
     [...tabs.children].forEach((b, i) => b.setAttribute('aria-selected', String(TABS[i][0] === ui.tab)));
-    panel.replaceChildren(({ resumen, habilidades, asistencia, notas })[ui.tab](p, stats));
+    panel.replaceChildren(({ resumen, habilidades, pruebas: (pp) => testsPanel(pp, { canEdit: true }), asistencia, notas })[ui.tab](p, stats));
   }
   paint();
   return { title: p.name, back: '#/jugadores', el: h('div', { class: 'page' }, playerCard(p, stats), actions, h('div', { class: 'stack' }, tabs, panel)) };
@@ -43,6 +53,10 @@ export default function jugador(ctx) {
 // ---------- pestañas ----------
 function resumen(p, { gap }) {
   const d = state.data, out = h('div', { class: 'stack' });
+  const plan = planOf(p);
+  if (plan.items.length) out.append(note(`Tarea de casa: ${plan.items.map((x) => `${refName(x.ref)} (${x.times || 2} por semana)`).join(', ')}.`));
+  const b = badgesEl(p, { you: false });
+  if (b) out.append(b);
   if (gap.top) out.append(note('Está en el nivel más alto de la ruta. Lo que sigue es mantener su nivel, cuidar su cuerpo y ayudar a los demás.'));
   else {
     out.append(sectionTitle(`Camino al nivel ${gap.target}, ${gap.targetLevel.name}`, h('span', { class: `chip ${gap.ready ? 'ball' : ''}` }, `${gap.met} de ${gap.total} fases`)),

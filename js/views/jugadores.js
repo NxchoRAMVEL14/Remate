@@ -31,6 +31,7 @@ export default function jugadores(ctx) {
     rows.replaceChildren(...(list.length ? list.map((p) => {
       const i = info.get(p.id);
       const end = [];
+      if (p.captain) end.push(h('span', { class: 'chip info', title: 'Capitán: puede pasar lista y capturar partidos' }, 'Capitán'));
       if (i.gap.ready) end.push(h('span', { class: 'chip ball', title: 'Cumple las fases para el examen' }, 'Listo'));
       if (i.att.faltasSeguidas >= 2) end.push(h('span', { class: 'chip bad' }, `${i.att.faltasSeguidas} faltas`));
       else if (i.att.pct != null) end.push(h('span', { class: `chip ${i.att.pct >= 85 ? 'ok' : i.att.pct >= 70 ? 'warn' : 'bad'}`, title: 'Asistencia' }, `${i.att.pct}%`));
@@ -41,7 +42,8 @@ export default function jugadores(ctx) {
   paint();
 
   const el = h('div', { class: 'page' },
-    h('section', {}, sectionTitle('Jugadores', h('button', { class: 'btn primary sm', type: 'button', onclick: () => playerFormSheet() }, ic('plus', 16), 'Agregar')),
+    h('section', {}, sectionTitle('Jugadores', h('div', { class: 'cluster' }, h('a', { class: 'btn sm', href: '#/pruebas' }, ic('ruler', 16), 'Pruebas físicas'),
+      h('button', { class: 'btn primary sm', type: 'button', onclick: () => playerFormSheet() }, ic('plus', 16), 'Agregar'))),
       all.length ? h('div', { class: 'stack' }, q, h('div', { class: 'grid' }, lv, pos, sort), count, rows)
         : empty('Todavía no hay jugadores', 'Agrega a tu primer jugador: solo necesitas un nombre o apodo. Después le das su código para que entre desde su celular.',
           h('button', { class: 'btn primary', type: 'button', onclick: () => playerFormSheet() }, ic('plus', 18), 'Agregar jugador'))));

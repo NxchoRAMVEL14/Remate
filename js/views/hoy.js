@@ -10,6 +10,9 @@ import { sectionTitle, note, playerRow, sessionWhen, jersey } from './ui.js';
 import { sessionFormSheet, attendanceSheet } from './sheets-session.js';
 import { playerFormSheet, examSheet, evaluateSheet } from './sheets-player.js';
 import { openCourtMode } from './court-mode.js';
+import { noticeSheet, recentNotices } from './avisos.js';
+import { currentBlock } from './temporada.js';
+import { rsvpCounts } from './partido-summary.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
 
@@ -60,6 +63,16 @@ export default function hoy() {
   if (overdue.length) {
     el.append(note(`${plural(overdue.length, 'entrenamiento pasado sigue', 'entrenamientos pasados siguen')} sin lista. Pasa lista o cancélalos para que la asistencia sea correcta.`, 'warn'),
       h('a', { class: 'btn sm', href: '#/sesiones', style: { justifySelf: 'start' } }, 'Ir a entrenamientos'));
+  }
+
+  // ---- próximo partido y convocatoria ----
+  const nextMatch = state.data.matches.filter((m) => m.status !== 'terminado' && m.match_date >= todayStr()).sort((a, b) => a.match_date.localeCompare(b.match_date))[0];
+  if (nextMatch) {
+    const c = rsvpCounts(nextMatch);
+    el.append(h('a', { class: 'panel', href: `#/partido/${nextMatch.id}`, style: { textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '12px' } },
+      ic('volleyball', 26), h('span', { class: 'row-main' }, h('strong', {}, `Próximo partido: contra ${nextMatch.rival}`),
+        h('span', { class: 'row-sub' }, `${fmtDate(nextMatch.match_date, { weekday: 'long', day: 'numeric', month: 'short' })} · convocatoria: van ${c.voy}, en duda ${c.duda}, no van ${c.no}, sin respuesta ${Math.max(0, list.length - c.list.length)}`)),
+      ic('chevron-right', 18)));
   }
 
   // ---- cifras del grupo ----
@@ -117,6 +130,14 @@ export default function hoy() {
       h('span', { class: 'lvl' }, String(l.n)),
       h('div', {}, h('div', { class: 'name' }, l.name), h('div', { class: 'bar', style: { marginTop: '4px' }, role: 'img', 'aria-label': `${counts[i]} jugadores` }, h('i', { style: { width: `${(counts[i] / top) * 100}%` } }))),
       h('span', { class: 'count' }, String(counts[i])))))));
+
+  const blk = currentBlock(), last = recentNotices(7)[0];
+  el.append(h('section', { class: 'stack' }, sectionTitle('Equipo', h('a', { class: 'btn ghost sm', href: '#/avisos' }, 'Avisos')),
+    h('div', { class: 'cluster' },
+      h('button', { class: 'btn primary', type: 'button', onclick: () => noticeSheet() }, ic('megaphone', 18), 'Avisar al equipo'),
+      h('a', { class: 'btn', href: '#/temporada' }, ic('calendar-range', 18), blk ? `Bloque: ${blk.name}` : 'Planear temporada'),
+      h('a', { class: 'btn', href: '#/pruebas' }, ic('ruler', 18), 'Pruebas físicas')),
+    last ? h('p', { class: 'row-sub', style: { margin: 0 } }, `Último aviso: “${last.title}” (${fmtDate(last.created_at.slice(0, 10))}).`) : null));
 
   el.append(h('div', { class: 'cluster' },
     h('button', { class: 'btn', type: 'button', onclick: () => playerFormSheet() }, ic('plus', 18), 'Agregar jugador'),

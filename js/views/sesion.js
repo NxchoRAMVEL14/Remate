@@ -8,6 +8,7 @@ import { getExercise, KINDS, levelLabel } from '../content/exercises.js';
 import { courtSVG } from '../court.js';
 import { sectionTitle, empty, note, longDate, field, options, STATUS_LABEL } from './ui.js';
 import { sessionFormSheet, attendanceSheet, pickExerciseSheet } from './sheets-session.js';
+import { noticeSheet } from './avisos.js';
 import { openCourtMode } from './court-mode.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
@@ -31,6 +32,7 @@ export default function sesion(ctx) {
       plan.length ? h('button', { class: 'btn', type: 'button', onclick: () => window.print() }, ic('printer', 18), 'Imprimir plan') : null),
     h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: s.published ? true : null, onchange: (e) => { patch('sessions', s.id, { published: e.target.checked }); toast(e.target.checked ? 'Publicado: tus jugadores ya lo ven' : 'Oculto para los jugadores'); } }),
       'Visible para los jugadores (plan y horario)'),
+    s.published && s.status === 'planeada' ? h('button', { class: 'btn sm', type: 'button', style: { justifySelf: 'start' }, onclick: () => noticeSheet(sessionNotice(s)) }, ic('megaphone', 16), 'Avisar al equipo') : null,
     h('div', { class: 'cluster' },
       h('button', { class: 'btn sm', type: 'button', onclick: () => sessionFormSheet(s) }, ic('pencil', 16), 'Editar datos'),
       h('button', { class: 'btn sm', type: 'button', onclick: () => duplicate(s) }, ic('copy', 16), 'Duplicar'),
@@ -125,4 +127,11 @@ function printable(s, plan) {
           ex.cues.length ? h('p', {}, `Puntos clave: ${ex.cues.join('; ')}.`) : null,
           ex.diagram ? h('div', { style: { maxWidth: '260px' }, html: courtSVG(ex.diagram, `Diagrama de ${ex.name}`) }) : null] : null);
     }));
+}
+
+// Texto del aviso de un entrenamiento (fecha, hora y enlace al plan).
+export function sessionNotice(s, changed = false) {
+  const when = `${longDate(s.session_date)}${s.start_time ? `, ${s.start_time.slice(0, 5)}` : ''}`;
+  return { title: changed ? `Cambio de horario: ${s.title || 'entrenamiento'}` : `Entrenamiento: ${s.title || 'nuevo plan'}`.slice(0, 80),
+    body: changed ? `Ahora es el ${when}.` : `${when}, ${s.minutes} min. El plan ya está en Remate.`, url: '#/entrenos' };
 }

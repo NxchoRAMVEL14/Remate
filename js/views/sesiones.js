@@ -4,6 +4,7 @@ import { state, sessions, settings, group, add } from '../store.js';
 import { TEMPLATES, TEMPLATE_BY_ID } from '../content/templates.js';
 import { sectionTitle, empty, note, sessionWhen, options, field } from './ui.js';
 import { sessionFormSheet } from './sheets-session.js';
+import { currentBlock } from './temporada.js';
 
 function sessionRow(s) {
   const marks = state.data.attendance.filter((a) => a.session_id === s.id);
@@ -26,6 +27,8 @@ export default function sesiones(ctx) {
   const overdue = all.filter((s) => s.status === 'planeada' && s.session_date < t).reverse();
   const past = all.filter((s) => s.status !== 'planeada').reverse();
   const el = h('div', { class: 'page' },
+    (() => { const b = currentBlock(); return h('a', { class: 'labcard', href: '#/temporada' }, h('span', { class: 'lc-ic' }, ic('calendar-range', 26)),
+      h('span', { class: 'lc-t' }, h('strong', {}, 'Planear temporada'), h('span', {}, b ? `Bloque actual: ${b.name}` : 'Bloques con enfoque que crean tus entrenamientos.')), ic('chevron-right', 20)); })(),
     h('section', {}, sectionTitle('Entrenamientos', h('div', { class: 'cluster' },
       h('button', { class: 'btn sm', type: 'button', onclick: scheduleSheet }, ic('calendar-days', 16), 'Programar semanas'),
       h('button', { class: 'btn primary sm', type: 'button', onclick: () => sessionFormSheet(null, (s) => { location.hash = `#/sesion/${s.id}`; }) }, ic('plus', 16), 'Nuevo'))),

@@ -1,5 +1,5 @@
 // Hojas emergentes de sesiones y ejercicios: crear sesión, pasar lista, elegir ejercicio, ejercicio propio.
-import { h, ic, openSheet, toast, todayStr, addDays, parseDate, DAYS } from '../util.js';
+import { h, ic, openSheet, confirmSheet, toast, todayStr, addDays, parseDate, DAYS } from '../util.js';
 import { add, patch, group, settings, players, setAttendance, state } from '../store.js';
 import { SKILLS, SKILL_BY_ID } from '../content/skills.js';
 import { TEMPLATES, TEMPLATE_BY_ID } from '../content/templates.js';
@@ -33,7 +33,16 @@ export function sessionFormSheet(s = null, onCreated) {
       if (!date.value) { toast('Elige una fecha'); return false; }
       const m = Math.min(300, Math.max(10, Number(mins.value) || st.minutes));
       const base = { session_date: date.value, start_time: time.value || null, minutes: m, title: title.value.trim() };
-      if (s) { patch('sessions', s.id, base); toast('Guardado'); return; }
+      if (s) {
+        const moved = s.published && s.status === 'planeada' && (s.session_date !== base.session_date || (s.start_time || '').slice(0, 5) !== (base.start_time || '').slice(0, 5));
+        patch('sessions', s.id, base); toast('Guardado');
+        // Si ya lo veían los jugadores y cambió el día o la hora, ofrece avisarles.
+        if (moved) setTimeout(async () => {
+          const { noticeSheet } = await import('./avisos.js'); const { sessionNotice } = await import('./sesion.js');
+          if (await confirmSheet({ title: '¿Avisar del cambio?', text: 'Este entrenamiento ya lo ven tus jugadores. Puedes avisarles en la app, por notificación y por WhatsApp.', ok: 'Avisar' })) noticeSheet(sessionNotice(s, true));
+        }, 50);
+        return;
+      }
       const t = TEMPLATE_BY_ID[tpl.value];
       const ns = add('sessions', { ...base, group_id: group()?.id, focus: t?.focus || [], plan: t ? t.blocks.map((b) => ({ ...b, note: '' })) : [], status: 'planeada', published: false });
       toast('Entrenamiento creado'); onCreated?.(ns);
@@ -61,7 +70,8 @@ export function attendanceSheet(s) {
   function set(pid, st) {
     setAttendance(s.id, pid, st);
     // Al pasar lista el entrenamiento ya ocurrió: se marca hecho y se publica, para que cada jugador vea su asistencia.
-    if (s.status === 'planeada') { patch('sessions', s.id, { status: 'hecha', published: true }); s.status = 'hecha'; }
+    // (Si la pasa un ayudante, la base de datos lo marca sola; aquí solo se refleja en pantalla.)
+    if (s.status === 'planeada') { if (state.role === 'coach') patch('sessions', s.id, { status: 'hecha', published: true }); else s.published = true; s.status = 'hecha'; }
     paint();
   }
   paint();

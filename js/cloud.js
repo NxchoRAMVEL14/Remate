@@ -64,3 +64,11 @@ export async function fetchAll(table) {
   }
   return out;
 }
+
+// Lista del equipo para ayudantes (asistente o capitán): nombres y números, sin códigos de acceso.
+export async function fetchRoster() {
+  const c = await client();
+  const { data, error } = await c.rpc('staff_roster');
+  if (error) throw error;
+  return data || [];
+}

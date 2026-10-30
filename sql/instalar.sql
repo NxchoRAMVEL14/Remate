@@ -1,5 +1,5 @@
 -- Remate · instalación completa para Supabase (SQL Editor → pega todo → Run).
--- Incluye el núcleo, el laboratorio con partidos y estadística, y En casa con tu lista de mejoras.
+-- Incluye: núcleo, laboratorio y partidos, En casa y mejoras, y equipo de apoyo (ayudantes, convocatoria, pruebas, avisos).
 -- Es seguro correrlo más de una vez: no borra datos.
 
 -- =====================================================================
@@ -603,5 +603,297 @@ create trigger home_logs_set_owner before insert on public.home_logs
 
 revoke all on all tables in schema public from anon;
 grant select, insert, update, delete on public.app_ideas, public.home_logs to authenticated;
+
+
+-- =====================================================================
+-- REMATE · Fase 4: equipo de apoyo, convocatorias, pruebas físicas, avisos y más
+-- Va después de 01 a 04 (si usas instalar.sql ya viene incluido).
+-- Es seguro correrlo más de una vez (no borra datos).
+--
+-- Ayudantes (pueden pasar lista y capturar partidos; nunca ven notas, evaluaciones, laboratorio ni reportes):
+--   · Capitán o mánager: un jugador que el entrenador marca como capitán. Entra con su mismo código.
+--   · Asistente adulto: alguien con su propia cuenta de correo que entra con un código de invitación.
+-- =====================================================================
+
+-- ---------- Columnas nuevas ----------
+alter table public.players add column if not exists captain boolean not null default false;
+alter table public.players add column if not exists home_plan jsonb not null default '{}'::jsonb;   -- tarea de casa: { items: [{ ref, times }], note }
+alter table public.matches add column if not exists lineups jsonb not null default '[]'::jsonb;     -- alineación y rotación por set
+alter table public.matches add column if not exists video jsonb not null default '{}'::jsonb;       -- enlace y marcas de tiempo
+
+-- ---------- Asistentes adultos ----------
+create table if not exists public.staff (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  group_id uuid not null references public.groups(id) on delete cascade,
+  name text not null check (char_length(name) between 1 and 60),
+  invite_code text not null unique default public.gen_join_code(),
+  user_id uuid references auth.users(id) on delete set null,
+  active boolean not null default true,
+  joined_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists staff_user_idx on public.staff (user_id);
+
+-- ---------- Ayudantes de permisos (security definer: evitan recursión entre políticas) ----------
+create or replace function public.my_staff_group_ids() returns setof uuid
+language sql stable security definer set search_path = public as $$
+  select group_id from public.staff where user_id = auth.uid() and active
+  union
+  select group_id from public.players where user_id = auth.uid() and active and captain;
+$$;
+create or replace function public.staff_player_ids() returns setof uuid
+language sql stable security definer set search_path = public as $$
+  select id from public.players where group_id in (select public.my_staff_group_ids());
+$$;
+create or replace function public.staff_session_ids() returns setof uuid
+language sql stable security definer set search_path = public as $$
+  select id from public.sessions where group_id in (select public.my_staff_group_ids());
+$$;
+create or replace function public.staff_match_ids() returns setof uuid
+language sql stable security definer set search_path = public as $$
+  select id from public.matches where group_id in (select public.my_staff_group_ids());
+$$;
+
+-- Lista del equipo para ayudantes: sin códigos de acceso ni datos de cuenta.
+create or replace function public.staff_roster()
+returns table (id uuid, group_id uuid, name text, jersey smallint, "position" text, level smallint, branch text, active boolean, captain boolean)
+language sql stable security definer set search_path = public as $$
+  select p.id, p.group_id, p.name, p.jersey, p.position, p.level, p.branch, p.active, p.captain
+    from public.players p
+   where p.group_id in (select public.my_staff_group_ids()) and p.active;
+$$;
+
+-- El asistente adulto escribe el código que le dio el entrenador.
+create or replace function public.join_staff(p_code text)
+returns setof public.staff
+language plpgsql security definer set search_path = public as $$
+declare
+  v public.staff;
+  n int;
+  c text := upper(regexp_replace(coalesce(p_code, ''), '\s', '', 'g'));
+begin
+  if auth.uid() is null or not public.is_coach() then
+    raise exception 'not_authenticated' using errcode = '28000';
+  end if;
+  select count(*) into n from public.join_attempts
+   where uid = auth.uid() and not ok and at > now() - interval '10 minutes';
+  if n >= 8 then
+    raise exception 'too_many_attempts' using errcode = '54000';
+  end if;
+  select * into v from public.staff where invite_code = c and active and (user_id is null or user_id = auth.uid());
+  if not found or v.owner_id = auth.uid() then
+    insert into public.join_attempts(uid, ok) values (auth.uid(), false);
+    return;
+  end if;
+  update public.staff set user_id = auth.uid(), joined_at = now() where id = v.id returning * into v;
+  insert into public.join_attempts(uid, ok) values (auth.uid(), true);
+  return next v;
+end $$;
+
+-- ---------- Convocatoria: ¿vas al partido? ----------
+create table if not exists public.match_rsvps (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  match_id uuid not null references public.matches(id) on delete cascade,
+  player_id uuid not null references public.players(id) on delete cascade,
+  status text not null check (status in ('voy','no','duda')),
+  note text not null default '' check (char_length(note) <= 200),
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (match_id, player_id)
+);
+
+-- ---------- Pruebas físicas de los jugadores ----------
+create table if not exists public.player_tests (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  player_id uuid not null references public.players(id) on delete cascade,
+  test_date date not null default current_date,
+  kind text not null check (kind in ('cmj','alcance','agilidad','plancha','estatura')),
+  value numeric(6,2) not null check (value > 0 and value < 1000),
+  note text not null default '' check (char_length(note) <= 300),
+  created_at timestamptz not null default now()
+);
+create index if not exists player_tests_player_idx on public.player_tests (player_id, test_date);
+
+-- ---------- Avisos al equipo ----------
+create table if not exists public.notices (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  group_id uuid not null references public.groups(id) on delete cascade,
+  title text not null check (char_length(title) between 1 and 80),
+  body text not null default '' check (char_length(body) <= 500),
+  url text not null default '' check (char_length(url) <= 200),
+  created_at timestamptz not null default now()
+);
+create index if not exists notices_group_idx on public.notices (group_id, created_at desc);
+
+-- ---------- Notificaciones en el celular ----------
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  group_id uuid not null references public.groups(id) on delete cascade,
+  endpoint text not null check (char_length(endpoint) <= 1000),
+  keys jsonb not null,
+  created_at timestamptz not null default now(),
+  unique (user_id, endpoint)
+);
+-- Llaves del servidor de notificaciones: solo las lee la función "avisos" (nadie más tiene permiso).
+create table if not exists public.push_config (
+  id smallint primary key default 1 check (id = 1),
+  public_key text not null,
+  private_key text not null,
+  created_at timestamptz not null default now()
+);
+
+-- ---------- Dueño automático: todo queda a nombre del entrenador del grupo ----------
+-- Así lo que capture un ayudante sigue siendo del entrenador, y nadie puede cambiar el dueño de una fila.
+create or replace function public.set_owner_from_parent() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare o uuid;
+begin
+  if tg_op = 'UPDATE' then new.owner_id := old.owner_id; return new; end if;
+  if tg_table_name = 'attendance' then select owner_id into o from public.sessions where id = new.session_id;
+  elsif tg_table_name = 'matches' then select owner_id into o from public.groups where id = new.group_id;
+  elsif tg_table_name in ('match_logs', 'match_stats', 'match_rsvps') then select owner_id into o from public.matches where id = new.match_id;
+  end if;
+  if o is null then raise exception 'parent_not_found' using errcode = 'P0002'; end if;
+  new.owner_id := o;
+  return new;
+end $$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['attendance', 'matches', 'match_logs', 'match_stats', 'match_rsvps'] loop
+    execute format('drop trigger if exists set_owner on public.%I', t);
+    execute format('create trigger set_owner before insert or update on public.%I for each row execute function public.set_owner_from_parent()', t);
+  end loop;
+end $$;
+
+-- Al pasar lista, el entrenamiento queda hecho y visible (aunque la lista la pase un ayudante).
+create or replace function public.attendance_marks_session() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  update public.sessions
+     set status = case when status = 'planeada' then 'hecha' else status end, published = true
+   where id = new.session_id and (status = 'planeada' or not published);
+  return null;
+end $$;
+drop trigger if exists attendance_marks_session on public.attendance;
+create trigger attendance_marks_session after insert on public.attendance
+  for each row execute function public.attendance_marks_session();
+
+-- ---------- Seguridad ----------
+alter table public.staff               enable row level security;
+alter table public.match_rsvps         enable row level security;
+alter table public.player_tests        enable row level security;
+alter table public.notices             enable row level security;
+alter table public.push_subscriptions  enable row level security;
+alter table public.push_config         enable row level security;   -- sin políticas: nadie la lee desde la app
+
+-- Entrenador: control total sobre lo suyo.
+do $$
+declare r record;
+begin
+  for r in
+    select * from (values
+      ('staff',        'group_id in (select id from public.groups where owner_id = auth.uid())'),
+      ('match_rsvps',  'match_id in (select id from public.matches where owner_id = auth.uid())
+                        and player_id in (select id from public.players where owner_id = auth.uid())'),
+      ('player_tests', 'player_id in (select id from public.players where owner_id = auth.uid())'),
+      ('notices',      'group_id in (select id from public.groups where owner_id = auth.uid())')
+    ) as v(tbl, chk)
+  loop
+    execute format('drop policy if exists %I on public.%I', r.tbl || '_coach', r.tbl);
+    execute format(
+      'create policy %I on public.%I for all to authenticated
+         using (owner_id = auth.uid() and public.is_coach())
+         with check (owner_id = auth.uid() and public.is_coach() and (%s))',
+      r.tbl || '_coach', r.tbl, r.chk);
+  end loop;
+end $$;
+
+-- El asistente ve su propia invitación (así la app sabe que es asistente).
+drop policy if exists staff_self_read on public.staff;
+create policy staff_self_read on public.staff for select to authenticated using (user_id = auth.uid());
+
+-- Ayudantes (asistente adulto o capitán): ven el grupo, los entrenamientos y la asistencia; pasan lista.
+drop policy if exists groups_staff_read on public.groups;
+create policy groups_staff_read on public.groups for select to authenticated
+  using (id in (select public.my_staff_group_ids()));
+drop policy if exists sessions_staff_read on public.sessions;
+create policy sessions_staff_read on public.sessions for select to authenticated
+  using (group_id in (select public.my_staff_group_ids()));
+drop policy if exists attendance_staff on public.attendance;
+create policy attendance_staff on public.attendance for all to authenticated
+  using (session_id in (select public.staff_session_ids()))
+  with check (session_id in (select public.staff_session_ids()) and player_id in (select public.staff_player_ids()));
+
+-- Ayudantes: crean y capturan partidos de su grupo (no los borran).
+drop policy if exists matches_staff_read on public.matches;
+create policy matches_staff_read on public.matches for select to authenticated
+  using (group_id in (select public.my_staff_group_ids()));
+drop policy if exists matches_staff_insert on public.matches;
+create policy matches_staff_insert on public.matches for insert to authenticated
+  with check (group_id in (select public.my_staff_group_ids()));
+drop policy if exists matches_staff_update on public.matches;
+create policy matches_staff_update on public.matches for update to authenticated
+  using (group_id in (select public.my_staff_group_ids()))
+  with check (group_id in (select public.my_staff_group_ids()));
+
+-- Registro y estadística del partido: leer, crear y corregir (sin borrar).
+do $$
+declare t text; op text;
+begin
+  foreach t in array array['match_logs', 'match_stats'] loop
+    execute format('drop policy if exists %I on public.%I', t || '_staff', t);   -- versión anterior
+    foreach op in array array['select', 'insert', 'update'] loop
+      execute format('drop policy if exists %I on public.%I', t || '_staff_' || op, t);
+    end loop;
+    execute format('create policy %I on public.%I for select to authenticated using (match_id in (select public.staff_match_ids()))', t || '_staff_select', t);
+    execute format('create policy %I on public.%I for insert to authenticated with check (match_id in (select public.staff_match_ids())%s)',
+      t || '_staff_insert', t, case when t = 'match_stats' then ' and player_id in (select public.staff_player_ids())' else '' end);
+    execute format('create policy %I on public.%I for update to authenticated using (match_id in (select public.staff_match_ids())) with check (match_id in (select public.staff_match_ids())%s)',
+      t || '_staff_update', t, case when t = 'match_stats' then ' and player_id in (select public.staff_player_ids())' else '' end);
+  end loop;
+end $$;
+drop policy if exists match_rsvps_staff_read on public.match_rsvps;
+create policy match_rsvps_staff_read on public.match_rsvps for select to authenticated
+  using (match_id in (select public.staff_match_ids()));
+
+-- Jugador: su convocatoria (la ve, la contesta y la cambia), sus pruebas y los avisos de su grupo.
+drop policy if exists match_rsvps_player on public.match_rsvps;
+create policy match_rsvps_player on public.match_rsvps for all to authenticated
+  using (player_id in (select public.my_player_ids()))
+  with check (player_id in (select public.my_player_ids())
+              and match_id in (select id from public.matches where group_id in (select public.my_group_ids())));
+drop policy if exists player_tests_player_read on public.player_tests;
+create policy player_tests_player_read on public.player_tests for select to authenticated
+  using (player_id in (select public.my_player_ids()));
+drop policy if exists notices_member_read on public.notices;
+create policy notices_member_read on public.notices for select to authenticated
+  using (group_id in (select public.my_group_ids()) or group_id in (select public.my_staff_group_ids()));
+
+-- Notificaciones: cada quien guarda y borra solo las suyas, para un grupo al que pertenece.
+drop policy if exists push_own on public.push_subscriptions;
+create policy push_own on public.push_subscriptions for all to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid() and (
+    group_id in (select public.my_group_ids())
+    or group_id in (select public.my_staff_group_ids())
+    or group_id in (select id from public.groups where owner_id = auth.uid())));
+
+-- ---------- Permisos ----------
+revoke all on all tables in schema public from anon;
+revoke all on public.push_config from authenticated;
+revoke all on function public.join_staff(text) from public, anon;
+revoke all on function public.staff_roster() from public, anon;
+grant execute on function public.join_staff(text) to authenticated;
+grant execute on function public.staff_roster() to authenticated;
+grant select, insert, update, delete on
+  public.staff, public.match_rsvps, public.player_tests, public.notices, public.push_subscriptions
+  to authenticated;
 
 

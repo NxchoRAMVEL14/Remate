@@ -16,14 +16,14 @@ function niceStep(range, target = 4) {
 const shortDate = (d) => fmtDate(d, { day: 'numeric', month: 'short' });
 
 // pts: [{x: 'AAAA-MM-DD', y: número, tip: 'texto opcional'}], ordenados por fecha.
-export function lineChart(pts, { unit = 'cm', label = 'Gráfica', digits = 1 } = {}) {
+export function lineChart(pts, { unit = 'cm', label = 'Gráfica', digits = 1, lowerBetter = false, bestLabel = 'Mejor' } = {}) {
   const box = h('div', { class: 'chart' });
   const fig = h('div', { class: 'chart-plot', role: 'img', 'aria-label': `${label}: ${pts.map((p) => `${shortDate(p.x)} ${p.y} ${unit}`).join(', ')}` });
   const read = h('div', { class: 'chart-read', 'aria-live': 'polite' });
   box.append(fig, read);
   if (!pts.length) return box;
   const fmt = (v) => `${Number(v).toFixed(digits).replace(/\.0+$/, '')} ${unit}`;
-  const bestI = pts.reduce((b, p, i) => (p.y > pts[b].y ? i : b), 0);
+  const bestI = pts.reduce((b, p, i) => ((lowerBetter ? p.y < pts[b].y : p.y > pts[b].y) ? i : b), 0);
   const showRead = (i) => { const p = pts[i]; read.textContent = `${fmtDate(p.x, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}: ${fmt(p.y)}${p.tip ? `, ${p.tip}` : ''}`; };
   showRead(pts.length - 1);
 
@@ -51,7 +51,7 @@ export function lineChart(pts, { unit = 'cm', label = 'Gráfica', digits = 1 } =
     pts.forEach((p, i) => svg.append(s('circle', { class: `dot${i === bestI ? ' best' : ''}`, cx: X(t[i]), cy: Y(p.y), r: i === bestI ? 5.5 : 4.5 })));
     // Etiqueta directa solo en el mejor valor
     const bx = X(t[bestI]), by = Y(pts[bestI].y);
-    svg.append(s('text', { class: 'lbl', x: Math.min(W - R, Math.max(L, bx)), y: Math.max(12, by - 10), 'text-anchor': bx > W - 60 ? 'end' : bx < L + 40 ? 'start' : 'middle' }, `Mejor: ${fmt(pts[bestI].y)}`));
+    svg.append(s('text', { class: 'lbl', x: Math.min(W - R, Math.max(L, bx)), y: Math.max(12, by - 10), 'text-anchor': bx > W - 60 ? 'end' : bx < L + 40 ? 'start' : 'middle' }, `${bestLabel}: ${fmt(pts[bestI].y)}`));
     const pick = (ev) => {
       const r = svg.getBoundingClientRect(); const x = ((ev.clientX - r.left) / r.width) * W;
       let k = 0; t.forEach((v, i) => { if (Math.abs(X(v) - x) < Math.abs(X(t[k]) - x)) k = i; });
