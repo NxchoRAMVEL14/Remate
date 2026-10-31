@@ -3,7 +3,7 @@ import { h, ic, toast, plural, addDays, parseDate, fmtDate, openSheet, confirmSh
 import { state, getSession, patch, add, remove, settings, players } from '../store.js';
 import { planMinutes, focusOf } from '../calc.js';
 import { SKILL_BY_ID } from '../content/skills.js';
-import { TEMPLATES, TEMPLATE_BY_ID } from '../content/templates.js';
+import { TEMPLATES, TEMPLATE_BY_ID, planFromTemplate, WARMUPS, warmupFor } from '../content/templates.js';
 import { getExercise, KINDS, levelLabel } from '../content/exercises.js';
 import { courtSVG } from '../court.js';
 import { sectionTitle, empty, note, longDate, field, options, STATUS_LABEL } from './ui.js';
@@ -47,11 +47,21 @@ export default function sesion(ctx) {
   const blocks = plan.length ? h('div', { class: 'blocks' }, plan.map((b, i) => blockRow(s, plan, i, b, setPlan)))
     : empty('El plan está vacío', 'Elige una plantilla para empezar rápido, o agrega ejercicios uno por uno.');
 
+  // Sugerencia: empezar con el calentamiento preventivo de la semana (se apaga en Ajustes).
+  const wu = warmupFor(s.session_date), fiIdx = plan.findIndex((b) => b.ex === 'fi-01');
+  const suggest = settings().warmup_prev !== false && s.status === 'planeada' && !plan.some((b) => WARMUPS.includes(b.ex))
+    ? h('div', { class: 'note stack warmup-tip' },
+      h('span', {}, h('strong', {}, 'Sugerencia: '), `empieza con el ${getEx(wu)?.name.split(':')[0].toLowerCase() || 'calentamiento preventivo'} (tobillo, rodilla y hombro, 10 min).`),
+      h('div', { class: 'cluster' },
+        h('button', { class: 'btn sm primary', type: 'button', onclick: () => {
+          setPlan(fiIdx >= 0 ? plan.map((b, k) => (k === fiIdx ? { ...b, ex: wu, min: Math.max(10, Number(b.min) || 10) } : b)) : [{ ex: wu, min: 10, note: '' }, ...plan]);
+          toast('Calentamiento preventivo agregado'); } }, fiIdx >= 0 ? 'Cambiar el calentamiento' : 'Agregar al inicio'),
+        h('a', { class: 'btn sm ghost', href: `#/ejercicio/${wu}` }, 'Ver ejercicios'))) : null;
   const planBox = h('section', { class: 'no-print stack' },
     sectionTitle('Plan', h('div', { class: 'cluster' },
       h('button', { class: 'btn sm', type: 'button', onclick: () => templateSheet(s) }, ic('book-open', 16), 'Plantilla'),
       h('button', { class: 'btn sm primary', type: 'button', onclick: () => pickExerciseSheet((blk) => { setPlan([...plan, { ...blk, note: '' }]); toast('Bloque agregado'); }) }, ic('plus', 16), 'Ejercicio'))),
-    balance, blocks);
+    suggest, balance, blocks);
 
   const notes = h('textarea', { maxlength: 1200, placeholder: 'Recordatorios para el grupo o cómo salió', value: s.notes || '', 'aria-label': 'Notas del entrenamiento', onchange: (e) => patch('sessions', s.id, { notes: e.target.value.trim() }) });
   const att = marks.length ? (() => { const c = { presente: 0, retardo: 0, falta: 0, justificada: 0 }; marks.forEach((m) => c[m.status]++); return c; })() : null;
@@ -98,7 +108,7 @@ function templateSheet(s) {
     body: h('div', { class: 'stack' }, field('Plantilla', sel), desc, (s.plan || []).length ? note('Esto reemplaza el plan actual.', 'warn') : null),
     actions: [{ label: 'Cancelar' }, { label: 'Aplicar', kind: 'primary', onClick: () => {
       const t = TEMPLATE_BY_ID[sel.value];
-      patch('sessions', s.id, { plan: t.blocks.map((b) => ({ ...b, note: '' })), focus: t.focus, title: s.title || t.name }); toast('Plantilla aplicada');
+      patch('sessions', s.id, { plan: planFromTemplate(t, s.session_date, settings().warmup_prev !== false), focus: t.focus, title: s.title || t.name }); toast('Plantilla aplicada');
     } }] });
 }
 

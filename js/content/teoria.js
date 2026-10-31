@@ -9,7 +9,7 @@
 //   { ul: [...] } / { ol: [...] }   lista con viñetas o numerada
 //   { tip: 'texto' }         recuadro de dato o consejo
 //   { dg: half(...), cap: 'pie' }   diagrama de cancha (ver court.js)
-import { P, B, A, Z, T, half } from './dx.js';
+import { P, B, A, Z, T, half } from '../court.js';
 
 export const UNITS = [
   { id: 'reglas', name: 'El juego y sus reglas', tag: 'Básico', min: 1, reto: 'teo-reglas',

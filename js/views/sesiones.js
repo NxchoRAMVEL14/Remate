@@ -1,9 +1,9 @@
 // Lista de entrenamientos: por venir, pendientes de lista y anteriores.
 import { h, ic, plural, toast, todayStr, addDays, parseDate, fmtDate, openSheet, DAYS_LONG } from '../util.js';
 import { state, sessions, settings, group, add } from '../store.js';
-import { TEMPLATES, TEMPLATE_BY_ID } from '../content/templates.js';
+import { TEMPLATES, TEMPLATE_BY_ID, planFromTemplate } from '../content/templates.js';
 import { sectionTitle, empty, note, sessionWhen, options, field } from './ui.js';
-import { sessionFormSheet } from './sheets-session.js';
+import { sessionFormSheet, calendarCard } from './sheets-session.js';
 import { currentBlock } from './temporada.js';
 import { teoriaCard } from './teoria.js';
 
@@ -31,6 +31,7 @@ export default function sesiones(ctx) {
     (() => { const b = currentBlock(); return h('a', { class: 'labcard', href: '#/temporada' }, h('span', { class: 'lc-ic' }, ic('calendar-range', 26)),
       h('span', { class: 'lc-t' }, h('strong', {}, 'Planear temporada'), h('span', {}, b ? `Bloque actual: ${b.name}` : 'Bloques con enfoque que crean tus entrenamientos.')), ic('chevron-right', 20)); })(),
     teoriaCard(ctx),
+    calendarCard(ctx),
     h('section', {}, sectionTitle('Entrenamientos', h('div', { class: 'cluster' },
       h('button', { class: 'btn sm', type: 'button', onclick: scheduleSheet }, ic('calendar-days', 16), 'Programar semanas'),
       h('button', { class: 'btn primary sm', type: 'button', onclick: () => sessionFormSheet(null, (s) => { location.hash = `#/sesion/${s.id}`; }) }, ic('plus', 16), 'Nuevo'))),
@@ -68,7 +69,7 @@ function scheduleSheet() {
       const d = dates(); if (!d.length) { toast('No hay días nuevos que crear'); return false; }
       const tp = TEMPLATE_BY_ID[tpl.value];
       for (const date of d) add('sessions', { group_id: group()?.id, session_date: date, start_time: st.start, minutes: tp?.minutes || st.minutes, title: tp?.name || '',
-        focus: tp?.focus || [], plan: tp ? tp.blocks.map((b) => ({ ...b, note: '' })) : [], status: 'planeada', published: false });
+        focus: tp?.focus || [], plan: tp ? planFromTemplate(tp, date, settings().warmup_prev !== false) : [], status: 'planeada', published: false });
       toast(`${plural(d.length, 'entrenamiento creado', 'entrenamientos creados')}`);
     } }],
   });

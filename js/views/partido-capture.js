@@ -1,6 +1,6 @@
 // Captura en vivo: marcador por set, alineación y rotación, acciones por jugador y zona del saque o del ataque.
-import { h, ic, toast, openSheet, confirmSheet, uid } from '../util.js';
-import { state, add, patch, players, playerById, ls } from '../store.js';
+import { h, ic, toast, openSheet, confirmSheet, uid, fmtDate, shareText } from '../util.js';
+import { state, add, patch, players, playerById, ls, group } from '../store.js';
 import { ACTIONS, GROUPS, score, storedSets, countsFor, playersIn, setsToWin, replay, rotLabel, ZONE_ORDER, RIVAL_GRID, ZONE_ACTIONS } from '../match-calc.js';
 import { note, sectionTitle, field, options } from './ui.js';
 
@@ -170,6 +170,7 @@ export function capture(m, ctx) {
         h('strong', {}, `¿Quién empieza el set ${sc.idx + 1}?`),
         h('p', { class: 'row-sub', style: { margin: 0 } }, 'Con la alineación, Remate sigue la rotación y te dice en cuál ganan y en cuál pierden más puntos, y su side-out y break point.'),
         h('div', { class: 'cluster' }, h('button', { type: 'button', class: 'btn primary sm', onclick: () => lineupSheet(m, sc.idx) }, ic('users', 16), 'Poner alineación'),
+          h('a', { class: 'btn ghost sm', href: `#/alineacion/${m.id}` }, ic('printer', 16), 'Hoja para la mesa'),
           h('button', { type: 'button', class: 'btn ghost sm', onclick: () => { ui.noLineup[sc.idx] = true; ctx.rerender(); } }, 'Capturar sin alineación'))) : null,
       h('div', { class: 'split' }, h('strong', {}, ui.sel ? `Jugador: ${nameOf(ui.sel)}` : '1. Toca al jugador'), ui.sel ? h('button', { type: 'button', class: 'btn ghost sm', onclick: () => { ui.sel = null; ctx.rerender(); } }, 'Quitar') : null),
       roster.length ? h('div', { class: 'roster', role: 'group', 'aria-label': 'Jugadores' }, roster.map((p) => pickBtn(p))) : note('Todavía no hay jugadores en el equipo.'));
@@ -192,4 +193,61 @@ export function capture(m, ctx) {
         h('strong', {}, e.a === 'set_end' ? `Fin del set ${e.set + 1}` : e.a === 'sub' ? `Cambio: entra ${nameOf(e.p)} por ${nameOf(e.out)}`
           : `${e.p ? `${nameOf(e.p)}: ` : ''}${e.p ? `${GROUPS[ACTIONS[e.a].g]}, ${ACTIONS[e.a].label.toLowerCase()}` : ACTIONS[e.a]?.label || e.a}${e.z ? `, zona ${e.z}` : ''}`),
         h('span', { class: 'row-sub' }, `Set ${e.set + 1}${e.pt ? `, punto ${e.pt === 'us' ? 'nuestro' : 'del rival'}` : ''}`)))))) : null);
+}
+
+
+// ---------- Hoja de alineación para la mesa (una por set) ----------
+// Posiciones I a VI = zonas 1 a 6. El orden de saque sigue la rotación: I, II, III... Si recibimos primero,
+// al ganar el saque rotamos antes de sacar, así que nuestro primer saque es de la posición II.
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+const serveOrder = (lu) => (lu.serve === 'us' ? [1, 2, 3, 4, 5, 6] : [2, 3, 4, 5, 6, 1]);
+const numName = (p) => (p ? `${p.jersey != null ? `${p.jersey} ` : ''}${p.name}` : '—');
+function lineupText(m, i, lu) {
+  const P = (id) => playerById(id);
+  return [`Alineación · ${group()?.name || 'Mi equipo'} vs ${m.rival} · Set ${i + 1}`,
+    `Saca primero: ${lu.serve === 'us' ? 'nosotros' : m.rival}`,
+    ...[1, 2, 3, 4, 5, 6].map((z) => `${ROMAN[z - 1]}: ${numName(P(lu.slots[z - 1]))}`),
+    lu.libero ? `Líbero: ${numName(P(lu.libero))}` : null,
+    `Orden de saque: ${serveOrder(lu).map((z) => P(lu.slots[z - 1])?.jersey ?? P(lu.slots[z - 1])?.name ?? '?').join(' → ')}`].filter(Boolean).join('\n');
+}
+function slip(m, i, lu, canEdit) {
+  const team = group()?.name || 'Mi equipo';
+  const head = h('div', { class: 'slip-head' }, h('strong', {}, `Set ${i + 1}`), h('span', {}, `${team} vs ${m.rival}`), h('span', {}, fmtDate(m.match_date, { day: 'numeric', month: 'short', year: 'numeric' })));
+  if (!lu) {
+    return h('section', { class: 'slip slip-blank' }, head,
+      h('div', { class: 'slip-grid' }, h('span', { class: 'slip-net' }, 'Red'), [4, 3, 2, 5, 6, 1].map((z) => h('div', { class: 'slip-cell' }, h('span', { class: 'slip-pos' }, ROMAN[z - 1]), h('b', {}, ' ')))),
+      h('p', { class: 'slip-line' }, 'Líbero: ________   Saca primero: nosotros / rival'),
+      h('p', { class: 'slip-line' }, 'Firma del entrenador: ______________________'),
+      canEdit ? h('div', { class: 'cluster no-print' }, h('button', { class: 'btn primary sm', type: 'button', onclick: () => lineupSheet(m, i) }, ic('users', 16), `Definir alineación del set ${i + 1}`)) : null);
+  }
+  const P = (id) => playerById(id);
+  const order = serveOrder(lu);
+  return h('section', { class: 'slip' }, head,
+    h('div', { class: 'slip-grid', role: 'img', 'aria-label': `Posiciones del set ${i + 1}` }, h('span', { class: 'slip-net' }, 'Red'),
+      [4, 3, 2, 5, 6, 1].map((z) => { const p = P(lu.slots[z - 1]);
+        return h('div', { class: 'slip-cell' }, h('span', { class: 'slip-pos' }, ROMAN[z - 1]), h('b', {}, p?.jersey != null ? String(p.jersey) : '—'), h('span', { class: 'slip-name' }, p?.name || 'Jugador')); })),
+    h('p', { class: 'slip-line' }, h('strong', {}, 'Líbero: '), lu.libero ? numName(P(lu.libero)) : 'sin líbero'),
+    h('p', { class: 'slip-line' }, h('strong', {}, 'Saca primero: '), lu.serve === 'us' ? 'nosotros (posición I)' : `${m.rival}. Nuestro primer saque es de la posición II.`),
+    h('ol', { class: 'slip-order', 'aria-label': 'Orden de saque' }, order.map((z) => { const p = P(lu.slots[z - 1]);
+      return h('li', {}, h('span', { class: 'slip-pos' }, ROMAN[z - 1]), ` ${numName(p)}`); })),
+    h('p', { class: 'slip-line' }, 'Firma del entrenador: ______________________'),
+    h('div', { class: 'cluster no-print' },
+      canEdit ? h('button', { class: 'btn sm', type: 'button', onclick: () => lineupSheet(m, i) }, ic('pencil', 16), 'Editar') : null,
+      h('button', { class: 'btn sm', type: 'button', onclick: () => shareText(lineupText(m, i, lu)) }, ic('share-2', 16), 'Compartir')));
+}
+export function alineacion(ctx) {
+  const m = state.data.matches.find((x) => x.id === ctx.args[0]);
+  if (!m) return { title: 'Hoja para la mesa', back: '#/partidos', el: h('div', { class: 'page' }, note('No encontré ese partido.')) };
+  const canEdit = ctx.role === 'coach' || ctx.role === 'assistant';
+  const n = m.best_of || 3, lus = m.lineups || [];
+  const used = lus.flatMap((lu) => (lu ? [...lu.slots, lu.libero] : [])).filter(Boolean);
+  const noNum = [...new Set(used)].map(playerById).filter((p) => p && p.jersey == null);
+  const shareAll = () => shareText(lus.map((lu, i) => (lu ? lineupText(m, i, lu) : null)).filter(Boolean).join('\n\n') || 'Todavía no hay alineaciones.');
+  const el = h('div', { class: 'page lineup-print' },
+    h('div', { class: 'note no-print' }, 'Una hoja por set con las posiciones I a VI (en la cancha, como la ve tu banca) y el orden de saque. Prepara los sets que faltan, imprímela o compártela, y entrégale cada hoja al anotador antes del set.'),
+    noNum.length ? h('div', { class: 'note warn no-print' }, `Sin número de playera: ${noNum.map((p) => p.name).join(', ')}. El anotador necesita los números; agrégalos en la ficha de cada jugador.`) : null,
+    Array.from({ length: n }, (_, i) => slip(m, i, lus[i], canEdit)),
+    h('div', { class: 'cluster no-print' }, h('button', { class: 'btn primary', type: 'button', onclick: () => window.print() }, ic('printer', 18), 'Imprimir o guardar PDF'),
+      h('button', { class: 'btn', type: 'button', onclick: shareAll }, ic('share-2', 18), 'Compartir todo')));
+  return { title: 'Hoja para la mesa', sub: `Contra ${m.rival}`, back: `#/partido/${m.id}`, actions: [{ icon: 'printer', label: 'Imprimir o guardar PDF', onClick: () => window.print() }], el };
 }

@@ -62,7 +62,8 @@ function coach(ctx) {
   const team = metrics(addCounts(...state.data.matchStats.filter((s) => done.some((m) => m.id === s.match_id)).map((s) => s.counts)));
   const el = h('div', { class: 'page' },
     ro ? missingSqlNote() : null,
-    ro ? null : h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', onclick: () => matchSheet(null, (m) => { location.hash = `#/partido/${m.id}`; }) }, ic('plus', 18), 'Nuevo partido')),
+    ro ? null : h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', onclick: () => matchSheet(null, (m) => { location.hash = `#/partido/${m.id}`; }) }, ic('plus', 18), 'Nuevo partido'),
+      isCoach ? h('a', { class: 'btn', href: '#/rivales' }, ic('eye', 18), 'Scouting de rivales') : null),
     tournamentsSection(ctx),
     list.length ? sectionTitle('Partidos') : null,
     done.length ? h('div', { class: 'kpis' },

@@ -24,5 +24,5 @@ export default function partido(ctx) {
     h('button', { type: 'button', role: 'tab', 'aria-selected': ui.tab === id ? 'true' : 'false', disabled: id === 'captura' && !canEdit ? true : null, onclick: () => { ui.tab = id; ctx.rerender(); } }, label)));
   const body = ui.tab === 'captura' && canEdit ? capture(m, ctx) : summaryView(m, ctx, { canEdit, coach });
   return { title: `Contra ${m.rival}`, sub, back: backTo,
-    actions: canEdit ? [{ icon: 'pencil', label: 'Editar partido', onClick: () => matchSheet(m) }] : [], el: h('div', { class: 'page' }, tabs, body) };
+    actions: canEdit ? [{ icon: 'printer', label: 'Hoja de alineación para la mesa', href: `#/alineacion/${m.id}` }, { icon: 'pencil', label: 'Editar partido', onClick: () => matchSheet(m) }] : [], el: h('div', { class: 'page' }, tabs, body) };
 }

@@ -8,13 +8,17 @@ export const PRIORITY = { alta: 'Alta', media: 'Media', baja: 'Baja' };
 export const STATUS = { idea: 'Idea', lista: 'Lista para pedir', hecha: 'Hecha', descartada: 'Descartada' };
 
 export const SUGGESTED = [
-  { title: 'Calendario en el celular', area: 'entrenos', priority: 'media',
+  { title: 'Captura del rival', area: 'partidos', priority: 'media',
+    body: 'Durante el partido, anotar también lo que hace el rival (quién ataca, a dónde saca y sus errores) para que el scouting se llene solo.' },
+  { title: 'Lista de asistencia con QR', area: 'entrenos', priority: 'baja',
+    body: 'Que cada jugador marque su llegada escaneando un código QR en mi celular, y yo solo reviso a los que faltan.' },
+  { title: 'Calendario en el celular', since: '3.4.0', area: 'entrenos', priority: 'media',
     body: 'Mandar los entrenamientos y partidos al calendario del celular (Google Calendar o el del iPhone), para que les llegue el recordatorio aunque no abran Remate.' },
-  { title: 'Hoja de alineación para la mesa', area: 'partidos', priority: 'media',
+  { title: 'Hoja de alineación para la mesa', since: '3.4.0', area: 'partidos', priority: 'media',
     body: 'Imprimir o compartir la alineación y el orden de saque de cada set, lista para entregar al anotador antes del partido.' },
-  { title: 'Scouting del rival', area: 'partidos', priority: 'baja',
+  { title: 'Scouting del rival', since: '3.4.0', area: 'partidos', priority: 'baja',
     body: 'Notas y tendencias de cada rival (quién ataca más, a dónde sacan, su rotación débil) para preparar el siguiente partido contra ellos.' },
-  { title: 'Calentamiento y prevención', area: 'entrenos', priority: 'baja',
+  { title: 'Calentamiento y prevención', since: '3.4.0', area: 'entrenos', priority: 'baja',
     body: 'Un bloque de calentamiento con ejercicios de prevención de tobillo, rodilla y hombro, sugerido al inicio de cada entrenamiento.' },
   { title: 'Alineación y rotaciones en cada set', since: '3.0.0', area: 'partidos', priority: 'alta',
     body: 'Armar la rotación inicial de cada set. La captura muestra solo a los 6 que están en cancha y calcula cuántos puntos ganamos en cada rotación, para saber cuál es la más débil.' },

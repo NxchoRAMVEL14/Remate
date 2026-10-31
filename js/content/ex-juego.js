@@ -1,4 +1,4 @@
-import { P, K, A, Z, half, full } from './dx.js';
+import { P, K, A, Z, half, full } from '../court.js';
 
 export default [
   { id: 'ju-01', name: 'Rally cooperativo 2 contra 2', skills: ['juego', 'recepcion', 'colocacion'], levels: [1, 2], min: 12, players: '4 a 16',

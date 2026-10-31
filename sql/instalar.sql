@@ -1,6 +1,6 @@
 -- Remate · instalación completa para Supabase (SQL Editor → pega todo → Run).
--- Incluye: núcleo, laboratorio y partidos, En casa y mejoras, equipo de apoyo (ayudantes, convocatoria, pruebas, avisos)
--- y torneos con su convocatoria y la prueba de 10 m (v3.3).
+-- Incluye: núcleo, laboratorio y partidos, En casa y mejoras, equipo de apoyo (ayudantes, convocatoria, pruebas, avisos),
+-- torneos con su convocatoria y la prueba de 10 m (v3.3), y el calendario del equipo para el celular (v3.4).
 -- Es seguro correrlo más de una vez: no borra datos.
 
 -- =====================================================================
@@ -1025,4 +1025,42 @@ create policy tournament_rsvps_staff_read on public.tournament_rsvps for select 
 -- ---------- Permisos ----------
 revoke all on public.tournaments, public.tournament_rsvps from anon;
 grant select, insert, update, delete on public.tournaments, public.tournament_rsvps to authenticated;
+
+
+-- =====================================================================
+-- REMATE · v3.4: calendario del equipo para el celular (suscripción)
+-- Va después de 01 a 06 (si usas instalar.sql ya viene incluido).
+-- Es seguro correrlo más de una vez. Solo agrega: no borra datos.
+--
+-- Cada equipo tiene un enlace secreto de calendario. La función "calendario" de Supabase lo usa para
+-- entregar los entrenamientos publicados, los partidos y los torneos en formato de calendario (.ics),
+-- sin nombres de jugadores. El entrenador puede cambiar el enlace cuando quiera (el anterior deja de servir).
+-- =====================================================================
+
+create table if not exists public.calendar_feeds (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  group_id uuid not null unique references public.groups(id) on delete cascade,
+  token text not null unique default replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '')
+        check (char_length(token) between 32 and 80),
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+alter table public.calendar_feeds enable row level security;
+
+-- Entrenador: control total sobre el de su grupo.
+drop policy if exists calendar_feeds_coach on public.calendar_feeds;
+create policy calendar_feeds_coach on public.calendar_feeds for all to authenticated
+  using (owner_id = auth.uid() and public.is_coach())
+  with check (owner_id = auth.uid() and public.is_coach()
+              and group_id in (select id from public.groups where owner_id = auth.uid()));
+
+-- Jugadores y ayudantes: leen el enlace activo de su grupo (para suscribirse). No lo pueden cambiar.
+drop policy if exists calendar_feeds_member_read on public.calendar_feeds;
+create policy calendar_feeds_member_read on public.calendar_feeds for select to authenticated
+  using (active and (group_id in (select public.my_group_ids()) or group_id in (select public.my_staff_group_ids())));
+
+revoke all on public.calendar_feeds from anon;
+grant select, insert, update, delete on public.calendar_feeds to authenticated;
 

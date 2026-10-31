@@ -1,4 +1,4 @@
-import { P, K, A, Z, full } from './dx.js';
+import { P, K, A, Z, full } from '../court.js';
 
 export default [
   { id: 'sa-01', name: 'Saque por abajo a zonas', skills: ['saque'], levels: [1, 2], min: 12, players: '2 a 12',

@@ -6,7 +6,7 @@ import { disablePush } from '../push.js';
 import { attendanceFor, doneSessions } from '../calc.js';
 import { leave, restartDemo } from '../auth.js';
 import { sectionTitle, note, field, options } from './ui.js';
-import { aboutSection } from './novedades.js';
+import { aboutSection } from './ayuda.js';
 
 function attendanceCsv() {
   const done = doneSessions(sessions()), list = players(), st = settings();
@@ -131,6 +131,8 @@ function coach() {
       h('div', { class: 'field' }, h('span', { class: 'label' }, 'Días de entrenamiento'), days),
       h('div', { class: 'grid' }, field('Hora de inicio', start), field('Duración (min)', mins)),
       field('Retardos que cuentan como 1 falta', late, 'Pon 0 para que los retardos nunca se conviertan en faltas. Las faltas justificadas no restan.'),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.warmup_prev !== false ? true : null, onchange: (e) => { saveSettings({ warmup_prev: e.target.checked }); toast(e.target.checked ? 'Calentamiento preventivo activado' : 'Calentamiento preventivo desactivado'); } }),
+        h('span', {}, 'Empezar cada entrenamiento con el calentamiento preventivo (tobillo, rodilla y hombro). Se turnan las versiones A, B y C por semana.')),
       field('Pruebas físicas cada (semanas)', h('input', { type: 'number', min: 4, max: 26, inputmode: 'numeric', value: st.tests_every || 10, onchange: (e) => { saveSettings({ tests_every: Math.min(26, Math.max(4, Number(e.target.value) || 10)) }); toast('Guardado'); } }), 'Cada cuánto te recuerdo en Hoy medir salto, velocidad de 10 m y plancha. 8 a 13 semanas son 2 a 3 meses.')),
     supportSection(),
     h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField()),

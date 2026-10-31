@@ -1,10 +1,12 @@
 // Ayuda: cómo usar Remate, cómo funcionan niveles y asistencia, y de dónde sale cada cosa.
-import { h } from '../util.js';
+import { h, ic, fmtDate } from '../util.js';
+import { ls } from '../store.js';
+import { sectionTitle } from './ui.js';
 import { XP_RULES } from '../calc.js';
-import { VERSION } from '../version.js';
+import { VERSION, CHANGELOG } from '../version.js';
 
 const link = (href, text) => h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, text);
-const list = (items) => h('ul', { class: 'plain' }, items.map((x) => h('li', {}, x)));
+const list = (items) => h('ul', { class: 'plain' }, items.filter(Boolean).map((x) => h('li', {}, x)));
 
 const COACH_STEPS = [
   'Entra a Ajustes y elige tus días y hora de entrenamiento.',
@@ -59,6 +61,9 @@ export default function ayuda(ctx) {
         'Eficiencia de ataque = (remates punto − errores − bloqueados) ÷ remates totales. Un número positivo significa que tu ataque gana más puntos de los que regala.',
         'Con el marcador automático, cada ace, remate punto, bloqueo punto o error suma el punto solo. Si lo apagas, usa los botones +1.',
         'Los sets van a 25 con diferencia de 2 y el decisivo a 15, como en las reglas FIVB. Si tu liga usa otro formato, cierra el set cuando corresponda y termina el partido a mano.',
+        coach ? 'Hoja para la mesa: en un partido, el ícono de impresora arma una hoja por set con las posiciones I a VI, el líbero y el orden de saque. Si recibes primero, tu primer saque es de la posición II. Puedes dejar listas las alineaciones de todos los sets antes del partido.' : null,
+        coach ? 'Scouting de rivales (en Partidos): una ficha privada por rival con sus jugadores clave, a dónde sacan, su sistema, su rotación débil y tu plan, más tu side-out, tu rotación más débil y dónde les haces daño en tus partidos contra ellos.' : null,
+        'Calendario en el celular (en Entrenos): suscríbete una vez y los entrenamientos publicados, partidos y torneos llegan a tu calendario con aviso, aunque no abras Remate. También puedes descargar un archivo .ics.',
         coach ? 'Torneos (en Partidos): crea el torneo con sede, fechas y rama, elige a los convocados y ellos confirman desde su celular. Agrega los partidos del torneo, escribe la tabla (tu fila se llena con tus partidos) y al final pon el lugar. Puedes filtrar por rama.' : 'Torneos: en Partidos ves los torneos de tu equipo. Si estás convocado, contesta si vas.',
         coach ? 'Tus jugadores ven el marcador y solo sus propios números. El registro jugada por jugada es solo tuyo.' : 'Tu entrenador captura tus acciones durante el partido; tú ves solo las tuyas.'])),
     coach ? h('section', {}, h('h2', {}, 'Tu laboratorio'),
@@ -84,6 +89,8 @@ export default function ayuda(ctx) {
         h('li', {}, 'Lecciones de técnica, sistemas, táctica y su quiz, y la hoja de antes y después: propuestas de Remate basadas en práctica común de entrenamiento.'),
         h('li', {}, 'Pruebas de reglas de la FIVB para 2026 (por ejemplo, ocho sustituciones por set en algunas competencias): ', link('https://norceca.info/fivb-board-of-administration-approves-rule-tests-for-2026-competitions/', 'NORCECA'), '.'),
         h('li', {}, 'Escala de recepción de 0 a 3 y eficiencia de ataque: son las medidas más comunes en la estadística de voleibol; la forma exacta de capturarlas en Remate es propia.'),
+        h('li', {}, 'Calentamiento preventivo: el calentamiento VolleyVeilig redujo las lesiones agudas y de brazo en voleibolistas jóvenes (Verhagen y cols., ', link('https://repository.up.ac.za/items/2d4f3fb9-f759-42d4-beae-174527228417', 'British Journal of Sports Medicine, 2023'), '); el entrenamiento de equilibrio redujo los esguinces de tobillo repetidos en voleibol (', link('https://pubmed.ncbi.nlm.nih.gov/15310562/', 'Verhagen y cols., 2004'), '); y el programa de hombro del OSTRC redujo los problemas de hombro en deportes de lanzamiento (', link('https://bjsm.bmj.com/content/51/14/1073', 'Andersson y cols., 2017'), '). Los tres calentamientos de Remate toman ideas de ellos; no son copia exacta de ningún programa.'),
+        h('li', {}, 'Calendario: formato iCalendar (.ics). En iPhone, un calendario suscrito avisa si no activas «Quitar alarmas»; en Google Calendar, los avisos de un calendario suscrito se eligen en su configuración.'),
         h('li', {}, 'Prueba de velocidad de 10 m (salida parada, tres intentos con descanso; mejor con fotoceldas que con cronómetro): ', link('https://www.scienceforsport.com/10m-sprint-test/', 'Science for Sport, «10m Sprint Test»'), '.'),
         h('li', {}, 'Prueba de agilidad T: ', link('https://www.topendsports.com/testing/tests/t-test.htm', 'descripción del protocolo'), ', con la referencia de Pauole y colaboradores (J Strength Cond Res, 2000) sobre su confiabilidad.'),
         h('li', {}, 'Notificaciones: usan Web Push con una función de Supabase (', link('https://supabase.com/docs/guides/functions', 'Edge Functions'), '). En iPhone solo llegan con la app instalada en la pantalla de inicio.'),
@@ -92,4 +99,41 @@ export default function ayuda(ctx) {
       h('p', {}, `Estás usando Remate ${VERSION}. `, h('a', { href: '#/novedades' }, 'Ver qué cambió en cada versión'), '.')),
     h('section', { class: 'note warn' }, h('strong', {}, 'Importante: '), 'Remate no sustituye a un médico ni a un entrenador titulado. Si un jugador siente dolor, se detiene. Si dudas de una carga o de una lesión, consulta a un profesional.'));
   return { title: 'Ayuda', el };
+}
+
+// ---------- Novedades: versión actual y qué cambió en cada versión (antes js/views/novedades.js) ----------
+// Última versión que este celular ya vio. Sirve para avisar una sola vez cuando Remate se actualiza.
+export const SEEN_KEY = 'remate.version.vista';
+export const markSeen = () => ls.set(SEEN_KEY, VERSION);
+export const unseenUpdate = () => { const v = ls.get(SEEN_KEY); return !!v && v !== VERSION; };
+export const firstRun = () => !ls.get(SEEN_KEY);
+
+const when = (f) => fmtDate(f, { day: 'numeric', month: 'long', year: 'numeric' });
+
+// Bloque "Acerca de Remate" para Ajustes (todos los roles).
+export const aboutSection = () => h('section', { class: 'stack' }, sectionTitle('Acerca de Remate'),
+  h('div', { class: 'rows' }, h('div', { class: 'row' }, h('span', { class: 'row-main' }, h('strong', {}, `Versión ${VERSION}`), h('span', { class: 'row-sub' }, `Actualizada el ${when(CHANGELOG[0].f)}`)),
+    h('a', { class: 'btn sm', href: '#/novedades' }, ic('sparkles', 18), 'Ver novedades'))));
+
+// Aviso de una sola vez después de una actualización.
+export function updateBanner(onClose) {
+  const close = () => { markSeen(); onClose(); };
+  return h('div', { class: 'updbar', role: 'status' },
+    h('span', {}, ic('sparkles', 18), ` Remate se actualizó a la versión ${VERSION}.`),
+    h('span', { class: 'cluster' }, h('a', { class: 'btn sm', href: '#/novedades', onclick: () => markSeen() }, 'Ver novedades'),
+      h('button', { class: 'iconbtn', type: 'button', 'aria-label': 'Cerrar aviso', onclick: close }, ic('x', 20))));
+}
+
+export function novedades(ctx) {
+  markSeen();
+  const back = ctx.role === 'coach' ? '#/ajustes' : null;
+  const el = h('div', { class: 'page' },
+    h('section', { class: 'band next stack' }, h('span', { class: 'when' }, 'Estás usando'), h('h2', {}, `Remate ${VERSION}`),
+      h('p', { style: { margin: 0 } }, 'Cuando subes una versión nueva a GitHub, cada celular la descarga sola al abrir Remate con internet. Si no la ves, cierra la app por completo y vuelve a abrirla.')),
+    h('section', { class: 'stack' }, sectionTitle('Qué cambió'),
+      h('ol', { class: 'changelog' }, CHANGELOG.map((c, i) => h('li', { class: 'panel' },
+        h('div', { class: 'cl-head' }, h('strong', {}, `Versión ${c.v}`), i === 0 ? h('span', { class: 'chip ball' }, 'Actual') : null, h('span', { class: 'row-sub' }, when(c.f))),
+        h('p', {}, c.t))))),
+    h('p', { class: 'row-sub' }, 'Las versiones siguen la forma mayor.menor.corrección: el primer número cambia con funciones grandes, el segundo con mejoras y el tercero con arreglos.'));
+  return { title: 'Novedades', back, el };
 }

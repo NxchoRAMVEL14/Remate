@@ -1,4 +1,4 @@
-import { P, K, A, Z, half } from './dx.js';
+import { P, K, A, Z, half } from '../court.js';
 
 export default [
   // ---------------- Bloqueo ----------------

@@ -186,3 +186,41 @@ export function fmtClock(t) {
   const hh = Math.floor(t / 3600), mm = Math.floor((t % 3600) / 60), ss = String(t % 60).padStart(2, '0');
   return hh ? `${hh}:${String(mm).padStart(2, '0')}:${ss}` : `${mm}:${ss}`;
 }
+
+// ---------- calendario (.ics) ----------
+// Mismo formato que la función "calendario" de Supabase. Zona horaria del Bajío: UTC-6 todo el año.
+const ICS_TZ = 'America/Mexico_City';
+const icsEsc = (s) => String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+function icsFold(line) {
+  const enc = new TextEncoder(), out = []; let cur = '';
+  for (const ch of line) { if (enc.encode(cur + ch).length > (out.length ? 74 : 75)) { out.push(cur); cur = ch; } else cur += ch; }
+  out.push(cur); return out.join('\r\n ');
+}
+function icsLocal(date, time, plusMin = 0) {
+  const [hh, mm] = time.split(':').map(Number);
+  const t = new Date(Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10), hh, mm + plusMin));
+  return `${t.getUTCFullYear()}${pad(t.getUTCMonth() + 1)}${pad(t.getUTCDate())}T${pad(t.getUTCHours())}${pad(t.getUTCMinutes())}00`;
+}
+// events: [{ uid, summary, date: 'AAAA-MM-DD', end?, time?: 'HH:MM', minutes?, location?, desc?, alarm?: minutos antes }]
+export function buildICS(events, calName = 'Remate') {
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Remate//Calendario del equipo//ES', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    `X-WR-CALNAME:${icsEsc(calName)}`, `X-WR-TIMEZONE:${ICS_TZ}`,
+    'BEGIN:VTIMEZONE', `TZID:${ICS_TZ}`, 'BEGIN:STANDARD', 'DTSTART:19700101T000000', 'TZOFFSETFROM:-0600', 'TZOFFSETTO:-0600', 'TZNAME:CST', 'END:STANDARD', 'END:VTIMEZONE'];
+  for (const e of events) {
+    L.push('BEGIN:VEVENT', `UID:${e.uid}@remate`, `DTSTAMP:${stamp}`);
+    if (e.time) L.push(`DTSTART;TZID=${ICS_TZ}:${icsLocal(e.date, e.time)}`, `DTEND;TZID=${ICS_TZ}:${icsLocal(e.date, e.time, e.minutes || 90)}`);
+    else L.push(`DTSTART;VALUE=DATE:${e.date.replaceAll('-', '')}`, `DTEND;VALUE=DATE:${addDays(e.end || e.date, 1).replaceAll('-', '')}`);
+    L.push(`SUMMARY:${icsEsc(e.summary)}`);
+    if (e.location) L.push(`LOCATION:${icsEsc(e.location)}`);
+    if (e.desc) L.push(`DESCRIPTION:${icsEsc(e.desc)}`);
+    // Avisos: los de hora, X minutos antes; los de todo el día, a las 9 de la mañana del día anterior.
+    if (e.alarm !== null) L.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsEsc(e.summary)}`, `TRIGGER:${e.time ? `-PT${e.alarm || 60}M` : '-PT15H'}`, 'END:VALARM');
+    L.push('END:VEVENT');
+  }
+  L.push('END:VCALENDAR');
+  return `${L.map(icsFold).join('\r\n')}\r\n`;
+}
+
+// Clave de un rival: el nombre sin mayúsculas, acentos ni signos («Prepa Las Lomas» = «prepa las lomas»).
+export const rivalKey = (name) => String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);

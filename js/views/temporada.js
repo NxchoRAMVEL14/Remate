@@ -2,7 +2,7 @@
 import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr, addDays, parseDate, plural, uid, DAYS_LONG } from '../util.js';
 import { state, settings, saveSettings, group, add } from '../store.js';
 import { SKILLS, SKILL_BY_ID } from '../content/skills.js';
-import { TEMPLATES, TEMPLATE_BY_ID } from '../content/templates.js';
+import { TEMPLATES, TEMPLATE_BY_ID, planFromTemplate } from '../content/templates.js';
 import { sectionTitle, note, empty, field, options } from './ui.js';
 import { weekStart } from '../lab-calc.js';
 
@@ -27,7 +27,7 @@ function generate(b) {
   dates.forEach((date, i) => {
     const tp = tpls.length ? tpls[i % tpls.length] : null;
     add('sessions', { group_id: group()?.id, session_date: date, start_time: st.start, minutes: tp?.minutes || st.minutes, title: tp ? `${b.name}: ${tp.name}` : b.name,
-      focus: b.focus?.length ? b.focus : tp?.focus || [], plan: tp ? tp.blocks.map((x) => ({ ...x, note: '' })) : [], status: 'planeada', published: false });
+      focus: b.focus?.length ? b.focus : tp?.focus || [], plan: tp ? planFromTemplate(tp, date, settings().warmup_prev !== false) : [], status: 'planeada', published: false });
   });
   toast(`${plural(dates.length, 'entrenamiento creado', 'entrenamientos creados')} para ${b.name}`);
 }

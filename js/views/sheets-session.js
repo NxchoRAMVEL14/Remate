@@ -1,10 +1,12 @@
 // Hojas emergentes de sesiones y ejercicios: crear sesión, pasar lista, elegir ejercicio, ejercicio propio.
-import { h, ic, openSheet, confirmSheet, toast, todayStr, addDays, parseDate, DAYS } from '../util.js';
-import { add, patch, group, settings, players, setAttendance, state } from '../store.js';
+import { h, ic, openSheet, confirmSheet, toast, todayStr, addDays, parseDate, DAYS, buildICS, download, copyText, plural } from '../util.js';
+import { add, patch, remove, group, settings, players, setAttendance, state, calReady, randomToken } from '../store.js';
 import { SKILLS, SKILL_BY_ID } from '../content/skills.js';
-import { TEMPLATES, TEMPLATE_BY_ID } from '../content/templates.js';
+import { TEMPLATES, TEMPLATE_BY_ID, planFromTemplate } from '../content/templates.js';
 import { allExercises, filterExercises, MATERIAL, KINDS, levelLabel } from '../content/exercises.js';
 import { field, options, note, jersey, STATUS_LABEL } from './ui.js';
+import { noticeSheet } from './avisos.js';
+import { CONFIG } from '../../config.js';
 
 // ---------- crear o editar sesión ----------
 function nextTrainingDay() {
@@ -44,7 +46,7 @@ export function sessionFormSheet(s = null, onCreated) {
         return;
       }
       const t = TEMPLATE_BY_ID[tpl.value];
-      const ns = add('sessions', { ...base, group_id: group()?.id, focus: t?.focus || [], plan: t ? t.blocks.map((b) => ({ ...b, note: '' })) : [], status: 'planeada', published: false });
+      const ns = add('sessions', { ...base, group_id: group()?.id, focus: t?.focus || [], plan: t ? planFromTemplate(t, base.session_date, settings().warmup_prev !== false) : [], status: 'planeada', published: false });
       toast('Entrenamiento creado'); onCreated?.(ns);
     } }],
   });
@@ -155,3 +157,85 @@ export function customExerciseSheet(ex = null, onSaved) {
     } }],
   });
 }
+
+
+// ---------- calendario en el celular ----------
+// Eventos de los próximos 90 días para quien está usando la app (el entrenador ve todo; jugadores y ayudantes, lo publicado).
+export function upcomingEvents(role, me, alarm = 60) {
+  const d = state.data, st = settings(), from = todayStr(), to = addDays(from, 90), team = group()?.name || 'Mi equipo';
+  const coach = role === 'coach';
+  const ev = [];
+  for (const s of d.sessions) {
+    if (s.session_date < from || s.session_date > to || s.status === 'cancelada' || (!coach && !s.published)) continue;
+    const time = String(s.start_time || st.start || '').slice(0, 5);
+    ev.push({ uid: `s-${s.id}`, summary: `${s.title || 'Entrenamiento'} · ${team}`, date: s.session_date, time: /^\d\d:\d\d$/.test(time) ? time : null,
+      minutes: Number(s.minutes) || Number(st.minutes) || 90, desc: 'Entrenamiento de voleibol. El plan está en Remate.', alarm });
+  }
+  const tours = new Map(d.tournaments.map((t) => [t.id, t]));
+  for (const m of d.matches) {
+    if (m.match_date < from || m.match_date > to || m.status === 'terminado') continue;
+    const t = tours.get(m.tournament_id);
+    ev.push({ uid: `m-${m.id}`, summary: `Partido contra ${m.rival}`, date: m.match_date, location: m.venue || t?.venue || '', desc: [t ? `Torneo: ${t.name}` : '', m.note || ''].filter(Boolean).join('\n') });
+  }
+  for (const t of d.tournaments) {
+    if ((t.end_date || t.start_date) < from || t.start_date > to) continue;
+    if (role === 'player' && me && !(t.roster || []).includes(me.id)) continue;   // al jugador, solo los torneos a los que está convocado
+    ev.push({ uid: `t-${t.id}`, summary: `Torneo: ${t.name}`, date: t.start_date, end: t.end_date, location: t.venue || '', desc: t.note || '' });
+  }
+  return ev.sort((a, b) => `${a.date}${a.time || ''}`.localeCompare(`${b.date}${b.time || ''}`));
+}
+export const feedUrl = (token) => `${CONFIG.SUPABASE_URL}/functions/v1/calendario?t=${token}`;
+
+export function calendarSheet(ctx) {
+  const coach = ctx.role === 'coach', readonly = !!ctx.readonly;
+  const box = h('div', { class: 'stack' });
+  const draw = () => {
+    const feed = state.data.calFeeds[0] || null;
+    // 1) Suscripción: se actualiza sola.
+    const sub = h('section', { class: 'panel stack' }, h('h3', { style: { margin: 0 } }, 'Que se actualice solo (suscripción)'));
+    if (state.mode !== 'cloud') sub.append(note('En el modo demo no hay suscripción. Prueba el archivo de abajo.'));
+    else if (!calReady()) sub.append(note(coach ? 'Para activar la suscripción, corre en Supabase el sql/instalar.sql de la versión 3.4 (SQL Editor → pega todo → Run).' : 'Tu entrenador todavía no activa el calendario del equipo. Mientras, usa el archivo de abajo.', coach ? 'bad' : ''));
+    else if (!feed) sub.append(...(coach
+      ? [h('p', { style: { margin: 0 } }, 'Crea el enlace del equipo. Tus jugadores se suscriben una vez y les llegan los cambios que hagas.'),
+        h('button', { class: 'btn primary', type: 'button', onclick: () => { add('calFeeds', { group_id: group()?.id }); toast('Calendario del equipo activado'); setTimeout(draw, 50); } }, ic('calendar-days', 18), 'Activar calendario del equipo')]
+      : [note('Tu entrenador todavía no activa el calendario del equipo. Mientras, usa el archivo de abajo.')]));
+    else {
+      const https = feedUrl(feed.token), webcal = https.replace(/^https?:\/\//, 'webcal://');
+      sub.append(h('p', { style: { margin: 0 } }, 'Entrenamientos publicados, partidos y torneos. Si cambias un horario, se actualiza solo en el celular (puede tardar unas horas).'),
+        h('div', { class: 'cluster' },
+          h('a', { class: 'btn primary', href: webcal }, ic('calendar-days', 18), 'Suscribirme (iPhone)'),
+          h('a', { class: 'btn', href: `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcal)}`, target: '_blank', rel: 'noopener' }, 'Google Calendar'),
+          h('button', { class: 'btn', type: 'button', onclick: () => copyText(https) }, ic('copy', 18), 'Copiar enlace')),
+        h('details', {}, h('summary', {}, 'Cómo suscribirse paso a paso'), h('ul', { class: 'plain' },
+          h('li', {}, 'iPhone: toca «Suscribirme» y luego «Suscribirse». Si no aparece: Ajustes → Calendario → Cuentas → Agregar cuenta → Otra → Agregar calendario suscrito, y pega el enlace. Para recibir los avisos, deja apagado «Quitar alarmas».'),
+          h('li', {}, 'Google Calendar (Android): la primera vez es más fácil desde una computadora: calendar.google.com → Otros calendarios → + → Desde URL → pega el enlace. Después aparece solo en el celular. Los avisos se eligen en la configuración de ese calendario.'),
+          h('li', {}, 'El enlace solo muestra horarios, partidos y torneos del equipo; no lleva nombres de jugadores. No lo publiques en redes.'))));
+      if (coach && !readonly) sub.append(h('div', { class: 'cluster' },
+        h('button', { class: 'btn sm', type: 'button', onclick: () => noticeSheet({ title: 'Calendario del equipo', body: 'Abre Remate → Entrenos → «Calendario en el celular» y suscríbete. Así te llegan los avisos de entrenamientos y partidos aunque no abras la app.', url: '#/entrenos' }) }, ic('megaphone', 16), 'Avisar a mis jugadores'),
+        h('button', { class: 'btn sm', type: 'button', onclick: async () => {
+          if (!(await confirmSheet({ title: '¿Cambiar el enlace?', text: 'El enlace anterior deja de funcionar. Quien ya estaba suscrito tendrá que volver a suscribirse. Úsalo si el enlace se compartió de más.', ok: 'Cambiar enlace' }))) return;
+          patch('calFeeds', feed.id, { token: randomToken() }); toast('Enlace nuevo listo'); draw(); } }, ic('refresh-cw', 16), 'Cambiar enlace'),
+        h('button', { class: 'btn sm', type: 'button', onclick: async () => {
+          if (!(await confirmSheet({ title: '¿Desactivar el calendario?', text: 'El enlace deja de funcionar para todos. Puedes activarlo otra vez cuando quieras (con un enlace nuevo).', ok: 'Desactivar', danger: true }))) return;
+          remove('calFeeds', feed.id); toast('Calendario desactivado'); draw(); } }, 'Desactivar')));
+    }
+    // 2) Archivo .ics: una sola vez.
+    let alarm = 60;
+    const alarmSel = h('select', { onchange: (e) => { alarm = Number(e.target.value); } }, options([[30, '30 minutos antes'], [60, '1 hora antes'], [120, '2 horas antes'], [1440, '1 día antes']], 60));
+    const n = upcomingEvents(ctx.role, ctx.me).length;
+    const file = h('section', { class: 'panel stack' }, h('h3', { style: { margin: 0 } }, 'Archivo de calendario (una sola vez)'),
+      h('p', { style: { margin: 0 } }, n ? `${plural(n, 'evento', 'eventos')} de los próximos 3 meses. No se actualiza solo: si cambia un horario, vuelve a descargarlo.` : 'No hay entrenamientos publicados ni partidos en los próximos 3 meses.'),
+      field('Aviso de los entrenamientos', alarmSel, 'Los partidos y torneos (de todo el día) avisan a las 9 de la mañana del día anterior.'),
+      h('button', { class: 'btn', type: 'button', disabled: n ? null : true, onclick: () => {
+        const ics = buildICS(upcomingEvents(ctx.role, ctx.me, alarm), `Remate · ${group()?.name || 'Mi equipo'}`);
+        download(`remate-calendario-${todayStr()}.ics`, ics, 'text/calendar;charset=utf-8'); toast('Calendario descargado');
+      } }, ic('download', 18), 'Descargar calendario (.ics)'),
+      h('p', { class: 'row-sub', style: { margin: 0 } }, 'En iPhone, ábrelo desde Safari y toca «Agregar todo». En Android, ábrelo con Google Calendar.'));
+    box.replaceChildren(sub, file);
+  };
+  draw();
+  openSheet({ title: 'Calendario en el celular', body: box, actions: [{ label: 'Listo', kind: 'primary' }] });
+}
+export const calendarCard = (ctx) => h('button', { class: 'labcard', type: 'button', onclick: () => calendarSheet(ctx) },
+  h('span', { class: 'lc-ic' }, ic('calendar-days', 26)),
+  h('span', { class: 'lc-t' }, h('strong', {}, 'Calendario en el celular'), h('span', {}, 'Entrenamientos y partidos en tu calendario, con aviso aunque no abras Remate.')), ic('chevron-right', 20));

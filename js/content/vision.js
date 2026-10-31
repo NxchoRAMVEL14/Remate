@@ -1,7 +1,7 @@
 // Entrenador de visión de juego: situaciones de partido con una mejor decisión.
 // Son propuestas de Remate basadas en principios tácticos comunes del voleibol; en un partido real puede haber más de una opción razonable.
 // Diagrama en vista completa: tu lado abajo (y positivo), el rival arriba (y negativo). Amarillo = tu equipo, coral = rival.
-import { P, B, A, Z, T, full } from './dx.js';
+import { P, B, A, Z, T, full } from '../court.js';
 
 export const CATS = { ataque: 'Ataque', colocacion: 'Colocación', defensa: 'Defensa', bloqueo: 'Bloqueo', saque: 'Saque', recepcion: 'Recepción y cobertura' };
 

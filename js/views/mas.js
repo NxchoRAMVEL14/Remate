@@ -2,7 +2,7 @@
 import { h, ic } from '../util.js';
 import { state, pendingClaims } from '../store.js';
 import { VERSION } from '../version.js';
-import { unseenUpdate } from './novedades.js';
+import { unseenUpdate } from './ayuda.js';
 
 export default function mas() {
   const item = (href, icon, title, text, badge) => h('a', { class: 'labcard', href },

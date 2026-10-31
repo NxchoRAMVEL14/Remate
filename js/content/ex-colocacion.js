@@ -1,4 +1,4 @@
-import { P, K, A, Z, half } from './dx.js';
+import { P, K, A, Z, half } from '../court.js';
 
 export default [
   { id: 'co-01', name: 'Toque de dedos solo y contra la pared', skills: ['colocacion'], levels: [1, 1], min: 10, players: '1 a 20',

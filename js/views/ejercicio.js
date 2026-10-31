@@ -27,7 +27,8 @@ export function exerciseDetail(ex) {
     sec('Puntos clave', list('ul', ex.cues)),
     sec('Errores comunes', list('ul', ex.errors)),
     sec('Cómo saber si salió bien', p(ex.measure)),
-    ex.safety ? note(`Seguridad: ${ex.safety}`, 'warn') : null);
+    ex.safety ? note(`Seguridad: ${ex.safety}`, 'warn') : null,
+    ex.src ? h('p', { class: 'row-sub', style: { margin: 0 } }, `Fuente: ${ex.src}`) : null);
 }
 
 export function exerciseSheet(ex) {

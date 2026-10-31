@@ -4,6 +4,7 @@ import { state, sessions } from '../store.js';
 import { getExercise } from '../content/exercises.js';
 import { sectionTitle, empty, note, statusChip, sessionWhen } from './ui.js';
 import { teoriaCard } from './teoria.js';
+import { calendarCard } from './sheets-session.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
 
@@ -20,7 +21,7 @@ export default function entrenos(ctx) {
   const upcoming = all.filter((s) => s.status === 'planeada' && s.session_date >= t);
   const past = all.filter((s) => s.status !== 'planeada' || s.session_date < t).reverse().slice(0, 30);
   const mark = (s) => state.data.attendance.find((a) => a.session_id === s.id && a.player_id === me?.id)?.status || null;
-  const el = h('div', { class: 'page' }, teoriaCard(ctx));
+  const el = h('div', { class: 'page' }, teoriaCard(ctx), calendarCard(ctx));
   el.append(h('section', {}, sectionTitle('Por venir'), upcoming.length
     ? h('div', { class: 'stack' }, upcoming.map((s) => h('details', { class: 'panel', open: s === upcoming[0] ? true : null },
       h('summary', { style: { cursor: 'pointer', display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' } },

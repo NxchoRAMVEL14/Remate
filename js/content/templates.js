@@ -2,6 +2,15 @@
 // Cada bloque: { ex: id del ejercicio, min: minutos }. Las plantillas suman la duración indicada.
 const B = (ex, min) => ({ ex, min });
 
+// Calentamiento preventivo (v3.4): se turnan las versiones A, B y C por semana del año.
+export const WARMUPS = ['ca-01', 'ca-02', 'ca-03'];
+export function warmupFor(date) {
+  const d = new Date(`${date}T12:00:00`), jan1 = new Date(d.getFullYear(), 0, 1);
+  return WARMUPS[Math.floor((d - jan1) / (7 * 864e5)) % WARMUPS.length];
+}
+// Plan de una plantilla para una fecha. Con prevent, el calentamiento dinámico (fi-01) se cambia por el preventivo de esa semana.
+export const planFromTemplate = (t, date, prevent = true) => t.blocks.map((b) => ({ ...b, ex: prevent && b.ex === 'fi-01' ? warmupFor(date) : b.ex, note: '' }));
+
 export const TEMPLATES = [
   { id: 't-fund-90', name: 'Fundamentos', levels: [1, 1], minutes: 90, focus: ['recepcion', 'colocacion', 'saque'],
     desc: 'Primer contacto con plataforma, dedos y saque por abajo, con mucho juego en parejas.',

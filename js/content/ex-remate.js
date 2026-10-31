@@ -1,4 +1,4 @@
-import { P, K, A, Z, half } from './dx.js';
+import { P, K, A, Z, half } from '../court.js';
 
 export default [
   { id: 'rm-01', name: 'Brazo de remate: arco y flecha', skills: ['remate'], levels: [1, 1], min: 10, players: '2 a 20',

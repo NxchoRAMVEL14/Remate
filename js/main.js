@@ -12,7 +12,6 @@ import ejercicios from './views/ejercicios.js';
 import ejercicio from './views/ejercicio.js';
 import ruta from './views/ruta.js';
 import ajustes from './views/ajustes.js';
-import ayuda from './views/ayuda.js';
 import inicio from './views/inicio.js';
 import entrenos from './views/entrenos.js';
 import partidos from './views/partidos.js';
@@ -29,12 +28,14 @@ import avisos from './views/avisos.js';
 import radar, { comparar } from './views/radar-guia.js';
 import teoria from './views/teoria.js';
 import torneo from './views/torneos.js';
-import novedades, { unseenUpdate, firstRun, markSeen, updateBanner, SEEN_KEY } from './views/novedades.js';
+import { alineacion } from './views/partido-capture.js';
+import rivales from './views/rivales.js';
+import ayuda, { novedades, unseenUpdate, firstRun, markSeen, updateBanner, SEEN_KEY } from './views/ayuda.js';
 import { casaReady, isStaff, ls } from './store.js';
 
-const COACH = { hoy, jugadores, jugador, sesiones, sesion, ejercicios, ejercicio, ruta, ajustes, ayuda, partidos, partido, lab, reportes, mas, casa, mejoras, pruebas, temporada, avisos, radar, novedades, teoria, comparar, torneo };
+const COACH = { hoy, jugadores, jugador, sesiones, sesion, ejercicios, ejercicio, ruta, ajustes, ayuda, partidos, partido, lab, reportes, mas, casa, mejoras, pruebas, temporada, avisos, radar, novedades, teoria, comparar, torneo, alineacion, rivales, rival: rivales };
 const PLAYER = { inicio, ruta, entrenos, partidos, partido, ejercicios, ejercicio, casa, pruebas, avisos, asistir, ajustes, ayuda, radar, novedades, teoria, torneo };
-const ASSISTANT = { asistir, partidos, partido, avisos, ejercicios, ejercicio, ajustes, ayuda, novedades, torneo };
+const ASSISTANT = { asistir, partidos, partido, avisos, ejercicios, ejercicio, ajustes, ayuda, novedades, torneo, alineacion };
 const TABLES = { coach: COACH, player: PLAYER, assistant: ASSISTANT };
 const HOME = { coach: '#/hoy', player: '#/inicio', assistant: '#/asistir' };
 // [ruta, texto, ícono, dónde se ve]: 'wide' solo en pantalla grande (barra lateral), 'narrow' solo en celular.
@@ -46,7 +47,7 @@ const NAV = {
   player: [['inicio', 'Inicio', 'house'], ['entrenos', 'Entrenos', 'calendar-days'], ['partidos', 'Partidos', 'volleyball'], ['ejercicios', 'Ejercicios', 'book-open'], ['ruta', 'Ruta', 'flag']],
   assistant: [['asistir', 'Asistir', 'clipboard-check'], ['partidos', 'Partidos', 'volleyball'], ['avisos', 'Avisos', 'bell'], ['ejercicios', 'Ejercicios', 'book-open']],
 };
-const PARENT = { jugador: 'jugadores', sesion: 'sesiones', ejercicio: 'ejercicios', partido: 'partidos', casa: 'ejercicios', pruebas: 'jugadores', temporada: 'sesiones', avisos: 'hoy', asistir: 'inicio', novedades: 'ajustes', comparar: 'jugadores', torneo: 'partidos' };   // sección que se ilumina en la navegación
+const PARENT = { jugador: 'jugadores', sesion: 'sesiones', ejercicio: 'ejercicios', partido: 'partidos', casa: 'ejercicios', pruebas: 'jugadores', temporada: 'sesiones', avisos: 'hoy', asistir: 'inicio', novedades: 'ajustes', comparar: 'jugadores', torneo: 'partidos', alineacion: 'partidos', rivales: 'partidos', rival: 'partidos' };   // sección que se ilumina en la navegación
 const UNDER_MAS = new Set(['ejercicios', 'ruta', 'lab', 'reportes', 'ajustes', 'ayuda', 'mejoras', 'mas', 'novedades']);
 // Pantalla en la que estás → sección de la mejora (para anotarla rápido desde el foco del encabezado).
 const IDEA_AREA = { hoy: 'hoy', jugadores: 'jugadores', jugador: 'jugadores', sesiones: 'entrenos', sesion: 'entrenos', partidos: 'partidos', partido: 'partidos',

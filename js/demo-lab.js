@@ -72,12 +72,19 @@ export function makeDemoPhase2({ R, players, sessions, gid }) {
     matchLogs.push({ id: `${m.id}-log`, owner_id: own, match_id: m.id, log, created_at: iso(-m.d) });
     for (const pid of playersIn(log)) matchStats.push({ id: `${m.id}-${pid}`, owner_id: own, match_id: m.id, player_id: pid, counts: countsFor(log, pid), created_at: iso(-m.d) });
   }
-  matches.push({ id: 'demo-m3', owner_id: own, group_id: gid, match_date: addDays(today, 9), rival: 'Instituto Juárez', venue: 'Casa', kind: 'torneo', best_of: 3, sets: [], status: 'planeado', note: 'Llegar 45 minutos antes para calentar.', tournament_id: 'demo-t2', created_at: iso(0) });
+  matches.push({ id: 'demo-m3', owner_id: own, group_id: gid, match_date: addDays(today, 9), rival: 'Instituto Juárez', venue: 'Casa', kind: 'torneo', best_of: 3, sets: [], status: 'planeado', note: 'Llegar 45 minutos antes para calentar.', tournament_id: 'demo-t2',
+    lineups: [{ slots: ['demo-p1', 'demo-p3', 'demo-p4', 'demo-p2', 'demo-p6', 'demo-p7'], libero: 'demo-p5', serve: 'them' }], created_at: iso(0) });
 
   // ---------- laboratorio de salto ----------
   const start = addDays(weekStart(today), -28);                     // hace 4 semanas: hoy cae en la semana 5
   const coachProfile = [{ id: 'demo-prof', owner_id: own, data: { reach_cm: 232, net: 'M', method: 'myjump', program_start: start, auto_score: true,
-    reportNotes: { 'demo-p1': 'Valeria organiza muy bien el juego y es la primera en llegar. Siguiente paso: colocación a zona 2 con pase lejos de la red.' } }, updated_at: iso(0) }];
+    reportNotes: { 'demo-p1': 'Valeria organiza muy bien el juego y es la primera en llegar. Siguiente paso: colocación a zona 2 con pase lejos de la red.' },
+    scouting: {
+      'instituto-juarez': { name: 'Instituto Juárez', system: '5-1', weakRot: 1, weakNote: 'Con su colocador atrás a la derecha, solo atacan por zona 4.', serveZones: [1, 5],
+        players: [{ num: '7', pos: 'punta', attacks: true, note: 'Remate fuerte en diagonal; en balón alto casi siempre va a la diagonal.' }, { num: '12', pos: 'central', attacks: false, note: 'Rápida por el centro cuando el pase es bueno.' }, { num: '3', pos: 'colocador', attacks: false, note: 'Finta de colocador en segundo toque cerca de la red.' }],
+        strengths: 'Saque flotado constante a zonas 1 y 5. Defensa ordenada.', weaknesses: 'Su recepción sufre con saque corto a zona 3. Bloqueo bajo en zona 2.',
+        plan: 'Sacar corto a zona 3 y al #7. Bloqueo cerrando la diagonal del #7. Recepción con 3: Camila, Sofi y Santi.', updated: addDays(today, -2) },
+    } }, updated_at: iso(0) }];
   const T = (d, kind, h, att, extra = {}) => ({ id: `demo-jt-${kind}-${d}`, owner_id: own, test_date: addDays(today, d), kind, method: 'myjump', height_cm: h, attempts: att,
     touch_cm: null, contact_ms: null, drop_cm: null, body_kg: 78, note: '', created_at: iso(-d), ...extra });
   const jumpTests = [

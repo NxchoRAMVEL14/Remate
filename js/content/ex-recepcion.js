@@ -1,4 +1,4 @@
-import { P, K, A, Z, half } from './dx.js';
+import { P, K, A, Z, half } from '../court.js';
 
 export default [
   { id: 're-01', name: 'Plataforma y pase en parejas', skills: ['recepcion'], levels: [1, 1], min: 10, players: '2 a 20',

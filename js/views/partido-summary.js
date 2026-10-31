@@ -1,5 +1,5 @@
 // Resumen del partido: marcador, side-out y break point, rotaciones, estadística por jugador, mapa, video y convocatoria.
-import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr, plural, atTime, isUrl, parseTime, fmtClock, ytId } from '../util.js';
+import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr, plural, atTime, isUrl, parseTime, fmtClock, ytId, rivalKey } from '../util.js';
 import { state, add, patch, remove, players, playerById, isStaff } from '../store.js';
 import { countsFor, playersIn, metrics, teamSummary, addCounts, fmtEff, result, replay, phaseStats, byRotation, rotLabel, RIVAL_GRID, zoneCounts } from '../match-calc.js';
 import { note, empty, sectionTitle, field, options } from './ui.js';
@@ -135,7 +135,8 @@ export function summaryView(m, ctx, { canEdit, coach }) {
     h('section', { class: 'panel stack' },
       h('div', { class: 'split' }, h('h2', {}, m.status === 'terminado' ? `${r.win ? 'Ganamos' : 'Perdimos'} ${r.text}` : `Sets ${r.text}`), m.status !== 'terminado' ? h('span', { class: 'chip warn' }, m.status === 'planeado' ? 'Próximo' : 'En juego') : null),
       (m.sets || []).length ? h('div', { class: 'cluster' }, m.sets.map((s, i) => h('span', { class: `chip ${s.us > s.them ? 'ok' : s.them > s.us ? 'bad' : ''}` }, `Set ${i + 1}: ${s.us}-${s.them}`))) : h('p', { style: { margin: 0 } }, 'Todavía no hay puntos.'),
-      m.venue ? h('span', { class: 'row-sub' }, m.venue) : null, m.note ? h('p', { style: { margin: 0 } }, m.note) : null),
+      m.venue ? h('span', { class: 'row-sub' }, m.venue) : null, m.note ? h('p', { style: { margin: 0 } }, m.note) : null,
+      coach ? h('div', { class: 'cluster' }, h('a', { class: 'btn sm', href: `#/rival/${rivalKey(m.rival)}` }, ic('eye', 16), `Scouting de ${m.rival}`)) : null),
     torneoById(m.tournament_id) && !state.data.rsvps.some((x) => x.match_id === m.id) ? tourRsvpNote(m)
       : upcoming || state.data.rsvps.some((x) => x.match_id === m.id) ? rsvpSection(m) : null,
     rows.length ? h('div', { class: 'kpis' }, k(fmtEff(tm.atEff), 'Eficiencia de ataque'), k(pctTxt(tm.recPos), 'Recepción buena o perfecta'), k(pctTxt(tm.svIn), 'Saques dentro')) : null,
