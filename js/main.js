@@ -30,28 +30,29 @@ import teoria from './views/teoria.js';
 import torneo from './views/torneos.js';
 import { alineacion } from './views/partido-capture.js';
 import rivales from './views/rivales.js';
+import gym from './views/gym.js';
 import ayuda, { novedades, unseenUpdate, firstRun, markSeen, updateBanner, SEEN_KEY } from './views/ayuda.js';
 import { casaReady, isStaff, ls, myPlayer } from './store.js';
 
-const COACH = { hoy, jugadores, jugador, sesiones, sesion, ejercicios, ejercicio, ruta, ajustes, ayuda, partidos, partido, lab, reportes, mas, casa, mejoras, pruebas, temporada, avisos, radar, novedades, teoria, comparar, torneo, alineacion, rivales, rival: rivales };
-const PLAYER = { inicio, ruta, entrenos, partidos, partido, ejercicios, ejercicio, casa, pruebas, avisos, asistir, ajustes, ayuda, radar, novedades, teoria, torneo };
+const COACH = { hoy, jugadores, jugador, sesiones, sesion, ejercicios, ejercicio, ruta, ajustes, ayuda, partidos, partido, lab, reportes, mas, casa, mejoras, pruebas, temporada, avisos, radar, novedades, teoria, comparar, torneo, alineacion, rivales, rival: rivales, gym };
+const PLAYER = { inicio, ruta, entrenos, partidos, partido, ejercicios, ejercicio, casa, pruebas, avisos, asistir, ajustes, ayuda, radar, novedades, teoria, torneo, gym };
 const ASSISTANT = { asistir, partidos, partido, avisos, ejercicios, ejercicio, ajustes, ayuda, novedades, torneo, alineacion };
 const TABLES = { coach: COACH, player: PLAYER, assistant: ASSISTANT };
 const HOME = { coach: '#/hoy', player: '#/inicio', assistant: '#/asistir' };
 // [ruta, texto, ícono, dónde se ve]: 'wide' solo en pantalla grande (barra lateral), 'narrow' solo en celular.
 const NAV = {
   coach: [['hoy', 'Hoy', 'house'], ['jugadores', 'Jugadores', 'users'], ['sesiones', 'Entrenos', 'calendar-days'], ['partidos', 'Partidos', 'volleyball'],
-    ['ejercicios', 'Ejercicios', 'book-open', 'wide'], ['ruta', 'Ruta', 'flag', 'wide'], ['lab', 'Laboratorio', 'zap', 'wide'], ['reportes', 'Reportes', 'file-text', 'wide'],
+    ['ejercicios', 'Ejercicios', 'book-open', 'wide'], ['ruta', 'Ruta', 'flag', 'wide'], ['lab', 'Laboratorio', 'zap', 'wide'], ['gym', 'Gym', 'dumbbell', 'wide'], ['reportes', 'Reportes', 'file-text', 'wide'],
     ['mejoras', 'Mejoras', 'lightbulb', 'wide'], ['ajustes', 'Ajustes', 'settings', 'wide'], ['ayuda', 'Ayuda', 'circle-help', 'wide'],
     ['mas', 'Más', 'layout-grid', 'narrow']],
   player: [['inicio', 'Inicio', 'house'], ['entrenos', 'Entrenos', 'calendar-days'], ['partidos', 'Partidos', 'volleyball'], ['ejercicios', 'Ejercicios', 'book-open'], ['ruta', 'Ruta', 'flag']],
   assistant: [['asistir', 'Asistir', 'clipboard-check'], ['partidos', 'Partidos', 'volleyball'], ['avisos', 'Avisos', 'bell'], ['ejercicios', 'Ejercicios', 'book-open']],
 };
 const PARENT = { jugador: 'jugadores', sesion: 'sesiones', ejercicio: 'ejercicios', partido: 'partidos', casa: 'ejercicios', pruebas: 'jugadores', temporada: 'sesiones', avisos: 'hoy', asistir: 'inicio', novedades: 'ajustes', comparar: 'jugadores', torneo: 'partidos', alineacion: 'partidos', rivales: 'partidos', rival: 'partidos' };   // sección que se ilumina en la navegación
-const UNDER_MAS = new Set(['ejercicios', 'ruta', 'lab', 'reportes', 'ajustes', 'ayuda', 'mejoras', 'mas', 'novedades']);
+const UNDER_MAS = new Set(['ejercicios', 'ruta', 'lab', 'reportes', 'ajustes', 'ayuda', 'mejoras', 'mas', 'novedades', 'gym']);
 // Pantalla en la que estás → sección de la mejora (para anotarla rápido desde el foco del encabezado).
 const IDEA_AREA = { hoy: 'hoy', jugadores: 'jugadores', jugador: 'jugadores', sesiones: 'entrenos', sesion: 'entrenos', partidos: 'partidos', partido: 'partidos',
-  casa: 'casa', lab: 'laboratorio', reportes: 'reportes', ruta: 'ruta', ejercicios: 'ejercicios', ejercicio: 'ejercicios', ajustes: 'ajustes', teoria: 'entrenos', comparar: 'jugadores', radar: 'jugadores', torneo: 'partidos' };          // en celular, estas iluminan "Más"
+  casa: 'casa', lab: 'laboratorio', reportes: 'reportes', ruta: 'ruta', ejercicios: 'ejercicios', ejercicio: 'ejercicios', ajustes: 'ajustes', teoria: 'entrenos', comparar: 'jugadores', radar: 'jugadores', torneo: 'partidos', gym: 'gym' };          // en celular, estas iluminan "Más"
 
 const root = $('#root');
 const uiState = new Map();
@@ -88,7 +89,7 @@ function render({ fresh = false } = {}) {
   const ctx = { role, me, readonly: !!state.viewAs && !state.self, self: !!state.viewAs && state.self, args, ui: uiState.get(key), rerender: () => render() };
   let view;
   try { view = table[name](ctx); } catch (e) { view = errorView(e); }
-  const nav = name === 'radar' ? (role === 'coach' ? 'jugadores' : 'inicio') : name === 'teoria' ? (role === 'coach' ? 'sesiones' : 'entrenos') : (PARENT[name] || name);
+  const nav = name === 'radar' ? (role === 'coach' ? 'jugadores' : 'inicio') : name === 'teoria' ? (role === 'coach' ? 'sesiones' : 'entrenos') : name === 'gym' ? (role === 'coach' ? 'gym' : 'ejercicios') : (PARENT[name] || name);
 
   const sync = state.mode === 'demo' ? h('span', { class: 'sync' }, 'Demo')
     : !state.online ? h('span', { class: 'sync warn' }, pendingCount() ? `Sin internet, ${pendingCount()} por enviar` : 'Sin internet')

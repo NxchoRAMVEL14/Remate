@@ -54,6 +54,7 @@ export default function mas() {
     item('#/reportes', 'file-text', 'Reportes', 'Reportes imprimibles por jugador y del grupo.'),
     item('#/teoria', 'notebook-pen', 'Teoría', 'Lecciones, quizzes, repaso general y tus errores. Para tus jugadores y para ti.'),
     item('#/casa', 'house', 'En casa', 'Rutinas opcionales para tus jugadores y quién está entrenando en casa.'),
+    item('#/gym', 'dumbbell', 'Gym', 'Rutinas de pesas según lo que quieren lograr, quién va al gym y sus cargas.'),
     item('#/mejoras', 'lightbulb', 'Mejoras de la app', 'Tu lista privada de cambios e ideas para Remate.', ideasPending ? `${ideasPending} pendientes` : null),
     item('#/ajustes', 'settings', 'Ajustes', 'Equipo, días de entrenamiento, respaldo y cuenta.'),
     item('#/ayuda', 'circle-help', 'Ayuda y fuentes', 'Cómo funciona Remate y de dónde viene la información.'),

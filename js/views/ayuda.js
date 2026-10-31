@@ -4,6 +4,7 @@ import { ls } from '../store.js';
 import { sectionTitle } from './ui.js';
 import { XP_RULES } from '../calc.js';
 import { VERSION, CHANGELOG } from '../version.js';
+import { GYM_SOURCES } from '../content/gym.js';
 
 const link = (href, text) => h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, text);
 const list = (items) => h('ul', { class: 'plain' }, items.filter(Boolean).map((x) => h('li', {}, x)));
@@ -24,6 +25,8 @@ const COACH_STEPS = [
   'En un partido, pon la alineación de cada set: Remate sigue la rotación y te dice side-out, break point y en qué rotación pierden más puntos.',
   'En Entrenamientos → Planear temporada divides la temporada en bloques con enfoque; cada bloque crea sus entrenamientos con las plantillas que elijas.',
   'Avisos: desde Hoy publicas un aviso que aparece en el Inicio de tus jugadores, se puede mandar por WhatsApp y llega como notificación a quien la activó.',
+  'Gym (en Más o en Ejercicios): tus jugadores arman su rutina de pesas según lo que quieren lograr y registran sus cargas. Tú ves quién va al gym, sus sesiones y si reportó molestia, y puedes asignarle una rutina desde su ficha. Se oculta en Ajustes → Entrenamientos.',
+  'Si pasaste lista por error en un entrenamiento que todavía no llega, ábrelo y toca «Regresar a Por hacer»: se borra esa lista y vuelve a pendiente.',
 ];
 const PLAYER_STEPS = [
   'En Inicio ves tu tarjeta: tu nivel, tu radar de habilidades y lo que falta para subir.',
@@ -34,6 +37,7 @@ const PLAYER_STEPS = [
   'En Inicio → Entrena en casa hay rutinas opcionales de físico y de técnica con y sin balón, a tu nivel. Si quieres, registra lo que hiciste: solo tú y tu entrenador lo ven.',
   'En Partidos contestas la convocatoria (Voy, En duda, No voy) y ves el video y tus números de cada partido.',
   'En Inicio ves tus insignias, tus pruebas físicas y los avisos del entrenador. En Ajustes puedes activar las notificaciones.',
+  'En Inicio → Físico en el gym armas tu rutina de pesas según lo que quieres mejorar, registras tus pesos y ves cómo llegar bien al entreno. Ve siempre con un instructor o un adulto que sepa.',
 ];
 
 export default function ayuda(ctx) {
@@ -76,6 +80,11 @@ export default function ayuda(ctx) {
         'Tus polainas de 5 kg por tobillo son solo para ejercicios de fuerza de cadera y pierna sin impacto. Nunca saltes con ellas: el peso en el tobillo aumenta la carga en rodillas y tobillos al aterrizar.',
         'Visión de juego: rondas cortas de situaciones de partido. Primero busca acertar; después, decidir más rápido. Lleva las mismas preguntas a tus jugadores.',
         'Coaching: escribe en tu bitácora después de cada entrenamiento y haz tu autoevaluación una vez al mes con un solo foco.'])) : null,
+    h('section', {}, h('h2', {}, 'Gym'),
+      list(['La rutina sale de seis respuestas: objetivo, momento de la temporada, días, minutos, experiencia y qué hay en el gym. En temporada son 2 días como máximo recomendado y en semana de partido solo uno, corto.',
+        '«Te sobran 2» quiere decir elegir un peso con el que todavía podrías hacer 2 repeticiones más. Remate nunca pide probar el máximo y sugiere cuándo subir de peso al registrar.',
+        'Pierna pesada y saltos, al menos 48 horas antes de un partido. Si hay partido en los próximos días, Remate lo avisa en la rutina.',
+        coach ? 'Lo que el jugador registra lo ven él y tú. Si marca «Me dolió algo», te aparece en Gym y en su ficha.' : 'Lo que registras lo ven tú y tu entrenador. Si algo te duele en una articulación, para y avísale.'])),
     h('section', {}, h('h2', {}, 'Sin internet'),
       h('p', {}, 'Remate guarda tus cambios en el celular y los envía cuando vuelve la conexión. Si ves “por enviar” arriba, no cierres sesión hasta que desaparezca.')),
     h('section', {}, h('h2', {}, 'Qué tan firmes son los números'),
@@ -100,6 +109,8 @@ export default function ayuda(ctx) {
         h('li', {}, 'Prueba de agilidad T: ', link('https://www.topendsports.com/testing/tests/t-test.htm', 'descripción del protocolo'), ', con la referencia de Pauole y colaboradores (J Strength Cond Res, 2000) sobre su confiabilidad.'),
         h('li', {}, 'Notificaciones: usan Web Push con una función de Supabase (', link('https://supabase.com/docs/guides/functions', 'Edge Functions'), '). En iPhone solo llegan con la app instalada en la pantalla de inicio.'),
         h('li', {}, 'Side-out, break point, insignias, bloques de temporada y tareas de casa: propuestas de Remate basadas en práctica común de entrenamiento, no en un estudio.'),
+        GYM_SOURCES.map(([t, u]) => h('li', {}, `Gym. ${t} `, link(u, 'Ver fuente'))),
+        h('li', {}, 'Gym: las rutinas, la elección de ejercicios y las series y descansos de cada objetivo son propuesta de Remate sobre esas fuentes, no un programa probado en un estudio.'),
         h('li', {}, 'Leer de una imagen: ', link('https://github.com/naptha/tesseract.js', 'Tesseract.js'), ' (licencia Apache 2.0), el motor de texto Tesseract compilado para el navegador; corre en tu celular y la imagen no se manda a ningún servidor. Los datos de idioma español se descargan de ', link('https://www.jsdelivr.com/package/npm/@tesseract.js-data/spa', 'jsDelivr'), '. La forma de reconocer partidos, horarios y pases directos es propia de Remate.'))),
     h('section', {}, h('h2', {}, 'Versión'),
       h('p', {}, `Estás usando Remate ${VERSION}. `, h('a', { href: '#/novedades' }, 'Ver qué cambió en cada versión'), '.')),

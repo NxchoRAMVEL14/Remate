@@ -7,7 +7,7 @@ import { TEMPLATES, TEMPLATE_BY_ID, planFromTemplate, WARMUPS, warmupFor } from 
 import { getExercise, KINDS, levelLabel } from '../content/exercises.js';
 import { courtSVG } from '../court.js';
 import { sectionTitle, empty, note, longDate, field, options, STATUS_LABEL } from './ui.js';
-import { sessionFormSheet, attendanceSheet, pickExerciseSheet } from './sheets-session.js';
+import { sessionFormSheet, attendanceSheet, pickExerciseSheet, undoDone } from './sheets-session.js';
 import { noticeSheet } from './avisos.js';
 import { openCourtMode } from './court-mode.js';
 
@@ -36,6 +36,7 @@ export default function sesion(ctx) {
     h('div', { class: 'cluster' },
       h('button', { class: 'btn sm', type: 'button', onclick: () => sessionFormSheet(s) }, ic('pencil', 16), 'Editar datos'),
       h('button', { class: 'btn sm', type: 'button', onclick: () => duplicate(s) }, ic('copy', 16), 'Duplicar'),
+      s.status === 'hecha' ? h('button', { class: 'btn sm', type: 'button', title: 'Por si pasaste lista por error', onclick: () => undoDone(s) }, ic('undo-2', 16), 'Regresar a Por hacer') : null,
       s.status === 'cancelada'
         ? h('button', { class: 'btn sm', type: 'button', onclick: () => { patch('sessions', s.id, { status: marks.length ? 'hecha' : 'planeada' }); toast('Entrenamiento reactivado'); } }, 'Reactivar')
         : h('button', { class: 'btn sm', type: 'button', onclick: async () => { if (await confirmSheet({ title: '¿Cancelar este entrenamiento?', text: 'Los jugadores lo verán como cancelado y no cuenta para la asistencia.', ok: 'Cancelar entrenamiento', danger: true })) { patch('sessions', s.id, { status: 'cancelada' }); toast('Entrenamiento cancelado'); } } }, 'Cancelar'),

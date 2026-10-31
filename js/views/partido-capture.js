@@ -1,6 +1,6 @@
 // Captura en vivo: marcador por set, alineación y rotación, acciones por jugador y zona del saque o del ataque.
 import { h, ic, toast, openSheet, confirmSheet, uid, fmtDate, shareText } from '../util.js';
-import { state, add, patch, players, playerById, ls, group, teamName, teamOf } from '../store.js';
+import { state, add, patch, players, playerById, ls, group, teamName, teamOf, inTeam } from '../store.js';
 import { ACTIONS, GROUPS, score, storedSets, countsFor, playersIn, setsToWin, replay, rotLabel, ZONE_ORDER, RIVAL_GRID, ZONE_ACTIONS } from '../match-calc.js';
 import { note, sectionTitle, field, options } from './ui.js';
 
@@ -72,7 +72,8 @@ async function finish(m, ctx) {
 
 // ---------- Alineación ----------
 export function lineupSheet(m, setIdx) {
-  const list = players().slice().sort((a, b) => (a.jersey ?? 999) - (b.jersey ?? 999));
+  // Con varios equipos, primero los que juegan en el equipo de este partido.
+  const list = players().slice().sort((a, b) => Number(inTeam(b, teamOf(m))) - Number(inTeam(a, teamOf(m))) || (a.jersey ?? 999) - (b.jersey ?? 999));
   const lus = m.lineups || [];
   const prev = lus[setIdx] || (setIdx > 0 && lus[setIdx - 1] ? { ...lus[setIdx - 1], serve: lus[setIdx - 1].serve === 'us' ? 'them' : 'us' } : null);
   const opts = (sel) => options([['', '—'], ...list.map((p) => [p.id, `${p.jersey != null ? `${p.jersey} · ` : ''}${p.name}`])], sel || '');
@@ -121,7 +122,8 @@ function subSheet(m, cur) {
 export function capture(m, ctx) {
   const ui = ctx.ui, pr = capPrefs();
   const log = getLog(m)?.log || [], sc = score(log, m.best_of);
-  const roster = players().slice().sort((a, b) => (a.jersey ?? 999) - (b.jersey ?? 999) || a.name.localeCompare(b.name, 'es'));
+  // Con varios equipos, primero los que juegan en el equipo de este partido.
+  const roster = players().slice().sort((a, b) => Number(inTeam(b, teamOf(m))) - Number(inTeam(a, teamOf(m))) || (a.jersey ?? 999) - (b.jersey ?? 999) || a.name.localeCompare(b.name, 'es'));
   const rp = replay(log, m.lineups || [], roster), cur = rp.cur;
   const hasLineup = !!cur.slots && cur.set === sc.idx;
   ui.noLineup ||= {};

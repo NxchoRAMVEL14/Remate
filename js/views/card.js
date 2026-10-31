@@ -1,9 +1,9 @@
 // Tarjeta del jugador: número grande, nivel, radar de habilidades, tres cifras y su avance en pruebas físicas. Es lo más vistoso de la app.
 // También vive aquí el bloque de insignias (antes js/views/insignias.js).
 import { h, ic, initials, fmtDate } from '../util.js';
-import { state, settings, multiTeam, teamName, teamOf } from '../store.js';
+import { state, settings, multiTeam, teamName, teamsOf } from '../store.js';
 import { badgesFor } from '../badges.js';
-import { PTESTS, testTrend } from '../content/pruebas.js';
+import { PTESTS, testTrend } from '../content/gym.js';
 import { sectionTitle, radarSVG, radarViewPicker, posView } from './ui.js';
 import { radarValues, attendanceFor, xpFor, levelGap, positionsOf, isWildcard } from '../calc.js';
 import { POSITION_NAME, BRANCHES, HANDS } from '../content/skills.js';
@@ -42,7 +42,7 @@ export function playerCard(p, stats = playerStats(p)) {
   const rv = radarValues(p, state.data.ratings);
   const rated = rv.values.some((v) => v > 0);
   const extra = positionsOf(p).slice(1).map((x) => POSITION_NAME[x]);
-  const meta = [multiTeam() ? teamName(teamOf(p)) : null, POSITION_NAME[p.position] !== 'Sin definir' ? POSITION_NAME[p.position] : null, extra.length ? `Comodín: también ${extra.join(', ')}` : null,
+  const meta = [multiTeam() ? teamsOf(p).map(teamName).join(' y ') : null, POSITION_NAME[p.position] !== 'Sin definir' ? POSITION_NAME[p.position] : null, extra.length ? `Comodín: también ${extra.join(', ')}` : null,
     p.branch ? BRANCHES[p.branch] : null, p.hand ? `Mano ${HANDS[p.hand].toLowerCase()}` : null, p.height_cm ? `${p.height_cm} cm` : null].filter(Boolean);
   return h('section', { class: 'card-player', 'aria-label': `Tarjeta de ${p.name}` },
     h('div', { class: 'big', 'aria-hidden': 'true' }, p.jersey != null ? String(p.jersey) : initials(p.name)[0]),

@@ -1,9 +1,10 @@
 // Ficha de un jugador (vista del entrenador): tarjeta, acciones y cuatro pestañas.
 import { h, ic, toast, fmtDate, plural, confirmSheet } from '../util.js';
-import { state, getPlayer, settings, remove, resolveClaim, patch, teamReady, isMine } from '../store.js';
+import { state, getPlayer, settings, remove, resolveClaim, patch, teamReady, isMine, gymReady } from '../store.js';
 import { testsPanel } from './pruebas.js';
 import { homePlanSheet, planOf } from './casa.js';
 import { refName } from '../content/casa.js';
+import { gymPlanSheet, playerGymSheet, coachPlanOf, gymStats, specText } from './gym.js';
 import { currentRatings, ratingHistory } from '../calc.js';
 import { SKILLS, PHASES } from '../content/skills.js';
 import { required } from '../content/levels.js';
@@ -33,6 +34,7 @@ export default function jugador(ctx) {
       isMine(p) ? h('a', { class: 'btn sm ball', href: '#/yo' }, ic('user-check', 16), 'Entrar a mi perfil') : h('a', { class: 'btn sm', href: `#/ver/${p.id}` }, ic('eye', 16), 'Ver como jugador'),
       h('a', { class: 'btn sm', href: `#/comparar/${p.id}` }, ic('arrow-left-right', 16), 'Antes y después'),
       h('button', { class: 'btn sm', type: 'button', disabled: teamReady() ? null : true, onclick: () => homePlanSheet(p) }, ic('house', 16), planOf(p).items.length ? 'Tarea de casa' : 'Dejar tarea de casa'),
+      h('button', { class: 'btn sm', type: 'button', disabled: gymReady() ? null : true, onclick: () => (coachPlanOf(p) || gymStats(p.id).logs.length ? playerGymSheet(p) : gymPlanSheet([p])) }, ic('dumbbell', 16), coachPlanOf(p) ? 'Rutina de gym' : 'Gym'),
       h('label', { class: 'check captain', title: 'El capitán puede pasar lista y capturar partidos desde su celular' },
         h('input', { type: 'checkbox', checked: p.captain ? true : null, disabled: teamReady() ? null : true,
           onchange: (e) => { patch('players', p.id, { captain: e.target.checked }); toast(e.target.checked ? `${p.name} ahora es capitán: puede pasar lista y capturar partidos` : `${p.name} ya no es capitán`, 3200); } }),
@@ -55,6 +57,8 @@ function resumen(p, { gap }) {
   const d = state.data, out = h('div', { class: 'stack' });
   const plan = planOf(p);
   if (plan.items.length) out.append(note(`Tarea de casa: ${plan.items.map((x) => `${refName(x.ref)} (${x.times || 2} por semana)`).join(', ')}.`));
+  const gp = coachPlanOf(p), gs = gymStats(p.id);
+  if (gp || gs.four) out.append(note(`Gym: ${gp ? `rutina «${specText(gp)}»` : 'usa la rutina que él armó'}${gs.four ? ` · ${gs.four} ${gs.four === 1 ? 'sesión' : 'sesiones'} en 4 semanas` : ' · sin sesiones en 4 semanas'}${gs.pain ? ' · reportó molestia' : ''}.`, gs.pain ? 'bad' : ''));
   const b = badgesEl(p, { you: false });
   if (b) out.append(b);
   if (gap.top) out.append(note('Está en el nivel más alto de la ruta. Lo que sigue es mantener su nivel, cuidar su cuerpo y ayudar a los demás.'));

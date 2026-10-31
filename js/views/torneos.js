@@ -1,6 +1,6 @@
 // Torneos: agrupan partidos, con sede, fechas, rama, convocados (y su confirmación), tabla de posiciones y resultado final.
 import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr, plural } from '../util.js';
-import { state, add, patch, remove, group, players, playerById, torneosReady, labReady, isStaff, equiposReady, multiTeam, teams, teamOf, teamName } from '../store.js';
+import { state, add, patch, remove, group, players, playerById, torneosReady, labReady, isStaff, equiposReady, multiTeam, teams, teamOf, teamsOf, inTeam, teamName } from '../store.js';
 import { result, KINDS } from '../match-calc.js';
 import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
 import { noticeSheet, waLink } from './avisos.js';
@@ -155,9 +155,9 @@ function rosterSheet(t) {
   const drawSeg = () => tseg?.replaceChildren(...[['', 'Todos'], ...teams().map((x) => [x.id, x.name])].map(([k, txt]) => h('button', { type: 'button', 'aria-pressed': tf === k ? 'true' : 'false', onclick: () => { tf = k; drawSeg(); draw(); } }, txt)));
   const list = h('div', { class: 'rows roster-pick' }), count = h('span', { class: 'chip ball' });
   const draw = () => {
-    const ps = players().filter((p) => (all || branchOk(p, t.branch) || sel.has(p.id)) && (!tf || teamOf(p) === tf));
+    const ps = players().filter((p) => (all || branchOk(p, t.branch) || sel.has(p.id)) && inTeam(p, tf));
     list.replaceChildren(...ps.map((p) => h('label', { class: 'row check-row' }, jersey(p, 'sm'),
-      h('span', { class: 'row-main' }, h('strong', {}, p.name), h('span', { class: 'row-sub' }, [multiTeam() ? teamName(teamOf(p)) : null, p.branch ? RAMAS[p.branch] : null, `nivel ${p.level}`].filter(Boolean).join(' · '))),
+      h('span', { class: 'row-main' }, h('strong', {}, p.name), h('span', { class: 'row-sub' }, [multiTeam() ? teamsOf(p).map(teamName).join(', ') : null, p.branch ? RAMAS[p.branch] : null, `nivel ${p.level}`].filter(Boolean).join(' · '))),
       h('input', { type: 'checkbox', checked: sel.has(p.id) ? true : null, 'aria-label': `Convocar a ${p.name}`, onchange: (e) => { if (e.target.checked) sel.add(p.id); else sel.delete(p.id); count.textContent = `${sel.size} convocados`; } }))));
     count.textContent = `${sel.size} convocados`;
   };
@@ -166,7 +166,7 @@ function rosterSheet(t) {
   openSheet({
     title: `Convocados: ${t.name}`,
     body: h('div', { class: 'stack' }, h('div', { class: 'cluster' }, count,
-      h('button', { class: 'btn sm', type: 'button', onclick: () => { players().filter((p) => (all || branchOk(p, t.branch)) && (!tf || teamOf(p) === tf)).forEach((p) => sel.add(p.id)); draw(); } }, 'Todos'),
+      h('button', { class: 'btn sm', type: 'button', onclick: () => { players().filter((p) => (all || branchOk(p, t.branch)) && inTeam(p, tf)).forEach((p) => sel.add(p.id)); draw(); } }, 'Todos'),
       h('button', { class: 'btn sm', type: 'button', onclick: () => { sel.clear(); draw(); } }, 'Ninguno')), tseg, toggle, list,
       note('Los convocados confirman desde su celular si van. Los demás ven el torneo como «no convocado».')),
     actions: [{ label: 'Cancelar' }, { label: 'Guardar convocados', kind: 'primary', onClick: () => {

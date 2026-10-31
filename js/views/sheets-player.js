@@ -1,6 +1,6 @@
 // Hojas emergentes del entrenador sobre un jugador: datos, evaluación, examen, código y notas.
 import { h, ic, openSheet, confirmSheet, toast, copyText, shareText, newJoinCode, todayStr, fmtDate } from '../util.js';
-import { add, patch, remove, group, rate, recordExam, state, multiTeam, teams, teamOf, equiposReady } from '../store.js';
+import { add, patch, remove, group, rate, recordExam, state, multiTeam, teams, teamOf, teamsOf, equiposReady, gymReady } from '../store.js';
 import { SKILLS, PHASES, POSITIONS, BRANCHES, HANDS, POSITION_NAME } from '../content/skills.js';
 import { LEVELS, required } from '../content/levels.js';
 import { currentRatings, levelGap, nextLevelN } from '../calc.js';
@@ -23,6 +23,12 @@ export function playerFormSheet(p = null, { self = false, name: suggested = '', 
   const drawExtra = () => extraBox?.replaceChildren(...POSITIONS.filter((x) => x.id !== 'sin_definir' && x.id !== pos.value).map((x) =>
     h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: extra.has(x.id) ? true : null, onchange: (e) => { if (e.target.checked) extra.add(x.id); else extra.delete(x.id); } }), h('span', {}, x.name))));
   pos.addEventListener('change', drawExtra); drawExtra();
+  // v3.6: además de su equipo principal, otros equipos donde también juega (por ejemplo varonil y mixto).
+  const moreTeams = new Set(p ? teamsOf(p).slice(1) : []);
+  const teamsBox = team && gymReady() ? h('div', { class: 'cluster pos-extra' }) : null;
+  const drawTeams = () => teamsBox?.replaceChildren(...teams().filter((t) => t.id !== team.value).map((t) =>
+    h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: moreTeams.has(t.id) ? true : null, onchange: (e) => { if (e.target.checked) moreTeams.add(t.id); else moreTeams.delete(t.id); } }), h('span', {}, t.name))));
+  team?.addEventListener('change', () => { moreTeams.delete(team.value); drawTeams(); }); drawTeams();
   const num = (el) => (el.value === '' ? null : Number(el.value));
   return openSheet({
     title: self ? 'Mi perfil de jugador' : p ? 'Editar jugador' : 'Nuevo jugador',
@@ -31,7 +37,8 @@ export function playerFormSheet(p = null, { self = false, name: suggested = '', 
       field('Nombre o apodo', name, self ? 'Así te verán en la lista y en la alineación.' : 'Solo nombre o apodo. No pidas teléfono, domicilio ni fotos.'),
       h('div', { class: 'grid' }, field('Rama', branch), field('Posición', pos), field('Mano de ataque', hand)),
       extraBox ? field('También juega bien de (comodín)', extraBox, 'Opcional. Su radar se puede ver con cada posición; el nivel y el examen se deciden con la principal.') : null,
-      h('div', { class: 'grid' }, field('Estatura (cm)', height), field('Número de playera', jersey), team ? field('Equipo', team) : null),
+      h('div', { class: 'grid' }, field('Estatura (cm)', height), field('Número de playera', jersey), team ? field(teamsBox ? 'Equipo principal' : 'Equipo', team) : null),
+      teamsBox ? field('También juega en', teamsBox, 'Opcional. Ve la convocatoria y sale en la lista de cada equipo que marques.') : null,
       self ? null : h('label', { class: 'check' }, consent, 'Ya tengo la autorización de su madre, padre o tutor')),
     actions: [{ label: 'Cancelar' }, { label: 'Guardar', kind: 'primary', onClick: () => {
       const n = name.value.trim();
@@ -42,6 +49,7 @@ export function playerFormSheet(p = null, { self = false, name: suggested = '', 
       const data = { name: n, branch: branch.value || null, position: pos.value, hand: hand.value || null, height_cm: h_, jersey: j,
         consent_at: self || consent.checked ? (p?.consent_at || new Date().toISOString()) : null };
       if (team) data.team = team.value;
+      if (teamsBox) data.teams = teams().map((t) => t.id).filter((id) => moreTeams.has(id) && id !== team.value);
       if (extraBox) data.positions = POSITIONS.map((x) => x.id).filter((id) => extra.has(id) && id !== pos.value && id !== 'sin_definir');
       if (p) { patch('players', p.id, data); toast('Guardado'); onSaved?.(p); }
       else if (self) { const np = add('players', { ...data, group_id: group()?.id, level: 1 }); toast('Listo: ya tienes tu perfil de jugador'); onSaved?.(np); }

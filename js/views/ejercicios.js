@@ -5,6 +5,7 @@ import { SKILLS, SKILL_BY_ID } from '../content/skills.js';
 import { allExercises, filterExercises, KINDS, MATERIAL, levelLabel } from '../content/exercises.js';
 import { sectionTitle, options } from './ui.js';
 import { customExerciseSheet } from './sheets-session.js';
+import { gymVisible } from './gym.js';
 
 export default function ejercicios(ctx) {
   const ui = ctx.ui;
@@ -31,6 +32,8 @@ export default function ejercicios(ctx) {
   const add = ctx.role === 'coach' ? h('button', { class: 'btn primary sm', type: 'button', onclick: () => customExerciseSheet(null, (row) => { if (row) location.hash = `#/ejercicio/c-${row.id}`; }) }, ic('plus', 16), 'Ejercicio propio') : null;
   const home = h('a', { class: 'labcard', href: '#/casa' }, h('span', { class: 'lc-ic' }, ic('house', 26)),
     h('span', { class: 'lc-t' }, h('strong', {}, 'Para hacer en casa'), h('span', {}, ctx.role === 'coach' ? 'Rutinas opcionales que ven tus jugadores: físico, técnica con y sin balón.' : 'Opcional: físico, técnica con balón y sin balón, a tu nivel.')), ic('chevron-right', 20));
-  return { title: 'Ejercicios', el: h('div', { class: 'page' }, home, h('section', {}, sectionTitle('Biblioteca', add),
+  const gymCard = ctx.role === 'coach' || gymVisible() || ctx.self ? h('a', { class: 'labcard', href: '#/gym' }, h('span', { class: 'lc-ic' }, ic('dumbbell', 26)),
+    h('span', { class: 'lc-t' }, h('strong', {}, 'Físico en el gym'), h('span', {}, ctx.role === 'coach' ? 'Rutinas de pesas para tus jugadores, quién va al gym y sus cargas.' : 'Tu rutina de pesas según lo que quieres mejorar, y cómo llegar bien al entreno.')), ic('chevron-right', 20)) : null;
+  return { title: 'Ejercicios', el: h('div', { class: 'page' }, h('div', { class: 'labcards' }, home, gymCard), h('section', {}, sectionTitle('Biblioteca', add),
     h('div', { class: 'stack' }, q, h('div', { class: 'grid' }, sk, lv, kd, mt), count, rows))) };
 }

@@ -1,14 +1,15 @@
-// Insignias: reconocen constancia y logros. Se calculan con lo que ya hay (asistencia, retos, casa, partidos, pruebas).
+// Insignias: reconocen constancia y logros. Se calculan con lo que ya hay (asistencia, retos, casa, gym, partidos, pruebas).
 import { attendanceFor } from './calc.js';
 import { metrics, addCounts } from './match-calc.js';
 import { weekStart } from './lab-calc.js';
 import { addDays, todayStr } from './util.js';
-import { testTrend } from './content/pruebas.js';
+import { testTrend } from './content/gym.js';
 
 // Cada familia tiene tres escalones. unit sirve para el texto del avance.
 export const FAMILIES = [
   { id: 'racha', icon: 'flame', unit: 'entrenos seguidos', tiers: [[5, 'Constante'], [10, 'Imparable'], [20, 'De hierro']] },
   { id: 'casa', icon: 'house', unit: 'semanas seguidas entrenando en casa', tiers: [[2, 'Tarea hecha'], [4, 'Disciplina'], [8, 'Hábito de campeón']] },
+  { id: 'gym', icon: 'dumbbell', unit: 'semanas seguidas yendo al gym', tiers: [[2, 'Al gym'], [4, 'Fierro'], [8, 'Constancia de acero']] },
   { id: 'retos', icon: 'trophy', unit: 'retos aprobados', tiers: [[1, 'Primer reto'], [5, 'Retador'], [10, 'Leyenda de retos']] },
   { id: 'nivel', icon: 'flag', unit: 'exámenes aprobados', tiers: [[1, 'Subí de nivel'], [2, 'Escalador'], [4, 'Cima']] },
   { id: 'partidos', icon: 'volleyball', unit: 'partidos jugados', tiers: [[1, 'Debut'], [5, 'Fogueado'], [10, 'Veterano']] },
@@ -29,6 +30,14 @@ export function homeWeeks(logs) {
   return n;
 }
 
+// Semanas seguidas (hasta esta o la pasada) con al menos una sesión de gym registrada.
+export function gymWeeks(logs) {
+  const weeks = new Set(logs.map((l) => weekStart(l.done_on)));
+  let w = weekStart(todayStr()); if (!weeks.has(w)) w = addDays(w, -7);
+  let n = 0; while (weeks.has(w)) { n++; w = addDays(w, -7); }
+  return n;
+}
+
 export function badgeValues(p, d, st) {
   const att = attendanceFor(p.id, d.sessions, d.attendance, st);
   const done = new Set(d.matches.filter((m) => m.status === 'terminado').map((m) => m.id));
@@ -38,6 +47,7 @@ export function badgeValues(p, d, st) {
   return {
     racha: att.streak,
     casa: homeWeeks(d.homeLogs.filter((l) => l.player_id === p.id)),
+    gym: gymWeeks((d.gymLogs || []).filter((l) => l.player_id === p.id)),
     retos: d.claims.filter((x) => x.player_id === p.id && x.status === 'aprobada').length,
     nivel: d.exams.filter((x) => x.player_id === p.id && x.passed).length,
     partidos: ms.length,

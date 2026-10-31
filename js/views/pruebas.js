@@ -1,7 +1,7 @@
 // Pruebas físicas: registro por jugador o de todo el equipo, y la gráfica de avance de cada quien.
 import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr } from '../util.js';
 import { state, add, patch, remove, players, teamReady, torneosReady, settings } from '../store.js';
-import { PTESTS, testTrend } from '../content/pruebas.js';
+import { PTESTS, testTrend } from '../content/gym.js';
 import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
 import { lineChart } from './chart.js';
 

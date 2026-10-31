@@ -531,3 +531,32 @@ button.br-team { cursor: pointer; }
 .card-player .rv-pick { background: rgba(255,255,255,.12); }
 .card-player .rv-pick button { color: #fff; padding: 6px 12px; min-height: 36px; }
 .card-player .rv-pick button[aria-pressed="true"] { background: var(--ball); color: var(--ball-on); }
+
+/* ---------- Gym (v3.6) ---------- */
+.choice.on, .choice[aria-pressed="true"] { border-color: var(--court); background: var(--info-bg); }
+.gx-goals { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.gx-goals .row-sub { font-weight: 400; }
+.gx-form .seg { display: flex; }
+.gx-form .seg button { flex: 1 1 auto; }
+.gx-day h3 { font-size: 1.3rem; }
+.gx-n { flex: none; width: 28px; height: 28px; border-radius: 50%; display: inline-grid; place-items: center; background: var(--surface-2); font-weight: 700; font-size: .9rem; }
+.gx-sub > summary { cursor: pointer; padding: 4px 0; }
+.gx-sub .plain { margin-top: 8px; }
+.gx-dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: .94rem; }
+.gx-dl dt { font-weight: 700; color: var(--ink-2); }
+.gx-dl dd { margin: 0; }
+@media (max-width: 560px) { .gx-dl { grid-template-columns: 1fr; } .gx-dl dd { margin-bottom: 6px; } }
+.gx-sets { display: grid; gap: 8px; }
+.gx-set { display: grid; grid-template-columns: 3.6em minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 8px; }
+.gx-set .gx-in:only-of-type { grid-column: 2 / 3; }
+.gx-sn { font-weight: 700; color: var(--ink-2); font-size: .88rem; }
+.gx-in { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.gx-in input { flex: 1; min-width: 0; width: 100%; text-align: center; font-variant-numeric: tabular-nums; }
+.gx-in span { color: var(--ink-2); font-size: .82rem; white-space: nowrap; }
+.gx-rpe { display: flex; flex-wrap: nowrap; }
+.gx-rpe button { flex: 1; padding: 8px 0; min-width: 0; }
+.gx-how > summary { cursor: pointer; color: var(--link); font-weight: 700; }
+.gx-how .plain { margin-top: 6px; }
+.gx-arrive { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.gx-arrive h3 { font-size: 1.25rem; }
+.gx-ic { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--court); color: #fff; }

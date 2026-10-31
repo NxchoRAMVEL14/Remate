@@ -81,7 +81,7 @@ function teamsSection() {
   return h('section', { class: 'stack' }, sectionTitle('Equipos'),
     ro ? note('Para separar en equipos, corre en Supabase el sql/instalar.sql de la versión 3.5 (SQL Editor → pega todo → Run). No borra nada.', 'bad') : null,
     h('p', { style: { margin: 0 } }, list.length > 1
-      ? 'Cada jugador y cada partido pertenecen a uno de tus equipos. Lo eliges en la ficha del jugador y al crear el partido. Los que no tienen equipo quedan en el primero de la lista.'
+      ? 'Cada partido es de uno de tus equipos. Cada jugador tiene un equipo principal y puede jugar también en otros (por ejemplo varonil y mixto): lo eliges en su ficha. Los que no tienen equipo quedan en el primero de la lista.'
       : 'Si tu escuela juega con más de un equipo (por ejemplo A y B), sepáralos aquí. Mientras tengas uno solo, todo funciona igual que antes.'),
     list.length ? h('div', { class: 'rows' }, list.map((t, i) => h('div', { class: 'row team-row' },
       h('input', { type: 'text', maxlength: 40, value: t.name, 'aria-label': `Nombre del equipo ${i + 1}`, disabled: ro ? true : null,
@@ -156,6 +156,8 @@ function coach() {
       field('Retardos que cuentan como 1 falta', late, 'Pon 0 para que los retardos nunca se conviertan en faltas. Las faltas justificadas no restan.'),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.warmup_prev !== false ? true : null, onchange: (e) => { saveSettings({ warmup_prev: e.target.checked }); toast(e.target.checked ? 'Calentamiento preventivo activado' : 'Calentamiento preventivo desactivado'); } }),
         h('span', {}, 'Empezar cada entrenamiento con el calentamiento preventivo (tobillo, rodilla y hombro). Se turnan las versiones A, B y C por semana.')),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.gym_players !== false ? true : null, onchange: (e) => { saveSettings({ gym_players: e.target.checked }); toast(e.target.checked ? 'Tus jugadores ya ven Gym' : 'Gym oculto para tus jugadores'); } }),
+        h('span', {}, 'Mostrar Gym a mis jugadores: rutinas de pesas según su objetivo, registro de cargas y consejos para llegar bien al entreno.')),
       field('Pruebas físicas cada (semanas)', h('input', { type: 'number', min: 4, max: 26, inputmode: 'numeric', value: st.tests_every || 10, onchange: (e) => { saveSettings({ tests_every: Math.min(26, Math.max(4, Number(e.target.value) || 10)) }); toast('Guardado'); } }), 'Cada cuánto te recuerdo en Hoy medir salto, velocidad de 10 m y plancha. 8 a 13 semanas son 2 a 3 meses.')),
     teamsSection(),
     supportSection(),

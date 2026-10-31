@@ -1,7 +1,8 @@
 -- Remate · instalación completa para Supabase (SQL Editor → pega todo → Run).
 -- Incluye: núcleo, laboratorio y partidos, En casa y mejoras, equipo de apoyo (ayudantes, convocatoria, pruebas, avisos),
 -- torneos con su convocatoria y la prueba de 10 m (v3.3), el calendario del equipo (v3.4)
--- y varios equipos por grupo, torneos de eliminación directa y jugadores comodín (v3.5).
+-- varios equipos por grupo, torneos de eliminación directa y jugadores comodín (v3.5)
+-- y Gym con rutinas y registro de cargas, más jugadores en varios equipos (v3.6).
 -- Es seguro correrlo más de una vez: no borra datos.
 
 -- =====================================================================
@@ -1077,3 +1078,72 @@ alter table public.tournaments add column if not exists teams jsonb not null def
 -- Jugadores comodín: otras posiciones que juega bien, además de la principal (lista de hasta 5).
 alter table public.players     add column if not exists positions jsonb not null default '[]'::jsonb
   check (case when jsonb_typeof(positions) = 'array' then jsonb_array_length(positions) <= 5 else false end);
+
+-- =====================================================================
+-- REMATE · v3.6: Físico en el gym (registro de sesiones y rutina asignada) y jugadores en varios equipos
+-- Va después de 01 a 08 (si usas instalar.sql ya viene incluido).
+-- Es seguro correrlo más de una vez. Agrega 1 tabla y 2 columnas: no cambia lo que ya tienes ni borra datos.
+--
+-- Gym: cada jugador registra sus sesiones (pesos y repeticiones). Las ven él y su entrenador; nadie más.
+-- La rutina que el entrenador le asigna se guarda en su ficha (gym_plan). La que arma él mismo vive en su celular.
+-- Varios equipos: además de su equipo principal (team), un jugador puede jugar en otros (teams), por ejemplo varonil y mixto.
+-- =====================================================================
+
+alter table public.players add column if not exists gym_plan jsonb not null default '{}'::jsonb
+  check (jsonb_typeof(gym_plan) = 'object' and octet_length(gym_plan::text) <= 1000);   -- { goal, days, minutes, exp, equip, phase, note, since }
+alter table public.players add column if not exists teams jsonb not null default '[]'::jsonb
+  check (case when jsonb_typeof(teams) = 'array' then jsonb_array_length(teams) <= 8 else false end);   -- ids de otros equipos donde juega
+
+create table if not exists public.gym_logs (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,   -- siempre el entrenador
+  player_id uuid not null references public.players(id) on delete cascade,
+  done_on date not null default current_date,
+  day text not null default '' check (char_length(day) <= 20),            -- día de la rutina: A, B, C o D
+  goal text not null default '' check (char_length(goal) <= 20),          -- objetivo de la rutina (salto, fuerza...)
+  plan jsonb not null default '{}'::jsonb check (jsonb_typeof(plan) = 'object' and octet_length(plan::text) <= 1000),
+  sets jsonb not null default '[]'::jsonb                                  -- [{ ex, s: [[kg, repeticiones], ...] }]
+    check (case when jsonb_typeof(sets) = 'array' then jsonb_array_length(sets) <= 16 and octet_length(sets::text) <= 6000 else false end),
+  minutes smallint check (minutes between 1 and 240),
+  rpe smallint check (rpe between 1 and 10),                               -- qué tan pesada fue la sesión
+  pain boolean not null default false,                                     -- «me dolió algo»
+  note text not null default '' check (char_length(note) <= 300),
+  created_at timestamptz not null default now()
+);
+create index if not exists gym_logs_player_idx on public.gym_logs (player_id, done_on desc);
+alter table public.gym_logs enable row level security;
+
+-- Entrenador: los registros de sus jugadores (incluido su propio perfil de jugador).
+drop policy if exists gym_logs_coach on public.gym_logs;
+create policy gym_logs_coach on public.gym_logs for all to authenticated
+  using (owner_id = auth.uid() and public.is_coach())
+  with check (owner_id = auth.uid() and public.is_coach()
+              and player_id in (select id from public.players where owner_id = auth.uid()));
+
+-- Jugador: ve, agrega y borra solo lo suyo. No puede cambiar un registro: si se equivoca, lo borra.
+drop policy if exists gym_logs_player_read on public.gym_logs;
+create policy gym_logs_player_read on public.gym_logs for select to authenticated
+  using (player_id in (select public.my_player_ids()));
+
+drop policy if exists gym_logs_player_insert on public.gym_logs;
+create policy gym_logs_player_insert on public.gym_logs for insert to authenticated
+  with check (player_id in (select public.my_player_ids()) and done_on between current_date - 7 and current_date + 1);
+
+drop policy if exists gym_logs_player_delete on public.gym_logs;
+create policy gym_logs_player_delete on public.gym_logs for delete to authenticated
+  using (player_id in (select public.my_player_ids()));
+
+-- El dueño del registro siempre es el entrenador del jugador (igual que en En casa).
+create or replace function public.gym_logs_set_owner() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  select owner_id into new.owner_id from public.players where id = new.player_id;
+  if new.owner_id is null then raise exception 'Jugador no encontrado'; end if;
+  return new;
+end $$;
+drop trigger if exists gym_logs_set_owner on public.gym_logs;
+create trigger gym_logs_set_owner before insert on public.gym_logs
+  for each row execute function public.gym_logs_set_owner();
+
+revoke all on public.gym_logs from anon;
+grant select, insert, update, delete on public.gym_logs to authenticated;

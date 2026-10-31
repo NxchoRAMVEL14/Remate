@@ -8,9 +8,10 @@ import { getExercise } from '../content/exercises.js';
 import { dots, sectionTitle, empty, note, statusChip, sessionWhen } from './ui.js';
 import { playerCard, playerStats, badgesEl } from './card.js';
 import { homeWeek, planOf } from './casa.js';
+import { gymVisible, gymLine, coachPlanOf } from './gym.js';
 import { unseenBanner } from './avisos.js';
 import { isStaff } from '../store.js';
-import { PTESTS, testTrend } from '../content/pruebas.js';
+import { PTESTS, testTrend } from '../content/gym.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
 
@@ -66,6 +67,13 @@ export default function inicio(ctx) {
     ic('house', 26), h('span', { class: 'row-main' }, h('strong', {}, 'Entrena en casa (opcional)'),
       h('span', { class: 'row-sub' }, hp.items.length ? `Tu entrenador te dejó tarea de casa (${plural(hp.items.length, 'cosa', 'cosas')}).${hw.days ? ` Esta semana llevas ${plural(hw.days, 'día', 'días')}.` : ''}` : hw.days ? `Esta semana llevas ${plural(hw.days, 'día', 'días')}. ¡Sigue así!` : 'Rutinas cortas de físico y técnica, con o sin balón.')),
       hp.items.length ? h('span', { class: 'chip ball' }, 'Tarea') : null, ic('chevron-right', 18)));
+
+  // gym (si el entrenador lo tiene activado)
+  if (gymVisible() || ctx.self) {
+    el.append(h('a', { class: 'panel', href: '#/gym', style: { textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '12px' } },
+      ic('dumbbell', 26), h('span', { class: 'row-main' }, h('strong', {}, 'Físico en el gym'), h('span', { class: 'row-sub' }, gymLine(me))),
+      coachPlanOf(me) ? h('span', { class: 'chip ball' }, 'Rutina') : null, ic('chevron-right', 18)));
+  }
 
   // retos
   const pend = state.data.claims.filter((c) => c.player_id === me.id && c.status === 'solicitada').length;

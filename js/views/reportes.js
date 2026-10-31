@@ -6,7 +6,7 @@ import { SKILLS, PHASES, POSITION_NAME, BRANCHES } from '../content/skills.js';
 import { LEVELS } from '../content/levels.js';
 import { metrics, addCounts, result, fmtEff } from '../match-calc.js';
 import { sectionTitle, note, empty, dots, playerRow, radarSVG } from './ui.js';
-import { PTESTS, testTrend } from '../content/pruebas.js';
+import { PTESTS, testTrend } from '../content/gym.js';
 import { badgesFor } from '../badges.js';
 
 const printBtn = () => h('button', { class: 'btn primary', type: 'button', onclick: () => window.print() }, ic('printer', 18), 'Imprimir o guardar PDF');

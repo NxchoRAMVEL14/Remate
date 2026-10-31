@@ -1,6 +1,6 @@
 // Partidos: lista de la temporada, récord y alta de un partido nuevo. El jugador ve resultados y sus propios números.
 import { h, ic, toast, openSheet, fmtDate, todayStr, plural } from '../util.js';
-import { state, add, patch, group, labReady, isStaff, torneosReady, multiTeam, teams, teamOf, teamName, equiposReady } from '../store.js';
+import { state, add, patch, group, labReady, isStaff, torneosReady, multiTeam, teams, teamOf, teamName, equiposReady, inTeam } from '../store.js';
 import { KINDS, result, metrics, addCounts, fmtEff } from '../match-calc.js';
 import { sectionTitle, note, empty, field, options } from './ui.js';
 import { missingSqlNote } from './lab.js';
@@ -92,8 +92,8 @@ function coach(ctx) {
 function jugador(ctx) {
   const me = ctx.me, list = matchesSorted().filter((m) => m.status !== 'planeado' || m.match_date >= todayStr());
   // Los partidos de un torneo se confirman en el torneo, no uno por uno.
-  // Con varios equipos, cada jugador confirma solo los partidos de su equipo.
-  const next = list.filter((m) => m.status !== 'terminado' && m.match_date >= todayStr() && !torneoById(m.tournament_id) && (!multiTeam() || !me || teamOf(m) === teamOf(me))).reverse();
+  // Con varios equipos, cada jugador confirma los partidos de los equipos donde juega.
+  const next = list.filter((m) => m.status !== 'terminado' && m.match_date >= todayStr() && !torneoById(m.tournament_id) && (!multiTeam() || !me || inTeam(me, teamOf(m)))).reverse();
   const captain = isStaff();
   const tours = torneosReady() ? myUpcomingTournaments(me) : [];
   const mine = state.data.matchStats.filter((s) => s.player_id === me?.id);

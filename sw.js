@@ -1,6 +1,6 @@
 // Service worker de Remate: primero la red (así una versión nueva llega sola) y, sin internet, lo guardado.
 // El nombre lleva la versión de js/version.js: al subir una versión nueva, cámbialo aquí también.
-const CACHE = 'remate-v3.5.0';
+const CACHE = 'remate-v3.6.0';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {

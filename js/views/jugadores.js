@@ -1,6 +1,6 @@
 // Lista de jugadores con búsqueda, filtros y orden.
 import { h, ic, plural } from '../util.js';
-import { state, players, settings, multiTeam, teams, teamOf, isMine, myPlayer } from '../store.js';
+import { state, players, settings, multiTeam, teams, teamOf, teamsOf, inTeam, teamName, isMine, myPlayer } from '../store.js';
 import { levelGap, attendanceFor, positionsOf } from '../calc.js';
 import { POSITIONS } from '../content/skills.js';
 import { sectionTitle, empty, playerRow, options } from './ui.js';
@@ -26,14 +26,14 @@ export default function jugadores(ctx) {
 
   function paint() {
     ui.q = q.value; ui.level = lv.value; ui.pos = pos.value; ui.sort = sort.value; ui.team = team ? team.value : '';
-    let list = all.filter((p) => (!ui.q || norm(p.name).includes(norm(ui.q))) && (ui.level === '0' || p.level === Number(ui.level)) && (!ui.pos || positionsOf(p).includes(ui.pos)) && (!ui.team || teamOf(p) === ui.team));
+    let list = all.filter((p) => (!ui.q || norm(p.name).includes(norm(ui.q))) && (ui.level === '0' || p.level === Number(ui.level)) && (!ui.pos || positionsOf(p).includes(ui.pos)) && inTeam(p, ui.team));
     if (ui.sort === 'nivel') list = [...list].sort((a, b) => b.level - a.level || a.name.localeCompare(b.name, 'es'));
     if (ui.sort === 'asistencia') list = [...list].sort((a, b) => (info.get(a.id).att.pct ?? 101) - (info.get(b.id).att.pct ?? 101));
     count.textContent = all.length === list.length ? plural(list.length, 'jugador', 'jugadores') : `${list.length} de ${all.length}`;
     rows.replaceChildren(...(list.length ? list.map((p) => {
       const i = info.get(p.id);
       const end = [];
-      if (mt) end.push(h('span', { class: 'chip' }, teams().find((t) => t.id === teamOf(p))?.name || ''));
+      if (mt) { const ts = teamsOf(p); end.push(h('span', { class: 'chip', title: ts.length > 1 ? `Juega en ${ts.map(teamName).join(', ')}` : null }, ts.length > 1 ? `${teamName(ts[0])} +${ts.length - 1}` : teamName(ts[0]))); }
       if (positionsOf(p).length > 1) end.push(h('span', { class: 'chip', title: `Comodín: ${positionsOf(p).map((x) => POSITIONS.find((y) => y.id === x)?.name).join(', ')}` }, 'Comodín'));
       if (isMine(p)) end.push(h('span', { class: 'chip ball', title: 'Tu perfil de jugador' }, 'Tú'));
       if (p.captain) end.push(h('span', { class: 'chip info', title: 'Capitán: puede pasar lista y capturar partidos' }, 'Capitán'));

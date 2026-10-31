@@ -16,12 +16,14 @@ export const TABLES = {
   tournaments: 'tournaments', tRsvps: 'tournament_rsvps',
   // v3.4: enlace del calendario del equipo
   calFeeds: 'calendar_feeds',
+  // v3.6: sesiones de gym
+  gymLogs: 'gym_logs',
 };
 export const KEYS = Object.keys(TABLES);
 // Qué pide cada quien a la nube (lo demás ni lo intenta). El capitán además pide el registro de partidos.
 const FETCH = {
   coach: KEYS,
-  player: ['groups', 'players', 'sessions', 'attendance', 'ratings', 'exams', 'claims', 'customEx', 'matches', 'matchStats', 'homeLogs', 'rsvps', 'playerTests', 'notices', 'tournaments', 'tRsvps', 'calFeeds'],
+  player: ['groups', 'players', 'sessions', 'attendance', 'ratings', 'exams', 'claims', 'customEx', 'matches', 'matchStats', 'homeLogs', 'rsvps', 'playerTests', 'notices', 'tournaments', 'tRsvps', 'calFeeds', 'gymLogs'],
   assistant: ['staff', 'groups', 'sessions', 'attendance', 'matches', 'matchLogs', 'matchStats', 'rsvps', 'notices', 'tournaments', 'tRsvps', 'calFeeds'],
 };
 // Lo que solo ve el entrenador (el jugador ni lo pide) y lo que llegó con la fase 2 (puede faltar si aún no corren el SQL nuevo).
@@ -31,6 +33,7 @@ const PHASE3 = new Set(['homeLogs', 'ideas']);
 const PHASE4 = new Set(['staff', 'rsvps', 'playerTests', 'notices']);
 const PHASE5 = new Set(['tournaments', 'tRsvps']);
 const PHASE6 = new Set(['calFeeds']);
+const PHASE7 = new Set(['gymLogs']);
 const isMissingTable = (e) => ['PGRST205', 'PGRST202', '42P01', '42883'].includes(e?.code) || /could not find the (table|function)|schema cache|does not exist/i.test(e?.message || '');
 const emptyData = () => ({ ...Object.fromEntries(KEYS.map((k) => [k, []])), roster: [] });   // roster: lista del equipo para ayudantes (sin códigos)
 
@@ -47,6 +50,7 @@ export const state = {
   torneos: true,                     // false si aún no corre el SQL de la v3.3 (torneos y prueba de 10 m)
   cal: true,                         // false si aún no corre el SQL de la v3.4 (calendario del equipo)
   equipos: true,                     // false si aún no corre el SQL de la v3.5 (equipos A y B, cuadro de eliminación)
+  gym: true,                         // false si aún no corre el SQL de la v3.6 (Gym y jugadores en varios equipos)
 };
 
 // ---------- almacenamiento seguro ----------
@@ -96,6 +100,7 @@ const DEFAULTS = {
   tournaments: () => ({ venue: '', start_date: todayStr(), end_date: null, branch: 'X', roster: [], standings: [], place: null, result: '', note: '' }),
   tRsvps: () => ({ note: '', updated_at: new Date().toISOString() }),
   calFeeds: () => ({ active: true, token: randomToken() }),
+  gymLogs: () => ({ done_on: todayStr(), day: '', goal: '', plan: {}, sets: [], minutes: null, rpe: null, pain: false, note: '' }),
 };
 // Enlace secreto del calendario: 64 caracteres al azar.
 export function randomToken() { const b = new Uint8Array(32); crypto.getRandomValues(b); return [...b].map((x) => x.toString(16).padStart(2, '0')).join(''); }
@@ -123,7 +128,7 @@ export function patch(key, id, changes) {
 export function remove(key, id) {
   state.data[key] = state.data[key].filter((r) => r.id !== id);
   const d = state.data;
-  if (key === 'players') for (const k of ['attendance', 'ratings', 'exams', 'claims', 'notes', 'matchStats', 'homeLogs', 'rsvps', 'playerTests', 'tRsvps']) d[k] = d[k].filter((r) => r.player_id !== id);
+  if (key === 'players') for (const k of ['attendance', 'ratings', 'exams', 'claims', 'notes', 'matchStats', 'homeLogs', 'rsvps', 'playerTests', 'tRsvps', 'gymLogs']) d[k] = d[k].filter((r) => r.player_id !== id);
   if (key === 'tournaments') { d.tRsvps = d.tRsvps.filter((r) => r.tournament_id !== id); d.matches.forEach((m) => { if (m.tournament_id === id) m.tournament_id = null; }); }
   if (key === 'sessions') { d.attendance = d.attendance.filter((r) => r.session_id !== id); d.coachLogs.forEach((r) => { if (r.session_id === id) r.session_id = null; }); }
   if (key === 'matches') { for (const k of ['matchLogs', 'matchStats', 'rsvps']) d[k] = d[k].filter((r) => r.match_id !== id); d.coachLogs.forEach((r) => { if (r.match_id === id) r.match_id = null; }); }
@@ -174,11 +179,20 @@ export const teamReady = () => state.mode !== 'cloud' || state.team;
 export const torneosReady = () => state.mode !== 'cloud' || state.torneos;
 export const calReady = () => state.mode === 'cloud' && state.cal;   // la suscripción solo existe en la nube
 export const equiposReady = () => state.mode !== 'cloud' || state.equipos;
+// v3.6: Gym y jugadores en varios equipos llegan con el mismo SQL.
+export const gymReady = () => state.mode !== 'cloud' || state.gym;
 // ---------- equipos del grupo (v3.5): settings.teams = [{ id, name, branch }] ----------
 export const teams = () => (settings().teams || []).filter((t) => t && t.id && t.name);
 export const multiTeam = () => equiposReady() && teams().length > 1;
 export const teamName = (id) => teams().find((t) => t.id === id)?.name || teams()[0]?.name || group()?.name || 'Mi equipo';
 export const teamOf = (row) => (multiTeam() ? (teams().some((t) => t.id === row?.team) ? row.team : teams()[0].id) : '');
+// v3.6: un jugador tiene su equipo principal (team) y puede jugar también en otros (teams).
+export const teamsOf = (p) => {
+  if (!multiTeam()) return [];
+  const main = teamOf(p), ids = new Set(teams().map((t) => t.id));
+  return [main, ...(Array.isArray(p?.teams) ? p.teams : []).filter((id, i, a) => ids.has(id) && id !== main && a.indexOf(id) === i)];
+};
+export const inTeam = (p, id) => !id || !multiTeam() || teamsOf(p).includes(id);
 export const profileRow = () => state.data.coachProfile[0] || null;
 export const profile = () => profileRow()?.data || {};
 export function saveProfile(changes) {
@@ -276,7 +290,7 @@ export async function refresh() {
   await flush();
   if (outbox.length) return false;                      // no pisar cambios que aún no se envían
   try {
-    let missing = false, missing3 = false, missing4 = false, missing5 = false, missing6 = false;
+    let missing = false, missing3 = false, missing4 = false, missing5 = false, missing6 = false, missing7 = false;
     const get = async (k) => {
       try { return await fetchAll(TABLES[k]); }
       catch (e) {
@@ -285,6 +299,7 @@ export async function refresh() {
         if (PHASE4.has(k) && isMissingTable(e)) { missing4 = true; return []; }
         if (PHASE5.has(k) && isMissingTable(e)) { missing5 = true; return []; }
         if (PHASE6.has(k) && isMissingTable(e)) { missing6 = true; return []; }
+        if (PHASE7.has(k) && isMissingTable(e)) { missing7 = true; return []; }
         throw e;
       }
     };
@@ -300,7 +315,7 @@ export async function refresh() {
     // v3.5: las columnas nuevas no se ven como tabla faltante; se prueba una vez si existen.
     let missing8 = false;
     if (!missing) { try { const c = await client(); const { error } = await c.from('matches').select('team').limit(1); if (error && (error.code === '42703' || /column|team/i.test(error.message || ''))) missing8 = true; } catch (e) { if (!isNetworkError(e)) missing8 = true; } }
-    state.data = next; state.online = true; state.lab = !missing; state.equipos = !missing8; state.casa = !missing3; state.team = !missing4; state.torneos = !missing5; state.cal = !missing6;
+    state.data = next; state.online = true; state.lab = !missing; state.equipos = !missing8; state.casa = !missing3; state.team = !missing4; state.torneos = !missing5; state.cal = !missing6; state.gym = !missing7;
     saveCache(); emit();
     return true;
   } catch (e) {
@@ -336,7 +351,7 @@ export function clearLocal() {
   for (const k of ls.keys()) if (k.startsWith('remate.cache.') || k.startsWith('remate.outbox.')) ls.del(k);
   ls.del(MODE_KEY);
   outbox = [];
-  Object.assign(state, { ready: false, mode: null, role: null, user: null, email: '', me: null, viewAs: null, self: false, data: emptyData(), pending: 0, lastError: null, lab: true, casa: true, team: true });
+  Object.assign(state, { ready: false, mode: null, role: null, user: null, email: '', me: null, viewAs: null, self: false, data: emptyData(), pending: 0, lastError: null, lab: true, casa: true, team: true, torneos: true, cal: true, equipos: true, gym: true });
 }
 export const pendingCount = () => outbox.length;
 

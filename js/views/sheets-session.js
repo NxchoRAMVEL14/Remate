@@ -1,5 +1,5 @@
 // Hojas emergentes de sesiones y ejercicios: crear sesión, pasar lista, elegir ejercicio, ejercicio propio.
-import { h, ic, openSheet, confirmSheet, toast, todayStr, addDays, parseDate, DAYS, buildICS, download, copyText, plural } from '../util.js';
+import { h, ic, openSheet, confirmSheet, toast, todayStr, addDays, parseDate, DAYS, buildICS, download, copyText, plural, fmtDate } from '../util.js';
 import { add, patch, remove, group, settings, players, setAttendance, state, calReady, randomToken, multiTeam, teamName, teamOf } from '../store.js';
 import { SKILLS, SKILL_BY_ID } from '../content/skills.js';
 import { TEMPLATES, TEMPLATE_BY_ID, planFromTemplate } from '../content/templates.js';
@@ -54,33 +54,61 @@ export function sessionFormSheet(s = null, onCreated) {
 
 // ---------- pasar lista ----------
 const ATT = [['presente', 'P', 'p'], ['retardo', 'R', 'r'], ['falta', 'F', 'f'], ['justificada', 'J', 'j']];
+const marksOf = (s) => state.data.attendance.filter((a) => a.session_id === s.id);
+
+// Regresa un entrenamiento a «Por hacer» y borra su lista (por si se pasó lista por error).
+export async function undoDone(s) {
+  const marks = marksOf(s);
+  const ok = await confirmSheet({ title: '¿Regresar a «Por hacer»?',
+    text: `${marks.length ? `Se borra la lista que se pasó (${plural(marks.length, 'marca', 'marcas')}) y deja de contar en la asistencia y los XP. ` : ''}El entrenamiento vuelve a quedar pendiente. Si todavía no quieres que tus jugadores lo vean, después desmarca «Visible para los jugadores».`,
+    ok: 'Regresar a Por hacer' });
+  if (!ok) return false;
+  for (const a of marks) remove('attendance', a.id);
+  patch('sessions', s.id, { status: 'planeada' });
+  toast('Listo: el entrenamiento está otra vez por hacer', 3200);
+  return true;
+}
+
 export function attendanceSheet(s) {
   const list = players();
   const mark = (pid) => state.data.attendance.find((a) => a.session_id === s.id && a.player_id === pid)?.status || null;
+  const future = s.session_date > todayStr();
+  // Un entrenamiento que todavía no llega: primero se confirma, para no dejarlo como hecho por un toque de más.
+  let armed = !future || marksOf(s).length > 0;
+  const when = fmtDate(s.session_date, { weekday: 'long', day: 'numeric', month: 'long' });
+  const guard = armed ? null : h('div', { class: 'note warn stack' },
+    h('span', {}, `Este entrenamiento es el ${when}: todavía no llega. Si pasas lista, quedará como hecho y contará en la asistencia de tus jugadores.`),
+    h('div', { class: 'cluster' }, h('button', { class: 'btn sm', type: 'button', onclick: () => { armed = true; guard.hidden = true; paint(); } }, 'Pasar lista de todos modos')));
+  const futureTip = future && !armed ? null : future ? note(state.role === 'coach' ? `Este entrenamiento es el ${when}. Si la lista fue por error, quita las marcas o, en el entrenamiento, toca «Regresar a Por hacer».` : `Este entrenamiento es el ${when}. Si la lista fue por error, quita las marcas.`, 'warn') : null;
   const counts = h('div', { class: 'cluster' });
   const rows = h('div', { class: 'rows' });
+  const bulk = h('button', { class: 'btn sm', type: 'button', onclick: () => { if (!armed) return; for (const p of list) if (!mark(p.id)) set(p.id, 'presente'); } }, ic('check', 16), 'Los que faltan por marcar, presentes');
   function paint() {
     const c = { presente: 0, retardo: 0, falta: 0, justificada: 0, sin: 0 };
     for (const p of list) c[mark(p.id) || 'sin']++;
+    bulk.disabled = !armed;
     counts.replaceChildren(...ATT.map(([k]) => h('span', { class: `chip ${{ presente: 'ok', retardo: 'warn', falta: 'bad', justificada: 'info' }[k]}` }, `${STATUS_LABEL[k]} ${c[k]}`)),
       h('span', { class: 'chip' }, `Sin lista ${c.sin}`));
     rows.replaceChildren(...list.map((p) => h('div', { class: 'row' }, jersey(p, 'sm'), h('span', { class: 'row-main' }, h('strong', {}, p.name)),
       h('div', { class: 'att', role: 'group', 'aria-label': `Asistencia de ${p.name}` }, ATT.map(([k, l, c2]) => h('button', {
-        type: 'button', class: c2, 'aria-pressed': String(mark(p.id) === k), 'aria-label': STATUS_LABEL[k], title: STATUS_LABEL[k],
+        type: 'button', class: c2, 'aria-pressed': String(mark(p.id) === k), 'aria-label': STATUS_LABEL[k], title: STATUS_LABEL[k], disabled: armed ? null : true,
         onclick: () => set(p.id, mark(p.id) === k ? null : k) }, l))))));
   }
   function set(pid, st) {
+    if (!armed) return;
     setAttendance(s.id, pid, st);
     // Al pasar lista el entrenamiento ya ocurrió: se marca hecho y se publica, para que cada jugador vea su asistencia.
     // (Si la pasa un ayudante, la base de datos lo marca sola; aquí solo se refleja en pantalla.)
-    if (s.status === 'planeada') { if (state.role === 'coach') patch('sessions', s.id, { status: 'hecha', published: true }); else s.published = true; s.status = 'hecha'; }
+    if (st && s.status === 'planeada') { if (state.role === 'coach') patch('sessions', s.id, { status: 'hecha', published: true }); else s.published = true; s.status = 'hecha'; }
+    // Si era un entrenamiento que todavía no llega y ya no le queda ninguna marca, vuelve a «Por hacer».
+    if (!st && future && s.status === 'hecha' && state.role === 'coach' && !marksOf(s).length) { patch('sessions', s.id, { status: 'planeada' }); toast('Sin lista: el entrenamiento vuelve a estar por hacer', 3200); }
     paint();
   }
   paint();
   return openSheet({
     title: 'Pasar lista',
-    body: h('div', { class: 'stack' },
-      list.length ? h('div', { class: 'cluster' }, h('button', { class: 'btn sm', type: 'button', onclick: () => { for (const p of list) if (!mark(p.id)) set(p.id, 'presente'); } }, ic('check', 16), 'Los que faltan por marcar, presentes')) : null,
+    body: h('div', { class: 'stack' }, guard, futureTip,
+      list.length ? h('div', { class: 'cluster' }, bulk) : null,
       counts, list.length ? rows : note('Primero agrega jugadores.'),
       h('p', { class: 'row-sub' }, 'P presente, R retardo, F falta, J justificada. Toca otra vez para borrar la marca.')),
     actions: [{ label: 'Listo', kind: 'primary' }],

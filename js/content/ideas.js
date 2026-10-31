@@ -2,12 +2,18 @@
 // since: versión en la que la idea ya quedó dentro de Remate (así no se vuelve a pedir).
 export const AREAS = {
   hoy: 'Hoy', jugadores: 'Jugadores', entrenos: 'Entrenos', partidos: 'Partidos', casa: 'En casa', laboratorio: 'Laboratorio',
-  reportes: 'Reportes', ruta: 'Ruta y retos', ejercicios: 'Ejercicios', ajustes: 'Ajustes', otra: 'Otra',
+  reportes: 'Reportes', ruta: 'Ruta y retos', ejercicios: 'Ejercicios', gym: 'Gym', ajustes: 'Ajustes', otra: 'Otra',
 };
 export const PRIORITY = { alta: 'Alta', media: 'Media', baja: 'Baja' };
 export const STATUS = { idea: 'Idea', lista: 'Lista para pedir', hecha: 'Hecha', descartada: 'Descartada' };
 
 export const SUGGESTED = [
+  { title: 'Físico en el gym', since: '3.6.0', area: 'gym', priority: 'alta',
+    body: 'Una pantalla con ejercicios de gym para fuerza y una rutina armada según lo que se quiere lograr, para llegar al entrenamiento de la mejor manera.' },
+  { title: 'Jugadores en varios equipos', since: '3.6.0', area: 'jugadores', priority: 'alta',
+    body: 'Que un jugador pueda estar en varios equipos (por ejemplo varonil y mixto) y vea la convocatoria de todos.' },
+  { title: 'Regresar un entrenamiento a «Por hacer»', since: '3.6.0', area: 'entrenos', priority: 'alta',
+    body: 'Si paso lista por error en un entrenamiento que todavía no llega, poder regresarlo a pendiente.' },
   { title: 'Captura del rival', area: 'partidos', priority: 'media',
     body: 'Durante el partido, anotar también lo que hace el rival (quién ataca, a dónde saca y sus errores) para que el scouting se llene solo.' },
   { title: 'Lista de asistencia con QR', area: 'entrenos', priority: 'baja',
