@@ -2,7 +2,6 @@
 import { h, ic, toast, fmtDate, plural, confirmSheet } from '../util.js';
 import { state, getPlayer, settings, remove, resolveClaim, patch, teamReady } from '../store.js';
 import { testsPanel } from './pruebas.js';
-import { badgesEl } from './insignias.js';
 import { homePlanSheet, planOf } from './casa.js';
 import { refName } from '../content/casa.js';
 import { currentRatings, ratingHistory } from '../calc.js';
@@ -10,7 +9,7 @@ import { SKILLS, PHASES } from '../content/skills.js';
 import { required } from '../content/levels.js';
 import { CHALLENGE_BY_ID } from '../content/challenges.js';
 import { dots, statusChip, sectionTitle, empty, note } from './ui.js';
-import { playerCard, playerStats } from './card.js';
+import { playerCard, playerStats, badgesEl } from './card.js';
 import { playerFormSheet, deletePlayer, evaluateSheet, examSheet, codeSheet, noteSheet } from './sheets-player.js';
 
 const TABS = [['resumen', 'Resumen'], ['habilidades', 'Habilidades'], ['pruebas', 'Pruebas'], ['asistencia', 'Asistencia'], ['notas', 'Notas']];
@@ -32,6 +31,7 @@ export default function jugador(ctx) {
       h('button', { class: 'btn sm', type: 'button', onclick: () => noteSheet(p) }, ic('pencil', 16), 'Nota'),
       h('button', { class: 'btn sm', type: 'button', onclick: () => playerFormSheet(p) }, ic('settings', 16), 'Editar datos'),
       h('a', { class: 'btn sm', href: `#/ver/${p.id}` }, ic('eye', 16), 'Ver como jugador'),
+      h('a', { class: 'btn sm', href: `#/comparar/${p.id}` }, ic('arrow-left-right', 16), 'Antes y después'),
       h('button', { class: 'btn sm', type: 'button', disabled: teamReady() ? null : true, onclick: () => homePlanSheet(p) }, ic('house', 16), planOf(p).items.length ? 'Tarea de casa' : 'Dejar tarea de casa'),
       h('label', { class: 'check captain', title: 'El capitán puede pasar lista y capturar partidos desde su celular' },
         h('input', { type: 'checkbox', checked: p.captain ? true : null, disabled: teamReady() ? null : true,

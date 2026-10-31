@@ -12,19 +12,22 @@ export const TABLES = {
   homeLogs: 'home_logs', ideas: 'app_ideas',
   // fase 4: ayudantes, convocatoria, pruebas físicas y avisos
   staff: 'staff', rsvps: 'match_rsvps', playerTests: 'player_tests', notices: 'notices',
+  // v3.3: torneos y su convocatoria
+  tournaments: 'tournaments', tRsvps: 'tournament_rsvps',
 };
 export const KEYS = Object.keys(TABLES);
 // Qué pide cada quien a la nube (lo demás ni lo intenta). El capitán además pide el registro de partidos.
 const FETCH = {
   coach: KEYS,
-  player: ['groups', 'players', 'sessions', 'attendance', 'ratings', 'exams', 'claims', 'customEx', 'matches', 'matchStats', 'homeLogs', 'rsvps', 'playerTests', 'notices'],
-  assistant: ['staff', 'groups', 'sessions', 'attendance', 'matches', 'matchLogs', 'matchStats', 'rsvps', 'notices'],
+  player: ['groups', 'players', 'sessions', 'attendance', 'ratings', 'exams', 'claims', 'customEx', 'matches', 'matchStats', 'homeLogs', 'rsvps', 'playerTests', 'notices', 'tournaments', 'tRsvps'],
+  assistant: ['staff', 'groups', 'sessions', 'attendance', 'matches', 'matchLogs', 'matchStats', 'rsvps', 'notices', 'tournaments', 'tRsvps'],
 };
 // Lo que solo ve el entrenador (el jugador ni lo pide) y lo que llegó con la fase 2 (puede faltar si aún no corren el SQL nuevo).
 const COACH_ONLY = new Set(['notes', 'matchLogs', 'coachProfile', 'jumpTests', 'jumpSessions', 'coachLogs', 'coachAssess', 'decisions', 'ideas']);
 const PHASE2 = new Set(['matches', 'matchLogs', 'matchStats', 'coachProfile', 'jumpTests', 'jumpSessions', 'coachLogs', 'coachAssess', 'decisions']);
 const PHASE3 = new Set(['homeLogs', 'ideas']);
 const PHASE4 = new Set(['staff', 'rsvps', 'playerTests', 'notices']);
+const PHASE5 = new Set(['tournaments', 'tRsvps']);
 const isMissingTable = (e) => ['PGRST205', 'PGRST202', '42P01', '42883'].includes(e?.code) || /could not find the (table|function)|schema cache|does not exist/i.test(e?.message || '');
 const emptyData = () => ({ ...Object.fromEntries(KEYS.map((k) => [k, []])), roster: [] });   // roster: lista del equipo para ayudantes (sin códigos)
 
@@ -37,6 +40,7 @@ export const state = {
   lab: true,                         // false si la base de datos aún no tiene las tablas de la fase 2
   casa: true,                        // false si aún no tiene las de la fase 3 (en casa y mejoras)
   team: true,                        // false si aún no tiene las de la fase 4 (ayudantes, convocatoria, pruebas, avisos)
+  torneos: true,                     // false si aún no corre el SQL de la v3.3 (torneos y prueba de 10 m)
 };
 
 // ---------- almacenamiento seguro ----------
@@ -83,6 +87,8 @@ const DEFAULTS = {
   rsvps: () => ({ note: '', updated_at: new Date().toISOString() }),
   playerTests: () => ({ note: '', test_date: todayStr() }),
   notices: () => ({ body: '', url: '' }),
+  tournaments: () => ({ venue: '', start_date: todayStr(), end_date: null, branch: 'X', roster: [], standings: [], place: null, result: '', note: '' }),
+  tRsvps: () => ({ note: '', updated_at: new Date().toISOString() }),
 };
 const NO_CREATED_AT = new Set(['claims', 'coachProfile']);   // esas tablas no tienen la columna created_at
 
@@ -108,7 +114,8 @@ export function patch(key, id, changes) {
 export function remove(key, id) {
   state.data[key] = state.data[key].filter((r) => r.id !== id);
   const d = state.data;
-  if (key === 'players') for (const k of ['attendance', 'ratings', 'exams', 'claims', 'notes', 'matchStats', 'homeLogs', 'rsvps', 'playerTests']) d[k] = d[k].filter((r) => r.player_id !== id);
+  if (key === 'players') for (const k of ['attendance', 'ratings', 'exams', 'claims', 'notes', 'matchStats', 'homeLogs', 'rsvps', 'playerTests', 'tRsvps']) d[k] = d[k].filter((r) => r.player_id !== id);
+  if (key === 'tournaments') { d.tRsvps = d.tRsvps.filter((r) => r.tournament_id !== id); d.matches.forEach((m) => { if (m.tournament_id === id) m.tournament_id = null; }); }
   if (key === 'sessions') { d.attendance = d.attendance.filter((r) => r.session_id !== id); d.coachLogs.forEach((r) => { if (r.session_id === id) r.session_id = null; }); }
   if (key === 'matches') { for (const k of ['matchLogs', 'matchStats', 'rsvps']) d[k] = d[k].filter((r) => r.match_id !== id); d.coachLogs.forEach((r) => { if (r.match_id === id) r.match_id = null; }); }
   persist({ op: 'remove', key, id });
@@ -151,6 +158,7 @@ export const pendingClaims = () => state.data.claims.filter((c) => c.status === 
 export const labReady = () => state.mode !== 'cloud' || state.lab;
 export const casaReady = () => state.mode !== 'cloud' || state.casa;
 export const teamReady = () => state.mode !== 'cloud' || state.team;
+export const torneosReady = () => state.mode !== 'cloud' || state.torneos;
 export const profileRow = () => state.data.coachProfile[0] || null;
 export const profile = () => profileRow()?.data || {};
 export function saveProfile(changes) {
@@ -211,6 +219,8 @@ async function applyOp(op) {
         ({ error } = await c.from(t).update({ counts: op.row.counts }).eq('match_id', op.row.match_id).eq('player_id', op.row.player_id));
       } else if (op.key === 'rsvps') {                                                    // ya había respuesta de ese jugador
         ({ error } = await c.from(t).update({ status: op.row.status, note: op.row.note, updated_at: op.row.updated_at }).eq('match_id', op.row.match_id).eq('player_id', op.row.player_id));
+      } else if (op.key === 'tRsvps') {                                                   // ya había respuesta de ese jugador al torneo
+        ({ error } = await c.from(t).update({ status: op.row.status, note: op.row.note, updated_at: op.row.updated_at }).eq('tournament_id', op.row.tournament_id).eq('player_id', op.row.player_id));
       } else if (op.key === 'coachProfile') {                                             // ya existía tu perfil (otro celular)
         ({ error } = await c.from(t).update({ data: op.row.data }).eq('owner_id', op.row.owner_id));
       }
@@ -246,13 +256,14 @@ export async function refresh() {
   await flush();
   if (outbox.length) return false;                      // no pisar cambios que aún no se envían
   try {
-    let missing = false, missing3 = false, missing4 = false;
+    let missing = false, missing3 = false, missing4 = false, missing5 = false;
     const get = async (k) => {
       try { return await fetchAll(TABLES[k]); }
       catch (e) {
         if (PHASE2.has(k) && isMissingTable(e)) { missing = true; return []; }
         if (PHASE3.has(k) && isMissingTable(e)) { missing3 = true; return []; }
         if (PHASE4.has(k) && isMissingTable(e)) { missing4 = true; return []; }
+        if (PHASE5.has(k) && isMissingTable(e)) { missing5 = true; return []; }
         throw e;
       }
     };
@@ -265,7 +276,7 @@ export async function refresh() {
       if (state.role === 'player') next.matchLogs = await get('matchLogs');
       try { next.roster = await fetchRoster(); } catch (e) { if (!isMissingTable(e) && !/staff_roster/.test(e?.message || '')) throw e; next.roster = []; missing4 = true; }
     }
-    state.data = next; state.online = true; state.lab = !missing; state.casa = !missing3; state.team = !missing4;
+    state.data = next; state.online = true; state.lab = !missing; state.casa = !missing3; state.team = !missing4; state.torneos = !missing5;
     saveCache(); emit();
     return true;
   } catch (e) {

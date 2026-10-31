@@ -1,16 +1,25 @@
 // Pruebas físicas: registro por jugador o de todo el equipo, y la gráfica de avance de cada quien.
 import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr } from '../util.js';
-import { state, add, patch, remove, players, teamReady } from '../store.js';
+import { state, add, patch, remove, players, teamReady, torneosReady, settings } from '../store.js';
 import { PTESTS, testTrend } from '../content/pruebas.js';
 import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
 import { lineChart } from './chart.js';
 
 const fmtV = (v, kind) => `${Number(v).toFixed(PTESTS[kind].step < 1 ? (PTESTS[kind].step < 0.1 ? 2 : 1) : 0).replace(/\.0+$/, '')} ${PTESTS[kind].unit}`;
 const testsOf = (pid) => state.data.playerTests.filter((t) => t.player_id === pid);
+// Pruebas que se pueden capturar: la de 10 m necesita el SQL de la v3.3.
+export const testKinds = () => Object.keys(PTESTS).filter((k) => k !== 'vel10' || torneosReady());
+// Recordatorio: cada cuántas semanas medir (Ajustes) y cuándo fue la última prueba del equipo.
+export const testsEvery = () => Number(settings().tests_every) || 10;
+export function testsDue() {
+  const last = state.data.playerTests.map((t) => String(t.test_date)).sort().pop() || null;
+  const days = last ? Math.round((Date.now() - new Date(`${last}T12:00:00`).getTime()) / 864e5) : null;
+  return { last, days, due: !last || days >= testsEvery() * 7 };
+}
 
 export function testSheet(p, t = null, kind0 = 'cmj') {
   const date = h('input', { type: 'date', max: todayStr(), value: t?.test_date || todayStr() });
-  const kind = h('select', {}, options(Object.entries(PTESTS).map(([k, x]) => [k, `${x.name} (${x.unit})`]), t?.kind || kind0));
+  const kind = h('select', {}, options(testKinds().map((k) => [k, `${PTESTS[k].name} (${PTESTS[k].unit})`]), t?.kind || kind0));
   const val = h('input', { type: 'number', inputmode: 'decimal', step: 'any', value: t?.value ?? '' });
   const text = h('input', { type: 'text', maxlength: 300, value: t?.note || '', placeholder: 'Opcional' });
   const how = h('ol', { class: 'plain' });
@@ -50,7 +59,7 @@ export function testsPanel(p, { canEdit = false } = {}) {
         h('div', { class: 'cluster' }, tr.list.slice().reverse().map((t) => canEdit
           ? h('button', { class: 'chip', type: 'button', onclick: () => testSheet(p, t) }, `${fmtDate(t.test_date, { day: 'numeric', month: 'short' })}: ${fmtV(t.value, k)}`)
           : h('span', { class: 'chip' }, `${fmtDate(t.test_date, { day: 'numeric', month: 'short' })}: ${fmtV(t.value, k)}`))));
-    }) : empty('Sin pruebas físicas', canEdit ? 'Cada 2 o 3 meses mide salto, alcance de remate, agilidad y plancha. Así ves su avance con datos.' : 'Tu entrenador registra aquí tus pruebas de salto, alcance, agilidad y plancha.'));
+    }) : empty('Sin pruebas físicas', canEdit ? 'Cada 2 o 3 meses mide salto, velocidad de 10 m, alcance de remate, agilidad y plancha. Así ves su avance con datos.' : 'Tu entrenador registra aquí tus pruebas de salto, velocidad, alcance, agilidad y plancha.'));
 }
 
 export default function pruebas(ctx) {
@@ -62,7 +71,7 @@ export default function pruebas(ctx) {
   // Entrenador: captura rápida de una prueba para todo el equipo.
   const ui = ctx.ui; ui.kind ||= 'cmj'; ui.date ||= todayStr();
   const list = players(), d = PTESTS[ui.kind];
-  const kind = h('select', { 'aria-label': 'Prueba' }, options(Object.entries(PTESTS).map(([k, x]) => [k, `${x.name} (${x.unit})`]), ui.kind));
+  const kind = h('select', { 'aria-label': 'Prueba' }, options(testKinds().map((k) => [k, `${PTESTS[k].name} (${PTESTS[k].unit})`]), ui.kind));
   kind.addEventListener('change', () => { ui.kind = kind.value; ctx.rerender(); });
   const date = h('input', { type: 'date', max: todayStr(), value: ui.date, 'aria-label': 'Fecha' });
   date.addEventListener('change', () => { ui.date = date.value || todayStr(); });
@@ -84,8 +93,11 @@ export default function pruebas(ctx) {
     }
     toast(bad ? `${n} guardadas. Revisa ${bad}: fuera de ${d.min} a ${d.max} ${d.unit}.` : n ? `${n} pruebas guardadas` : 'Escribe al menos un resultado');
   };
+  const due = testsDue();
   const el = h('div', { class: 'page' },
     !teamReady() ? note('Para guardar pruebas, corre en Supabase el instalar.sql de esta versión.', 'bad') : null,
+    teamReady() && !torneosReady() ? note('La prueba de velocidad de 10 m aparece cuando corras en Supabase el sql/instalar.sql de la versión 3.3.', 'warn') : null,
+    h('p', { class: 'row-sub', style: { margin: 0 } }, due.last ? `Última toma del equipo: ${fmtDate(due.last, { day: 'numeric', month: 'long' })} (hace ${due.days} días). Te recuerdo en Hoy cada ${testsEvery()} semanas; lo cambias en Ajustes.` : `Te recuerdo en Hoy cada ${testsEvery()} semanas; lo cambias en Ajustes.`),
     h('div', { class: 'grid' }, field('Prueba', kind), field('Fecha', date)),
     h('details', { class: 'panel' }, h('summary', {}, h('strong', {}, `Cómo se mide: ${d.name}`)), h('ol', { class: 'plain', style: { marginTop: '10px' } }, d.how.map((x) => h('li', {}, x)))),
     list.length ? h('div', { class: 'rows tests-entry' }, rows) : empty('Sin jugadores', 'Agrega jugadores primero.'),

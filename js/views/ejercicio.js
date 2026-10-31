@@ -1,7 +1,6 @@
 // Detalle de un ejercicio: diagrama, organización, pasos, progresiones, puntos clave y cómo medirlo.
-import { h, ic, toast, openSheet, confirmSheet, relDay, todayStr } from '../util.js';
+import { h, ic, toast, openSheet, confirmSheet, relDay, todayStr, isUrl, ytId } from '../util.js';
 import { state, sessions, patch, remove, settings, saveSettings } from '../store.js';
-import { isUrl, ytId } from '../video.js';
 import { SKILL_BY_ID } from '../content/skills.js';
 import { getExercise, KINDS, MATERIAL, levelLabel } from '../content/exercises.js';
 import { courtSVG } from '../court.js';

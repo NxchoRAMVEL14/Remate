@@ -69,7 +69,7 @@ function retos(ctx) {
     const pend = d.claims.filter((c) => c.status === 'solicitada');
     out.append(sectionTitle('Por aprobar'), pend.length ? h('div', { class: 'rows' }, pend.map((c) => {
       const p = getPlayer(c.player_id), ch = CHALLENGES.find((x) => x.id === c.challenge_id); if (!p || !ch) return null;
-      return h('div', { class: 'row', style: { flexWrap: 'wrap' } }, jersey(p), h('span', { class: 'row-main', style: { flex: '1 1 200px' } }, h('strong', {}, `${p.name}: ${ch.name}`), h('span', { class: 'row-sub' }, `${ch.xp} XP. ${ch.verify}`)),
+      return h('div', { class: 'row', style: { flexWrap: 'wrap' } }, jersey(p), h('span', { class: 'row-main', style: { flex: '1 1 200px' } }, h('strong', {}, `${p.name}: ${ch.name}`), h('span', { class: 'row-sub' }, `${ch.xp} XP.${c.note ? ` ${c.note}.` : ''} ${ch.verify}`)),
         h('span', { class: 'row-end', style: { marginLeft: 'auto' } }, h('button', { class: 'btn sm primary', type: 'button', onclick: () => { resolveClaim(c.id, true); toast('Reto aprobado'); } }, 'Aprobar'),
           h('button', { class: 'btn sm', type: 'button', onclick: () => { resolveClaim(c.id, false); toast('Reto rechazado'); } }, 'Rechazar')));
     })) : note('No hay retos por aprobar.'));
@@ -82,6 +82,7 @@ function retos(ctx) {
     if (me) {
       if (done) end = h('span', { class: 'chip ok' }, 'Hecho');
       else if (claim?.status === 'solicitada') end = [h('span', { class: 'chip warn' }, 'Esperando a tu entrenador'), readonly ? null : h('button', { class: 'btn sm', type: 'button', onclick: () => { remove('claims', claim.id); toast('Solicitud cancelada'); } }, 'Cancelar')];
+      else if (c.teo) end = h('a', { class: 'btn sm primary', href: `#/teoria/examen/${c.teo}` }, ic('award', 16), 'Hacer el examen');   // los de teoría se piden desde el examen
       else if (!readonly) end = h('button', { class: 'btn sm primary', type: 'button', onclick: () => { add('claims', { player_id: me.id, challenge_id: c.id }); toast('Listo: tu entrenador lo revisará'); } }, claim?.status === 'rechazada' ? 'Intentar otra vez' : 'Pedir aprobación');
     } else end = doneBy ? h('span', { class: 'chip ok' }, plural(doneBy, 'jugador lo logró', 'jugadores lo lograron')) : null;
     return h('div', { class: `reto ${done ? 'done' : ''}` },

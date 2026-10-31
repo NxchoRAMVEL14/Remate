@@ -8,6 +8,9 @@ const PRI_ORDER = { alta: 0, media: 1, baja: 2 }, ST_ORDER = { lista: 0, idea: 1
 const FILTERS = [['pendientes', 'Pendientes'], ['hecha', 'Hechas'], ['descartada', 'Descartadas'], ['todas', 'Todas']];
 const sorted = () => state.data.ideas.slice().sort((a, b) => ST_ORDER[a.status] - ST_ORDER[b.status] || PRI_ORDER[a.priority] - PRI_ORDER[b.priority] || b.created_at.localeCompare(a.created_at));
 const norm = (s) => String(s || '').trim().toLowerCase();
+// Ideas sugeridas que ya están dentro de Remate (por título): no se vuelven a pedir.
+const BUILT = new Map(SUGGESTED.filter((s) => s.since).map((s) => [norm(s.title), s.since]));
+export const builtIn = (idea) => BUILT.get(norm(idea.title)) || null;
 
 export const missingSql3Note = () => note('Para guardar aquí, corre en Supabase el archivo instalar.sql de esta versión (SQL Editor → pega todo → Run). No borra nada.', 'bad');
 
@@ -54,7 +57,8 @@ export default function mejoras(ctx) {
   const all = sorted();
   const list = all.filter((x) => ui.f === 'todas' || (ui.f === 'pendientes' ? ['idea', 'lista'].includes(x.status) : x.status === ui.f));
   const pending = all.filter((x) => ['idea', 'lista'].includes(x.status)), ready = all.filter((x) => x.status === 'lista');
-  const toCopy = ready.length ? ready : pending;
+  const stale = pending.filter(builtIn);   // pendientes que ya existen en Remate
+  const toCopy = (ready.length ? ready : pending).filter((x) => !builtIn(x));
   const have = new Set(all.map((x) => norm(x.title)));
   const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Filtro' }, FILTERS.map(([k, t]) =>
     h('button', { type: 'button', 'aria-pressed': ui.f === k ? 'true' : 'false', onclick: () => { ui.f = k; ctx.rerender(); } }, t)));
@@ -65,20 +69,24 @@ export default function mejoras(ctx) {
       ro ? null : h('button', { class: 'btn primary', type: 'button', onclick: () => ideaSheet() }, ic('plus', 18), 'Nueva mejora'),
       toCopy.length ? h('button', { class: 'btn', type: 'button', onclick: () => copyText(requestText(toCopy)) }, ic('copy', 18),
         ready.length ? `Copiar ${plural(ready.length, 'lista para pedir', 'listas para pedir')}` : `Copiar ${plural(pending.length, 'pendiente', 'pendientes')}`) : null),
+    stale.length && !ro ? h('div', { class: 'note warn stack' }, h('span', {}, `${plural(stale.length, 'idea de tu lista ya está', 'ideas de tu lista ya están')} en Remate: ${stale.map((x) => `${x.title} (v${builtIn(x)})`).join(', ')}. Por eso no se copian al pedir cambios.`),
+      h('div', { class: 'cluster' }, h('button', { class: 'btn sm', type: 'button', onclick: () => { const now = new Date().toISOString(); stale.forEach((x) => patch('ideas', x.id, { status: 'hecha', done_at: now })); toast('Marcadas como hechas'); } }, ic('check', 16), 'Marcarlas como hechas'))) : null,
     all.length ? seg : null,
     list.length ? h('div', { class: 'rows' }, list.map((x) => h(ro ? 'div' : 'button', { type: ro ? null : 'button', class: 'row', onclick: ro ? null : () => ideaSheet(x) },
       h('span', { class: 'row-main' }, h('strong', { style: x.status === 'hecha' || x.status === 'descartada' ? { textDecoration: 'line-through', opacity: .75 } : null }, x.title),
         h('span', { class: 'row-sub' }, [AREAS[x.area] || x.area, `prioridad ${PRIORITY[x.priority].toLowerCase()}`, x.status === 'hecha' && x.done_at ? `hecha el ${fmtDate(x.done_at.slice(0, 10), { day: 'numeric', month: 'short' })}` : null].filter(Boolean).join(' · ')),
         x.body ? h('span', { class: 'row-sub' }, x.body.length > 110 ? `${x.body.slice(0, 109)}…` : x.body) : null),
-      h('span', { class: 'row-end' }, h('span', { class: `chip ${x.status === 'lista' ? 'ball' : x.status === 'hecha' ? 'ok' : x.status === 'descartada' ? '' : 'info'}` }, STATUS[x.status])))))
+      h('span', { class: 'row-end' }, builtIn(x) && ['idea', 'lista'].includes(x.status) ? h('span', { class: 'chip ok' }, `Ya está (v${builtIn(x)})`) : null, h('span', { class: `chip ${x.status === 'lista' ? 'ball' : x.status === 'hecha' ? 'ok' : x.status === 'descartada' ? '' : 'info'}` }, STATUS[x.status])))))
       : empty(all.length ? 'Nada en este filtro' : 'Tu lista está vacía', all.length ? null : 'Escribe la primera mejora o agrega alguna de las ideas sugeridas de abajo.'),
     h('section', { class: 'stack' }, sectionTitle('Ideas sugeridas'),
       h('p', { class: 'row-sub', style: { margin: 0 } }, 'Ideas para las siguientes versiones. Agrega a tu lista las que te sirvan; las demás ignóralas.'),
-      h('div', { class: 'rows' }, SUGGESTED.map((s) => { const added = have.has(norm(s.title));
+      h('div', { class: 'rows' }, SUGGESTED.filter((s) => !s.since).map((s) => { const added = have.has(norm(s.title));
         return h('div', { class: 'row' }, h('span', { class: 'row-main' }, h('strong', {}, s.title), h('span', { class: 'row-sub' }, `${AREAS[s.area]} · ${s.body}`)),
           h('span', { class: 'row-end' }, added ? h('span', { class: 'chip ok' }, 'En tu lista')
-            : ro ? null : h('button', { class: 'btn sm', type: 'button', onclick: () => { add('ideas', { ...s }); toast('Agregada a tu lista'); } }, ic('plus', 16), 'Agregar')));
-      }))),
+            : ro ? null : h('button', { class: 'btn sm', type: 'button', onclick: () => { const { since, ...row } = s; add('ideas', row); toast('Agregada a tu lista'); } }, ic('plus', 16), 'Agregar')));
+      })),
+      h('details', { class: 'panel' }, h('summary', {}, h('strong', {}, `Ya incluidas en Remate (${SUGGESTED.filter((s) => s.since).length})`)),
+        h('ul', { class: 'plain', style: { marginTop: '8px' } }, SUGGESTED.filter((s) => s.since).map((s) => h('li', {}, `${s.title} (desde la v${s.since})`))))),
     note('Consejo para pedir cambios: marca como "Lista para pedir" solo lo que de verdad quieres en la siguiente versión. Pedir de 3 a 5 cosas a la vez, cada una con pantalla, qué y para qué, sale mejor que una lista larga.'));
   return { title: 'Mejoras', sub: 'Solo tú lo ves', back: '#/mas', el };
 }

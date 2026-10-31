@@ -147,3 +147,42 @@ export async function shareText(text) {
   if (navigator.share) { try { await navigator.share({ text }); return; } catch { return; } }
   copyText(text);
 }
+
+// ---------- tema claro, oscuro o automático (se recuerda en este navegador) ----------
+const THEME_KEY = 'remate.theme';
+const themeGet = () => { try { return localStorage.getItem(THEME_KEY); } catch { return null; } };
+export const THEMES = { auto: 'Automático (como tu celular)', light: 'Claro', dark: 'Oscuro' };
+export const getTheme = () => (THEMES[themeGet()] ? themeGet() : 'auto');
+export function applyTheme() {
+  const t = getTheme(), root = document.documentElement;
+  if (t === 'auto') root.removeAttribute('data-theme'); else root.dataset.theme = t;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t === 'dark' ? '#0F2A55' : '#12356F');
+}
+export function setTheme(t) { if (THEMES[t]) { try { localStorage.setItem(THEME_KEY, t); } catch { /* sin almacenamiento */ } applyTheme(); } }
+
+// ---------- videos de YouTube o Drive con marcas de tiempo ----------
+export function ytId(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname.endsWith('youtu.be')) return u.pathname.slice(1).split('/')[0] || null;
+    if (u.hostname.endsWith('youtube.com')) {
+      if (u.searchParams.get('v')) return u.searchParams.get('v');
+      const m = u.pathname.match(/\/(live|shorts|embed)\/([^/?]+)/);
+      if (m) return m[2];
+    }
+  } catch { /* no es URL */ }
+  return null;
+}
+export const isUrl = (s) => /^https?:\/\/\S+\.\S+/i.test(String(s || '').trim());
+// Abre el video en ese segundo (solo YouTube permite saltar al minuto desde el enlace).
+export const atTime = (url, t) => { const id = ytId(url); return id ? `https://www.youtube.com/watch?v=${id}&t=${Math.max(0, Math.floor(t || 0))}s` : url; };
+export function parseTime(s) {
+  const p = String(s || '').trim().split(':').map((x) => x.trim());
+  if (!p[0] || p.some((x) => !/^\d+$/.test(x)) || p.length > 3) return null;
+  return p.reduce((a, x) => a * 60 + Number(x), 0);
+}
+export function fmtClock(t) {
+  t = Math.max(0, Math.floor(t || 0));
+  const hh = Math.floor(t / 3600), mm = Math.floor((t % 3600) / 60), ss = String(t % 60).padStart(2, '0');
+  return hh ? `${hh}:${String(mm).padStart(2, '0')}:${ss}` : `${mm}:${ss}`;
+}

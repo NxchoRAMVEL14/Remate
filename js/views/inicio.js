@@ -6,10 +6,9 @@ import { SKILL_BY_ID } from '../content/skills.js';
 import { CHALLENGES } from '../content/challenges.js';
 import { getExercise } from '../content/exercises.js';
 import { dots, sectionTitle, empty, note, statusChip, sessionWhen } from './ui.js';
-import { playerCard, playerStats } from './card.js';
+import { playerCard, playerStats, badgesEl } from './card.js';
 import { homeWeek, planOf } from './casa.js';
 import { unseenBanner } from './avisos.js';
-import { badgesEl } from './insignias.js';
 import { isStaff } from '../store.js';
 import { PTESTS, testTrend } from '../content/pruebas.js';
 

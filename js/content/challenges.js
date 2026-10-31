@@ -45,5 +45,14 @@ export const CHALLENGES = [
     'Explica y dirige un ejercicio a compañeros de un nivel menor.', 'Lo observas.'),
   C('r-meta', 'Mi meta del mes', 'juego', 20, [1, 6],
     'Escribe tu meta del mes y cómo la vas a medir.', 'Lees la meta.'),
+  // Retos de teoría: el jugador los pide desde el examen del módulo en Teoría (8 de 10 o más). teo = módulo de js/content/teoria.js.
+  { ...C('teo-reglas', 'Teoría: el juego y sus reglas', 'juego', 30, [1, 6],
+    'Aprueba el examen del módulo «El juego y sus reglas» en Teoría con 8 de 10 o más.', 'Remate manda el resultado con la solicitud. Si quieres, hazle 2 o 3 preguntas en el entrenamiento.'), teo: 'reglas' },
+  { ...C('teo-tecnica', 'Teoría: fundamentos técnicos', 'juego', 30, [1, 6],
+    'Aprueba el examen del módulo «Fundamentos técnicos» en Teoría con 8 de 10 o más.', 'Remate manda el resultado con la solicitud. Si quieres, pídele que te explique un gesto.'), teo: 'tecnica' },
+  { ...C('teo-sistemas', 'Teoría: posiciones y sistemas', 'juego', 40, [3, 6],
+    'Aprueba el examen del módulo «Posiciones y sistemas» en Teoría con 8 de 10 o más.', 'Remate manda el resultado con la solicitud. Si quieres, pídele que acomode una recepción con 3.'), teo: 'sistemas' },
+  { ...C('teo-tactica', 'Teoría: táctica y lectura de juego', 'juego', 50, [4, 6],
+    'Aprueba el examen del módulo «Táctica y lectura de juego» en Teoría con 8 de 10 o más.', 'Remate manda el resultado con la solicitud. Si quieres, comenten juntos una jugada en video.'), teo: 'tactica' },
 ];
 export const CHALLENGE_BY_ID = Object.fromEntries(CHALLENGES.map((c) => [c.id, c]));

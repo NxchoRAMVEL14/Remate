@@ -3,6 +3,7 @@ import { h } from '../util.js';
 import { cloudConfigured } from '../cloud.js';
 import { coachSignIn, coachSignUp, playerJoin, startDemo, assistantJoin } from '../auth.js';
 import { note } from './ui.js';
+import { VERSION } from '../version.js';
 
 export function renderGate(onDone) {
   let tab = 'player';
@@ -11,7 +12,8 @@ export function renderGate(onDone) {
   const wrap = h('div', { class: 'gate' },
     h('div', {}, h('div', { class: 'brand' }, 'Remate'), h('p', { class: 'tag' }, 'Entrena voleibol de sala, de tus primeros toques al nivel competitivo.')),
     box,
-    h('button', { class: 'btn ghost', type: 'button', style: { color: '#fff' }, onclick: () => { startDemo(); onDone(); } }, 'Probar el modo demo'));
+    h('button', { class: 'btn ghost', type: 'button', style: { color: '#fff' }, onclick: () => { startDemo(); onDone(); } }, 'Probar el modo demo'),
+    h('p', { class: 'gate-ver' }, `Remate v${VERSION}`));
 
   const busy = (btn, fn) => async (e) => {
     e?.preventDefault(); const msg = box.querySelector('[data-msg]');

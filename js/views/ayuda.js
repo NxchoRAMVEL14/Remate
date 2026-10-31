@@ -1,6 +1,7 @@
 // Ayuda: cómo usar Remate, cómo funcionan niveles y asistencia, y de dónde sale cada cosa.
 import { h } from '../util.js';
 import { XP_RULES } from '../calc.js';
+import { VERSION } from '../version.js';
 
 const link = (href, text) => h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, text);
 const list = (items) => h('ul', { class: 'plain' }, items.map((x) => h('li', {}, x)));
@@ -41,6 +42,14 @@ export default function ayuda(ctx) {
       h('p', {}, 'Cada habilidad (saque, recepción, colocación, remate, bloqueo, defensa, físico y juego) se evalúa en cuatro fases: iniciación, adquisición, consolidación y refinamiento. Cada nivel pide una fase mínima por habilidad y un examen práctico.'),
       h('p', {}, 'Las fases dicen cuándo conviene presentar el examen; el examen decide si se sube. Así el nivel no cambia solo por cumplir una lista, sino por demostrarlo jugando.'),
       h('p', {}, 'Las exigencias se ajustan a la posición: un líbero no se mide en remate ni bloqueo, y se le pide una fase más en recepción y defensa; un central, una más en bloqueo.')),
+    h('section', {}, h('h2', {}, coach ? 'El radar de cada jugador' : 'Tu radar'),
+      h('p', {}, 'El radar dibuja las 8 habilidades. Del centro a la orilla van las 4 fases; el relleno amarillo es la última evaluación y la línea punteada, lo que pide el siguiente nivel según la posición.'),
+      h('p', {}, coach ? 'Cada jugador tiene en su tarjeta el botón «¿Qué dice mi radar?», con la explicación detallada de dónde va, qué le falta y cómo mejorar. Desde la ficha del jugador puedes ver exactamente lo que él lee.'
+        : h('span', {}, 'En tu tarjeta de Inicio está el botón ', h('a', { href: '#/radar' }, '«¿Qué dice mi radar?»'), ': te explica habilidad por habilidad en qué vas, qué te falta para el siguiente nivel y qué hacer para mejorar.'))),
+    h('section', {}, h('h2', {}, 'Teoría'),
+      h('p', {}, coach ? 'En Entrenamientos (y en Más) está Teoría: 24 lecciones cortas con quiz para tus jugadores. Al aprobar el examen de un módulo con 8 de 10, el jugador te pide su reto de teoría y tú lo apruebas como cualquier reto. El avance de cada quiz se guarda en el celular de cada jugador.'
+        : h('span', {}, 'En Entrenos está ', h('a', { href: '#/teoria' }, 'Teoría'), ': lecciones cortas de reglas, técnica, sistemas y táctica. Cada una cierra con un quiz. Con 8 de 10 en el examen de un módulo, puedes pedirle a tu entrenador tu reto de teoría.')),
+      coach ? h('p', {}, 'Antes y después: en la ficha del jugador compara dos fechas de evaluación. La hoja se imprime o se guarda en PDF para las juntas con familias.') : null),
     h('section', {}, h('h2', {}, 'Asistencia y puntos XP'),
       list(['Presente suma asistencia completa, retardo también cuenta como asistencia, falta resta y justificada no resta.',
         'Cada cierto número de retardos (lo eliges en Ajustes) se cuenta como una falta.',
@@ -50,6 +59,7 @@ export default function ayuda(ctx) {
         'Eficiencia de ataque = (remates punto − errores − bloqueados) ÷ remates totales. Un número positivo significa que tu ataque gana más puntos de los que regala.',
         'Con el marcador automático, cada ace, remate punto, bloqueo punto o error suma el punto solo. Si lo apagas, usa los botones +1.',
         'Los sets van a 25 con diferencia de 2 y el decisivo a 15, como en las reglas FIVB. Si tu liga usa otro formato, cierra el set cuando corresponda y termina el partido a mano.',
+        coach ? 'Torneos (en Partidos): crea el torneo con sede, fechas y rama, elige a los convocados y ellos confirman desde su celular. Agrega los partidos del torneo, escribe la tabla (tu fila se llena con tus partidos) y al final pon el lugar. Puedes filtrar por rama.' : 'Torneos: en Partidos ves los torneos de tu equipo. Si estás convocado, contesta si vas.',
         coach ? 'Tus jugadores ven el marcador y solo sus propios números. El registro jugada por jugada es solo tuyo.' : 'Tu entrenador captura tus acciones durante el partido; tú ves solo las tuyas.'])),
     coach ? h('section', {}, h('h2', {}, 'Tu laboratorio'),
       list(['Salto vertical: mide tu salto antes de empezar (semana 1) y en las semanas 5, 9 y 12. El programa es de 12 semanas, dos sesiones por semana, con peso corporal, conos, un escalón y tus polainas.',
@@ -69,12 +79,17 @@ export default function ayuda(ctx) {
         h('li', {}, 'Entrenar la toma de decisiones: ', link('https://pmc.ncbi.nlm.nih.gov/articles/PMC7277643', '“The Effect of Decision Training, from a Cognitive Perspective, on Decision-Making in Volleyball”'), ', revisión con metaanálisis de 2020.'),
         h('li', {}, 'Fuerza en menores de edad: ', link('https://pubmed.ncbi.nlm.nih.gov/19620931/', 'declaración de posición de la NSCA sobre entrenamiento de fuerza en jóvenes (2009)'), '. Por eso los ejercicios usan peso corporal, técnica y progresión, con supervisión.'),
         h('li', {}, 'Lesiones frecuentes en jóvenes voleibolistas (tobillo, rodilla, espalda baja, hombro): ', link('https://www.childrenscolorado.org/just-ask-childrens/articles/common-volleyball-injuries-in-young-athletes/', 'Children’s Hospital Colorado'), '. Base de los ejercicios de aterrizaje y prevención.'),
-        h('li', {}, 'Reglas de juego: ', link('https://www.fivb.com/volleyball/the-game/official-volleyball-rules/', 'reglas oficiales FIVB 2025-2028'), '.'),
+        h('li', {}, 'Reglas de juego: ', link('https://www.fivb.com/volleyball/the-game/official-volleyball-rules/', 'reglas oficiales FIVB 2025-2028'), ' (', link('https://www.fivb.com/wp-content/uploads/2025/01/FIVB-Volleyball_Rules2025_2028-SP-v02.pdf', 'versión en español'), '). Las lecciones de reglas de Teoría citan el número de cada regla; por ejemplo, desde 2025 solo el equipo que recibe tiene que estar en orden de rotación al momento del saque (regla 7.4).'),
+        h('li', {}, 'Tiempos de ataque (primer, segundo y tercer tiempo) y complejos de juego (K1 y K2): J. Bellendier, ', link('https://efdeportes.com/efd51/ataque1.htm', '«Ataque de rotación en el voleibol, un enfoque actualizado»'), ', EFDeportes, 2002.'),
+        h('li', {}, 'Lecciones de técnica, sistemas, táctica y su quiz, y la hoja de antes y después: propuestas de Remate basadas en práctica común de entrenamiento.'),
         h('li', {}, 'Pruebas de reglas de la FIVB para 2026 (por ejemplo, ocho sustituciones por set en algunas competencias): ', link('https://norceca.info/fivb-board-of-administration-approves-rule-tests-for-2026-competitions/', 'NORCECA'), '.'),
         h('li', {}, 'Escala de recepción de 0 a 3 y eficiencia de ataque: son las medidas más comunes en la estadística de voleibol; la forma exacta de capturarlas en Remate es propia.'),
+        h('li', {}, 'Prueba de velocidad de 10 m (salida parada, tres intentos con descanso; mejor con fotoceldas que con cronómetro): ', link('https://www.scienceforsport.com/10m-sprint-test/', 'Science for Sport, «10m Sprint Test»'), '.'),
         h('li', {}, 'Prueba de agilidad T: ', link('https://www.topendsports.com/testing/tests/t-test.htm', 'descripción del protocolo'), ', con la referencia de Pauole y colaboradores (J Strength Cond Res, 2000) sobre su confiabilidad.'),
         h('li', {}, 'Notificaciones: usan Web Push con una función de Supabase (', link('https://supabase.com/docs/guides/functions', 'Edge Functions'), '). En iPhone solo llegan con la app instalada en la pantalla de inicio.'),
         h('li', {}, 'Side-out, break point, insignias, bloques de temporada y tareas de casa: propuestas de Remate basadas en práctica común de entrenamiento, no en un estudio.'))),
+    h('section', {}, h('h2', {}, 'Versión'),
+      h('p', {}, `Estás usando Remate ${VERSION}. `, h('a', { href: '#/novedades' }, 'Ver qué cambió en cada versión'), '.')),
     h('section', { class: 'note warn' }, h('strong', {}, 'Importante: '), 'Remate no sustituye a un médico ni a un entrenador titulado. Si un jugador siente dolor, se detiene. Si dudas de una carga o de una lesión, consulta a un profesional.'));
   return { title: 'Ayuda', el };
 }

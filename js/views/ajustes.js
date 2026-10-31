@@ -1,12 +1,12 @@
 // Ajustes: equipo, días de entrenamiento, apariencia, respaldo, privacidad y cuenta.
-import { h, ic, toast, confirmSheet, openSheet, download, copyText, shareText, fmtDate, newJoinCode, DAYS, DAYS_LONG, plural } from '../util.js';
+import { h, ic, toast, confirmSheet, openSheet, download, copyText, shareText, fmtDate, newJoinCode, DAYS, DAYS_LONG, plural, THEMES, getTheme, setTheme } from '../util.js';
 import { state, group, settings, saveSettings, add, patch, remove, players, sessions, exportBackup, importBackup, refresh, pendingCount, teamReady } from '../store.js';
 import { pushSettings } from './avisos.js';
 import { disablePush } from '../push.js';
 import { attendanceFor, doneSessions } from '../calc.js';
 import { leave, restartDemo } from '../auth.js';
-import { THEMES, getTheme, setTheme } from '../theme.js';
 import { sectionTitle, note, field, options } from './ui.js';
+import { aboutSection } from './novedades.js';
 
 function attendanceCsv() {
   const done = doneSessions(sessions()), list = players(), st = settings();
@@ -58,6 +58,20 @@ function newStaffSheet() {
       setTimeout(() => inviteSheet(st), 50); return true;
     } }] });
 }
+// Elegir capitanes desde aquí (también se puede en la ficha de cada jugador).
+function captainsSheet() {
+  const sel = new Set(players().filter((p) => p.captain).map((p) => p.id));
+  const count = h('span', { class: 'chip ball' }, `${sel.size} capitanes`);
+  const list = h('div', { class: 'rows roster-pick' }, players().map((p) => h('label', { class: 'row check-row' },
+    h('span', { class: 'row-main' }, h('strong', {}, p.name), h('span', { class: 'row-sub' }, p.user_id ? 'Ya entra a Remate con su código' : 'Todavía no usa su código')),
+    h('input', { type: 'checkbox', checked: sel.has(p.id) ? true : null, 'aria-label': `Capitán: ${p.name}`, onchange: (e) => { if (e.target.checked) sel.add(p.id); else sel.delete(p.id); count.textContent = `${sel.size} capitanes`; } }))));
+  openSheet({ title: 'Capitanes', body: h('div', { class: 'stack' }, count, list,
+    note('El capitán entra con su mismo código y además puede pasar lista y capturar partidos. No ve notas, evaluaciones de otros, reportes ni tu laboratorio.')),
+    actions: [{ label: 'Cancelar' }, { label: 'Guardar', kind: 'primary', onClick: () => {
+      let n = 0;
+      for (const p of players()) { const want = sel.has(p.id); if (!!p.captain !== want) { patch('players', p.id, { captain: want }); n++; } }
+      toast(n ? 'Capitanes guardados' : 'Sin cambios'); return true; } }] });
+}
 function supportSection() {
   const staff = state.data.staff.slice().sort((a, b) => a.name.localeCompare(b.name, 'es'));
   const caps = players().filter((p) => p.captain);
@@ -66,7 +80,8 @@ function supportSection() {
     h('p', { style: { margin: 0 } }, 'Ayudantes que pueden pasar lista y capturar partidos. Nunca ven notas privadas, evaluaciones, reportes ni tu laboratorio.'),
     h('h3', {}, 'Capitanes'),
     caps.length ? h('div', { class: 'rows' }, caps.map((p) => h('a', { class: 'row', href: `#/jugador/${p.id}` }, h('span', { class: 'row-main' }, h('strong', {}, p.name), h('span', { class: 'row-sub' }, 'Entra con su mismo código')), ic('chevron-right', 18))))
-      : h('p', { class: 'row-sub', style: { margin: 0 } }, 'Ninguno. Márcalo en la ficha del jugador con la casilla "Capitán".'),
+      : h('p', { class: 'row-sub', style: { margin: 0 } }, 'Ninguno todavía.'),
+    h('div', { class: 'cluster' }, h('button', { class: 'btn', type: 'button', disabled: teamReady() ? null : true, onclick: captainsSheet }, ic('shield', 18), 'Elegir capitanes')),
     h('h3', {}, 'Asistentes adultos'),
     staff.length ? h('div', { class: 'rows' }, staff.map((st) => h('div', { class: 'row', style: { flexWrap: 'wrap' } },
       h('span', { class: 'row-main', style: { flex: '1 1 180px' } }, h('strong', {}, st.name),
@@ -87,6 +102,7 @@ function asistente() {
   return { title: 'Ajustes', el: h('div', { class: 'page' },
     h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField()),
     h('section', { class: 'stack' }, sectionTitle('Notificaciones'), pushSettings()),
+    aboutSection(),
     h('section', { class: 'stack' }, sectionTitle('Cuenta'),
       h('p', { style: { margin: 0 } }, `Entraste como asistente${state.email ? ` (${state.email})` : ''} de ${group()?.name || 'tu equipo'}. Ves la lista del equipo, pasas lista y capturas partidos; no ves datos privados de los jugadores.`),
       h('div', { class: 'cluster' }, h('button', { class: 'btn', type: 'button', onclick: () => signOut() }, ic('log-out', 18), 'Cerrar sesión'),
@@ -114,7 +130,8 @@ function coach() {
     h('section', { class: 'stack' }, sectionTitle('Entrenamientos'),
       h('div', { class: 'field' }, h('span', { class: 'label' }, 'Días de entrenamiento'), days),
       h('div', { class: 'grid' }, field('Hora de inicio', start), field('Duración (min)', mins)),
-      field('Retardos que cuentan como 1 falta', late, 'Pon 0 para que los retardos nunca se conviertan en faltas. Las faltas justificadas no restan.')),
+      field('Retardos que cuentan como 1 falta', late, 'Pon 0 para que los retardos nunca se conviertan en faltas. Las faltas justificadas no restan.'),
+      field('Pruebas físicas cada (semanas)', h('input', { type: 'number', min: 4, max: 26, inputmode: 'numeric', value: st.tests_every || 10, onchange: (e) => { saveSettings({ tests_every: Math.min(26, Math.max(4, Number(e.target.value) || 10)) }); toast('Guardado'); } }), 'Cada cuánto te recuerdo en Hoy medir salto, velocidad de 10 m y plancha. 8 a 13 semanas son 2 a 3 meses.')),
     supportSection(),
     h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField()),
     h('section', { class: 'stack' }, sectionTitle('Tus datos'),
@@ -132,6 +149,7 @@ function coach() {
         h('li', {}, 'Cada jugador solo ve lo suyo: su tarjeta, su asistencia y los entrenamientos que publiques. Tus notas privadas nunca se muestran.'),
         h('li', {}, 'Si cambia de celular o se comparte su código, genera uno nuevo en su ficha: el celular anterior pierde el acceso.'),
         h('li', {}, 'Puedes eliminar a un jugador en cualquier momento; se borra todo su historial.'))),
+    aboutSection(),
     h('section', { class: 'stack' }, sectionTitle('Cuenta'),
       state.mode === 'demo' ? h('p', { style: { margin: 0 } }, 'Estás en modo demo, sin cuenta.') : h('p', { style: { margin: 0 } }, `Entraste como ${state.email || 'entrenador'}.`),
       h('div', { class: 'cluster' }, h('button', { class: 'btn', type: 'button', onclick: () => signOut() }, ic('log-out', 18), state.mode === 'demo' ? 'Salir del demo' : 'Cerrar sesión'),
@@ -146,6 +164,7 @@ function jugador(ctx) {
     ctx.readonly ? null : h('section', { class: 'stack' }, sectionTitle('Notificaciones'), pushSettings()),
     h('section', { class: 'stack' }, sectionTitle('Tu información'),
       h('p', { style: { margin: 0 } }, `Tu entrenador guarda tu nombre o apodo${me ? ` (${me.name})` : ''}, tu posición, tus evaluaciones y tu asistencia. No guarda teléfono, domicilio ni fotos. Solo tú y tu entrenador ven tu avance. Si quieres que se corrija o se borre algo, pídeselo a tu entrenador.`)),
+    aboutSection(),
     ctx.readonly ? note('Vista previa: aquí no se cierra la sesión del jugador.', 'warn') : h('section', { class: 'stack' }, sectionTitle('Este celular'),
       h('p', { style: { margin: 0 } }, 'Si sales, vas a necesitar tu código otra vez para volver a entrar.'),
       h('div', { class: 'cluster' }, h('button', { class: 'btn', type: 'button', onclick: async () => { if (await confirmSheet({ title: '¿Salir de Remate en este celular?', text: 'Para volver a entrar necesitarás tu código.', ok: 'Salir', danger: true })) signOut(); } }, ic('log-out', 18), 'Salir'),

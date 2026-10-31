@@ -68,11 +68,11 @@ export function makeDemoPhase2({ R, players, sessions, gid }) {
     const slots = ['demo-p1', 'demo-p3', 'demo-p4', 'demo-p2', 'demo-p6', 'demo-p7'];   // colocadora en 1, opuesto en 4, puntas en 2 y 5, centrales en 3 y 6
     const lineups = [{ slots, libero: 'demo-p5', serve: 'us' }, { slots, libero: 'demo-p5', serve: 'them' }, { slots, libero: 'demo-p5', serve: 'us' }];
     matches.push({ id: m.id, owner_id: own, group_id: gid, match_date: addDays(today, m.d), rival: m.rival, venue: m.venue, kind: m.kind, best_of: 3,
-      sets: storedSets(sc), status: 'terminado', note: '', lineups, video: {}, created_at: iso(-m.d) });
+      sets: storedSets(sc), status: 'terminado', note: '', lineups, video: {}, tournament_id: m.id === 'demo-m1' ? 'demo-t1' : null, created_at: iso(-m.d) });
     matchLogs.push({ id: `${m.id}-log`, owner_id: own, match_id: m.id, log, created_at: iso(-m.d) });
     for (const pid of playersIn(log)) matchStats.push({ id: `${m.id}-${pid}`, owner_id: own, match_id: m.id, player_id: pid, counts: countsFor(log, pid), created_at: iso(-m.d) });
   }
-  matches.push({ id: 'demo-m3', owner_id: own, group_id: gid, match_date: addDays(today, 9), rival: 'Instituto Juárez', venue: 'Casa', kind: 'torneo', best_of: 3, sets: [], status: 'planeado', note: 'Llegar 45 minutos antes para calentar.', created_at: iso(0) });
+  matches.push({ id: 'demo-m3', owner_id: own, group_id: gid, match_date: addDays(today, 9), rival: 'Instituto Juárez', venue: 'Casa', kind: 'torneo', best_of: 3, sets: [], status: 'planeado', note: 'Llegar 45 minutos antes para calentar.', tournament_id: 'demo-t2', created_at: iso(0) });
 
   // ---------- laboratorio de salto ----------
   const start = addDays(weekStart(today), -28);                     // hace 4 semanas: hoy cae en la semana 5
@@ -125,9 +125,9 @@ export function makeDemoPhase2({ R, players, sessions, gid }) {
     .map(([pid, status], i) => ({ id: `demo-rv-${i}`, owner_id: own, match_id: 'demo-m3', player_id: pid, status, note: '', updated_at: iso(1), created_at: iso(1) }));
   const PT = (pid, d, kind, value) => ({ id: `demo-pt-${pid}-${kind}-${d}`, owner_id: own, player_id: pid, test_date: addDays(today, d), kind, value, note: '', created_at: iso(-d) });
   const playerTests = [];
-  [['demo-p1', 31, 30.5, 228, 11.9, 55], ['demo-p2', 45, 47.5, 302, 10.4, 90], ['demo-p3', 34, 36.0, 262, 11.2, 70], ['demo-p4', 41, 41.5, 296, 11.0, 60], ['demo-p5', 33, 35.5, 245, 10.8, 95], ['demo-p6', 38, 40.0, 281, 10.9, 65]]
-    .forEach(([pid, a, b, reach, agil, plank]) => {
-      playerTests.push(PT(pid, -70, 'cmj', a), PT(pid, -8, 'cmj', b), PT(pid, -70, 'alcance', reach - 4), PT(pid, -8, 'alcance', reach),
+  [['demo-p1', 31, 30.5, 228, 11.9, 55, 2.21], ['demo-p2', 45, 47.5, 302, 10.4, 90, 1.92], ['demo-p3', 34, 36.0, 262, 11.2, 70, 2.12], ['demo-p4', 41, 41.5, 296, 11.0, 60, 1.98], ['demo-p5', 33, 35.5, 245, 10.8, 95, 2.05], ['demo-p6', 38, 40.0, 281, 10.9, 65, 2.01]]
+    .forEach(([pid, a, b, reach, agil, plank, v10]) => {
+      playerTests.push(PT(pid, -70, 'vel10', Math.round((v10 + 0.09) * 100) / 100), PT(pid, -8, 'vel10', v10),PT(pid, -70, 'cmj', a), PT(pid, -8, 'cmj', b), PT(pid, -70, 'alcance', reach - 4), PT(pid, -8, 'alcance', reach),
         PT(pid, -70, 'agilidad', Math.round((agil + 0.4) * 100) / 100), PT(pid, -8, 'agilidad', agil), PT(pid, -70, 'plancha', plank - 15), PT(pid, -8, 'plancha', plank));
     });
   const notices = [
@@ -145,5 +145,19 @@ export function makeDemoPhase2({ R, players, sessions, gid }) {
     { id: 'demo-b3', name: 'Competencia', start: addDays(blockStart, 28), weeks: 4, focus: ['juego', 'saque'], templates: ['t-situacional-90'], note: 'Juego situacional antes del torneo.' },
   ];
 
-  return { matches, matchLogs, matchStats, coachProfile, jumpTests, jumpSessions, coachLogs, coachAssess, decisions, homeLogs, ideas, rsvps, playerTests, notices, staff, seasonPlan };
+  // ---------- v3.3: torneos (uno terminado, uno próximo y uno femenil más adelante) ----------
+  const tournaments = [
+    { id: 'demo-t1', owner_id: own, group_id: gid, name: 'Copa de Otoño', venue: 'Gimnasio municipal', start_date: addDays(today, -17), end_date: addDays(today, -16), branch: 'X',
+      roster: ['demo-p1', 'demo-p2', 'demo-p3', 'demo-p4', 'demo-p5', 'demo-p6', 'demo-p7'], place: 2, result: 'Perdimos la final 2-1', note: '',
+      standings: [{ team: 'Prepa demo · Voleibol', us: true, pj: 3, pg: 2, pp: 1, sf: 5, sc: 3, pts: 6 }, { team: 'Prepa Las Lomas', pj: 3, pg: 1, pp: 2, sf: 3, sc: 4, pts: 3 },
+        { team: 'CBTis 75', pj: 3, pg: 3, pp: 0, sf: 6, sc: 1, pts: 9 }, { team: 'Colegio Arboleda', pj: 3, pg: 0, pp: 3, sf: 1, sc: 6, pts: 0 }], created_at: iso(20) },
+    { id: 'demo-t2', owner_id: own, group_id: gid, name: 'Torneo Interprepas', venue: 'Casa', start_date: addDays(today, 9), end_date: addDays(today, 10), branch: 'X',
+      roster: ['demo-p1', 'demo-p2', 'demo-p3', 'demo-p4', 'demo-p5', 'demo-p6', 'demo-p8', 'demo-p11'], place: null, result: '', note: 'Uniforme azul. Llevar agua y comida para todo el día.', standings: [], created_at: iso(2) },
+    { id: 'demo-t3', owner_id: own, group_id: gid, name: 'Liga Estatal Femenil', venue: 'Unidad deportiva', start_date: addDays(today, 23), end_date: addDays(today, 24), branch: 'F',
+      roster: ['demo-p1', 'demo-p3', 'demo-p5', 'demo-p7', 'demo-p9', 'demo-p11'], place: null, result: '', note: '', standings: [], created_at: iso(1) },
+  ];
+  const tRsvps = [['demo-p1', 'voy'], ['demo-p2', 'voy'], ['demo-p3', 'duda'], ['demo-p5', 'voy'], ['demo-p8', 'no']]
+    .map(([pid, status], i) => ({ id: `demo-trv-${i}`, owner_id: own, tournament_id: 'demo-t2', player_id: pid, status, note: '', updated_at: iso(1), created_at: iso(1) }));
+
+  return { matches, matchLogs, matchStats, coachProfile, jumpTests, jumpSessions, coachLogs, coachAssess, decisions, homeLogs, ideas, rsvps, playerTests, notices, staff, seasonPlan, tournaments, tRsvps };
 }

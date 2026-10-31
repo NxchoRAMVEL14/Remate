@@ -1,6 +1,6 @@
 // "Hoy": lo próximo que viene y lo que necesita tu atención.
 import { h, ic, plural, toast, todayStr, fmtDate, sum } from '../util.js';
-import { state, players, sessions, pendingClaims, getPlayer, settings, resolveClaim } from '../store.js';
+import { state, players, sessions, pendingClaims, getPlayer, settings, resolveClaim, teamReady, torneosReady } from '../store.js';
 import { levelGap, attendanceFor, nextSession, planMinutes, focusOf, levelCounts, hasRatings, doneSessions } from '../calc.js';
 import { SKILL_BY_ID } from '../content/skills.js';
 import { LEVELS } from '../content/levels.js';
@@ -13,6 +13,8 @@ import { openCourtMode } from './court-mode.js';
 import { noticeSheet, recentNotices } from './avisos.js';
 import { currentBlock } from './temporada.js';
 import { rsvpCounts } from './partido-summary.js';
+import { tournamentsNeedingAnswers } from './torneos.js';
+import { testsDue, testsEvery } from './pruebas.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
 
@@ -91,12 +93,28 @@ export default function hoy() {
   const unrated = list.filter((p) => !hasRatings(p.id, state.data.ratings));
   const todo = h('div', { class: 'stack' });
 
+  // Torneos que empiezan pronto con convocados sin contestar.
+  const tq = torneosReady() ? tournamentsNeedingAnswers() : [];
+  if (tq.length) {
+    todo.append(h('div', { class: 'rows', 'aria-label': 'Torneos por confirmar' }, tq.map(({ t, c }) => h('a', { class: 'row', href: `#/torneo/${t.id}` },
+      h('span', { class: 'jersey off', 'aria-hidden': 'true' }, ic('trophy', 20)),
+      h('span', { class: 'row-main' }, h('strong', {}, t.name), h('span', { class: 'row-sub' }, `Empieza el ${fmtDate(t.start_date, { weekday: 'long', day: 'numeric', month: 'short' })}. Van ${c.voy}; faltan ${c.missing.length} por contestar.`)),
+      ic('chevron-right', 18)))));
+  }
+  // Recordatorio de pruebas físicas (cada cuántas semanas lo eliges en Ajustes).
+  const due = teamReady() && list.length ? testsDue() : null;
+  if (due?.due) {
+    todo.append(h('div', { class: 'rows' }, h('a', { class: 'row', href: '#/pruebas' }, h('span', { class: 'jersey off', 'aria-hidden': 'true' }, ic('ruler', 20)),
+      h('span', { class: 'row-main' }, h('strong', {}, 'Toca medir pruebas físicas'), h('span', { class: 'row-sub' }, due.last ? `La última fue hace ${Math.round(due.days / 7)} semanas (cada ${testsEvery()} semanas). Salto, velocidad de 10 m y plancha.` : 'Todavía no hay pruebas. Mide salto, velocidad de 10 m y plancha para tener su punto de partida.')),
+      ic('chevron-right', 18))));
+  }
+
   if (claims.length) {
     todo.append(h('div', { class: 'rows', 'aria-label': 'Retos por aprobar' }, claims.map((c) => {
       const p = getPlayer(c.player_id), ch = CHALLENGE_BY_ID[c.challenge_id];
       if (!p || !ch) return null;
       return h('div', { class: 'row', style: { flexWrap: 'wrap' } }, jersey(p),
-        h('span', { class: 'row-main', style: { flex: '1 1 200px' } }, h('strong', {}, p.name), h('span', { class: 'row-sub' }, `Pide aprobar: ${ch.name} (${ch.xp} XP). ${ch.verify}`)),
+        h('span', { class: 'row-main', style: { flex: '1 1 200px' } }, h('strong', {}, p.name), h('span', { class: 'row-sub' }, `Pide aprobar: ${ch.name} (${ch.xp} XP).${c.note ? ` ${c.note}.` : ''} ${ch.verify}`)),
         h('span', { class: 'row-end', style: { marginLeft: 'auto' } },
           h('button', { class: 'btn sm primary', type: 'button', onclick: () => { resolveClaim(c.id, true); toast(`Reto aprobado: +${ch.xp} XP para ${p.name}`); } }, 'Aprobar'),
           h('button', { class: 'btn sm', type: 'button', onclick: () => { resolveClaim(c.id, false); toast('Reto rechazado'); } }, 'Rechazar')));

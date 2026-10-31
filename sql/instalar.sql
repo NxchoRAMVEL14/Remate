@@ -1,5 +1,6 @@
 -- Remate · instalación completa para Supabase (SQL Editor → pega todo → Run).
--- Incluye: núcleo, laboratorio y partidos, En casa y mejoras, y equipo de apoyo (ayudantes, convocatoria, pruebas, avisos).
+-- Incluye: núcleo, laboratorio y partidos, En casa y mejoras, equipo de apoyo (ayudantes, convocatoria, pruebas, avisos)
+-- y torneos con su convocatoria y la prueba de 10 m (v3.3).
 -- Es seguro correrlo más de una vez: no borra datos.
 
 -- =====================================================================
@@ -896,4 +897,132 @@ grant select, insert, update, delete on
   public.staff, public.match_rsvps, public.player_tests, public.notices, public.push_subscriptions
   to authenticated;
 
+
+-- =====================================================================
+-- REMATE · v3.3: torneos (con convocatoria) y prueba de velocidad de 10 m
+-- Va después de 01 a 05 (si usas instalar.sql ya viene incluido).
+-- Es seguro correrlo más de una vez. Solo agrega: no borra datos.
+--
+-- Torneos: agrupan partidos, con sede, fechas, rama, convocados, tabla de posiciones y resultado final.
+--   · El entrenador los crea y edita.
+--   · Los ayudantes (asistente o capitán) los ven y pueden capturar sus partidos.
+--   · Los jugadores ven los torneos de su grupo; si están convocados, confirman si van.
+-- =====================================================================
+
+-- ---------- Torneos ----------
+create table if not exists public.tournaments (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  group_id uuid not null references public.groups(id) on delete cascade,
+  name text not null check (char_length(name) between 1 and 80),
+  venue text not null default '' check (char_length(venue) <= 120),
+  start_date date not null default current_date,
+  end_date date,
+  branch text not null default 'X' check (branch in ('F', 'M', 'X')),      -- femenil, varonil o mixto
+  roster jsonb not null default '[]'::jsonb,                                -- ids de los jugadores convocados
+  standings jsonb not null default '[]'::jsonb,                             -- tabla: [{ team, pj, pg, pp, sf, sc, pts, us }]
+  place smallint check (place between 1 and 64),                            -- lugar final (1 = campeón)
+  result text not null default '' check (char_length(result) <= 120),
+  note text not null default '' check (char_length(note) <= 1000),
+  created_at timestamptz not null default now(),
+  constraint tournaments_dates_check check (end_date is null or end_date >= start_date)
+);
+create index if not exists tournaments_group_idx on public.tournaments (group_id, start_date desc);
+
+-- Un partido puede pertenecer a un torneo (si se borra el torneo, el partido se queda sin torneo).
+alter table public.matches add column if not exists tournament_id uuid references public.tournaments(id) on delete set null;
+create index if not exists matches_tournament_idx on public.matches (tournament_id);
+
+-- Convocatoria del torneo: el jugador convocado contesta si va.
+create table if not exists public.tournament_rsvps (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  tournament_id uuid not null references public.tournaments(id) on delete cascade,
+  player_id uuid not null references public.players(id) on delete cascade,
+  status text not null check (status in ('voy', 'no', 'duda')),
+  note text not null default '' check (char_length(note) <= 200),
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (tournament_id, player_id)
+);
+
+-- ---------- Prueba física nueva: velocidad de 10 m (vel10) ----------
+do $$
+declare c record;
+begin
+  for c in select conname from pg_constraint
+            where conrelid = 'public.player_tests'::regclass and contype = 'c' and pg_get_constraintdef(oid) ilike '%kind%'
+  loop
+    execute format('alter table public.player_tests drop constraint %I', c.conname);
+  end loop;
+end $$;
+alter table public.player_tests add constraint player_tests_kind_check
+  check (kind in ('cmj', 'alcance', 'agilidad', 'plancha', 'estatura', 'vel10'));
+
+-- ---------- Dueño automático (se agrega la convocatoria del torneo) ----------
+create or replace function public.set_owner_from_parent() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare o uuid;
+begin
+  if tg_op = 'UPDATE' then new.owner_id := old.owner_id; return new; end if;
+  if tg_table_name = 'attendance' then select owner_id into o from public.sessions where id = new.session_id;
+  elsif tg_table_name = 'matches' then select owner_id into o from public.groups where id = new.group_id;
+  elsif tg_table_name in ('match_logs', 'match_stats', 'match_rsvps') then select owner_id into o from public.matches where id = new.match_id;
+  elsif tg_table_name = 'tournament_rsvps' then select owner_id into o from public.tournaments where id = new.tournament_id;
+  end if;
+  if o is null then raise exception 'parent_not_found' using errcode = 'P0002'; end if;
+  new.owner_id := o;
+  return new;
+end $$;
+drop trigger if exists set_owner on public.tournament_rsvps;
+create trigger set_owner before insert or update on public.tournament_rsvps for each row execute function public.set_owner_from_parent();
+
+-- ---------- Seguridad ----------
+alter table public.tournaments      enable row level security;
+alter table public.tournament_rsvps enable row level security;
+
+-- Entrenador: control total sobre lo suyo.
+do $$
+declare r record;
+begin
+  for r in
+    select * from (values
+      ('tournaments',      'group_id in (select id from public.groups where owner_id = auth.uid())'),
+      ('tournament_rsvps', 'tournament_id in (select id from public.tournaments where owner_id = auth.uid())
+                            and player_id in (select id from public.players where owner_id = auth.uid())')
+    ) as v(tbl, chk)
+  loop
+    execute format('drop policy if exists %I on public.%I', r.tbl || '_coach', r.tbl);
+    execute format(
+      'create policy %I on public.%I for all to authenticated
+         using (owner_id = auth.uid() and public.is_coach())
+         with check (owner_id = auth.uid() and public.is_coach() and (%s))',
+      r.tbl || '_coach', r.tbl, r.chk);
+  end loop;
+end $$;
+
+-- Jugador: ve los torneos de su grupo y contesta su propia convocatoria (solo si está convocado).
+drop policy if exists tournaments_player_read on public.tournaments;
+create policy tournaments_player_read on public.tournaments for select to authenticated
+  using (group_id in (select public.my_group_ids()));
+drop policy if exists tournament_rsvps_player on public.tournament_rsvps;
+create policy tournament_rsvps_player on public.tournament_rsvps for all to authenticated
+  using (player_id in (select public.my_player_ids()))
+  with check (player_id in (select public.my_player_ids())
+              and exists (select 1 from public.tournaments t
+                           where t.id = tournament_id
+                             and t.group_id in (select public.my_group_ids())
+                             and t.roster ? player_id::text));
+
+-- Ayudantes (asistente o capitán): ven los torneos de su grupo y quién confirmó.
+drop policy if exists tournaments_staff_read on public.tournaments;
+create policy tournaments_staff_read on public.tournaments for select to authenticated
+  using (group_id in (select public.my_staff_group_ids()));
+drop policy if exists tournament_rsvps_staff_read on public.tournament_rsvps;
+create policy tournament_rsvps_staff_read on public.tournament_rsvps for select to authenticated
+  using (tournament_id in (select id from public.tournaments where group_id in (select public.my_staff_group_ids())));
+
+-- ---------- Permisos ----------
+revoke all on public.tournaments, public.tournament_rsvps from anon;
+grant select, insert, update, delete on public.tournaments, public.tournament_rsvps to authenticated;
 

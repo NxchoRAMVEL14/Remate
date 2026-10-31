@@ -1,6 +1,8 @@
 // "Más": todo lo que no cabe en la barra de abajo del celular.
 import { h, ic } from '../util.js';
 import { state, pendingClaims } from '../store.js';
+import { VERSION } from '../version.js';
+import { unseenUpdate } from './novedades.js';
 
 export default function mas() {
   const item = (href, icon, title, text, badge) => h('a', { class: 'labcard', href },
@@ -12,8 +14,11 @@ export default function mas() {
     item('#/ejercicios', 'book-open', 'Ejercicios', 'La biblioteca con diagramas, progresiones y tus ejercicios propios.'),
     item('#/ruta', 'flag', 'Ruta', 'Los 6 niveles, exámenes y retos de tus jugadores.', claims ? `${claims} por revisar` : null),
     item('#/reportes', 'file-text', 'Reportes', 'Reportes imprimibles por jugador y del grupo.'),
+    item('#/teoria', 'notebook-pen', 'Teoría', 'Lecciones de reglas, técnica, sistemas y táctica para tus jugadores.'),
     item('#/casa', 'house', 'En casa', 'Rutinas opcionales para tus jugadores y quién está entrenando en casa.'),
     item('#/mejoras', 'lightbulb', 'Mejoras de la app', 'Tu lista privada de cambios e ideas para Remate.', ideasPending ? `${ideasPending} pendientes` : null),
     item('#/ajustes', 'settings', 'Ajustes', 'Equipo, días de entrenamiento, respaldo y cuenta.'),
-    item('#/ayuda', 'circle-help', 'Ayuda y fuentes', 'Cómo funciona Remate y de dónde viene la información.'))) };
+    item('#/ayuda', 'circle-help', 'Ayuda y fuentes', 'Cómo funciona Remate y de dónde viene la información.'),
+    item('#/novedades', 'sparkles', 'Novedades', `Qué cambió en cada versión. Estás en la ${VERSION}.`, unseenUpdate() ? 'Nuevo' : null)),
+    h('p', { class: 'row-sub', style: { textAlign: 'center' } }, `Remate v${VERSION}`)) };
 }

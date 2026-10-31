@@ -1,8 +1,12 @@
 # Remate: guía para subirlo (GitHub + Supabase)
 
-Remate es una app para entrenar voleibol de sala con chavos de prepa, del primer toque al nivel competitivo. Se instala en el celular como Escuadra (PWA). Esta es la **versión 3**: el núcleo (jugadores, niveles, ejercicios, entrenamientos y asistencia), **partidos con estadística en vivo, rotaciones, side-out y break point, mapa de saque y ataque y video**, **convocatoria**, **ayudantes** (capitán y asistente adulto), **pruebas físicas**, **insignias**, **planeador de temporada**, **avisos** (en la app, WhatsApp y notificación al celular), **reportes imprimibles**, tu **laboratorio** (salto vertical, visión de juego y coaching), **En casa** con tareas por jugador y tu lista privada de **Mejoras**. Sin configurar nada, abre en **modo demo** con datos de ejemplo.
+Remate es una app para entrenar voleibol de sala con chavos de prepa, del primer toque al nivel competitivo. Se instala en el celular como Escuadra (PWA). Esta es la **versión 3.3.0** (el número se ve en la entrada, en *Ajustes → Acerca de Remate* y en *Novedades*): el núcleo (jugadores, niveles, ejercicios, entrenamientos y asistencia), **partidos con estadística en vivo, rotaciones, side-out y break point, mapa de saque y ataque y video**, **convocatoria**, **ayudantes** (capitán y asistente adulto), **pruebas físicas**, **insignias**, **planeador de temporada**, **avisos** (en la app, WhatsApp y notificación al celular), **reportes imprimibles**, tu **laboratorio** (salto vertical, visión de juego y coaching), **En casa** con tareas por jugador y tu lista privada de **Mejoras**. Sin configurar nada, abre en **modo demo** con datos de ejemplo.
 
 > **¿Ya subiste una versión anterior?** Salta a la sección **0. Actualizar desde una versión anterior**.
+>
+> **Para pasar a la 3.3.0 sí hay SQL nuevo (torneos y prueba de 10 m):** primero corre en Supabase el `sql/instalar.sql` de este ZIP (SQL Editor → New query → pega todo → Run). Es seguro correrlo aunque ya hayas corrido los anteriores: solo agrega 2 tablas (torneos y su convocatoria), 1 columna en partidos y permite la prueba de 10 m; no borra datos. Después arrastra los archivos a GitHub. Si subes los archivos antes, no se rompe nada: Torneos muestra un aviso rojo y la prueba de 10 m no aparece hasta que corras el SQL.
+>
+> **Archivos que ya no se usan:** `js/theme.js` y `js/video.js` (desde la 3.2.0 viven en `js/util.js`) y `js/views/insignias.js` (desde la 3.3.0 vive en `js/views/card.js`). Si están en tu repositorio, no estorban; puedes borrarlos cuando quieras.
 
 Tiempo estimado: 25 minutos. Orden recomendado: 1) Supabase, 2) GitHub, 3) conectar las dos.
 
@@ -31,7 +35,7 @@ Crea un proyecto **nuevo y separado** de Escuadra y Brida: aquí habrá datos de
 ## 2. GitHub (para publicar la app)
 
 1. Crea un repositorio nuevo, por ejemplo `remate`. Públicos funcionan gratis con GitHub Pages; uno privado necesita plan de pago.
-2. Descomprime el ZIP en tu computadora. Entra a la carpeta y selecciona **todo lo que hay dentro** (index.html, css, js, fonts, icons, vendor, sql, etc.). Arrástralo a la página del repositorio (*uploading an existing file*) y da **Commit changes**. Tiene 96 archivos, debajo del límite de 100 por carga.
+2. Descomprime el ZIP en tu computadora. Entra a la carpeta y selecciona **todo lo que hay dentro** (index.html, css, js, fonts, icons, vendor, sql, etc.). Arrástralo a la página del repositorio (*uploading an existing file*) y da **Commit changes**. Tiene 99 archivos, justo debajo del límite de 100 por carga.
    Importante: `index.html` debe quedar en la raíz del repositorio, no dentro de otra carpeta.
 3. En el repositorio: **Settings → Pages**. En *Source* elige **Deploy from a branch**, rama **main**, carpeta **/ (root)** y guarda. En uno o dos minutos aparece la dirección, algo como `https://tuusuario.github.io/remate/`.
 4. Esa es la dirección que abres en el celular. Si usas confirmación de correo, es la que pones como *Site URL* en Supabase.
@@ -95,12 +99,18 @@ Probar sin tocar Supabase: deja `config.js` vacío y abre la app, o usa **Probar
 - **Rotaciones:** al empezar cada set, *Poner alineación* (zonas 1 a 6, líbero y quién saca). La cancha de la captura sigue la rotación sola y registra los cambios. Con eso el resumen te dice **side-out** (puntos ganados recibiendo), **break point** (ganados sacando) y la **rotación más débil**.
 - **Marcar zona:** enciéndelo en la captura y, después de un saque o un ataque, toca dónde cayó. El resumen y la lista de partidos muestran el **mapa** del equipo o de cada jugador.
 - **Video:** en el resumen del partido pega el enlace de YouTube (puede ser *No listado*) o Drive y agrega **marcas** con su minuto. En YouTube, la marca abre el video justo ahí. También puedes poner video a cada ejercicio.
-- **Convocatoria:** los partidos próximos aparecen a tus jugadores con *Voy / En duda / No voy*. Tú ves quién falta por contestar y puedes recordarles por WhatsApp.
-- **Ayudantes:** el **capitán** (casilla en la ficha del jugador) entra con su mismo código; el **asistente adulto** entra con correo y el código de invitación de *Ajustes → Equipo de apoyo*. Los dos pasan lista y capturan partidos; nunca ven notas, evaluaciones, reportes, pruebas de otros ni tu laboratorio. Lo que capturan queda a tu nombre. Puedes quitarles el acceso cuando quieras.
-- **Pruebas físicas** (*Jugadores → Pruebas físicas*): salto, alcance de remate, agilidad (prueba T), plancha y estatura. Captura rápida para todo el equipo y gráfica de avance por jugador; cada jugador ve solo las suyas.
+- **Convocatoria:** los partidos próximos aparecen a tus jugadores con *Voy / En duda / No voy*. Tú ves quién falta por contestar y puedes recordarles por WhatsApp. Los partidos de un torneo se confirman una sola vez, en el torneo.
+- **Torneos** (*Partidos → Nuevo torneo*): nombre, sede, fechas y rama (femenil, varonil o mixto). *Elegir convocados* sugiere a los de esa rama; los convocados confirman desde su celular y tú ves quién va, quién no, quién falta y quién no fue convocado, con aviso y recordatorio por WhatsApp. Agrega los partidos del torneo (o asigna uno existente desde *Editar partido*), escribe la tabla de posiciones (tu fila se llena con *Usar mis partidos*; los puntos los pones según las reglas del torneo) y al final pon el lugar. En *Partidos* filtras por rama. En *Hoy* te aviso cuando un torneo empieza en menos de 2 semanas y faltan respuestas.
+- **Ayudantes:** el **capitán** (*Ajustes → Equipo de apoyo → Elegir capitanes*, o la casilla en la ficha del jugador) entra con su mismo código; el **asistente adulto** entra con correo y el código de invitación de *Ajustes → Equipo de apoyo*. Los dos pasan lista y capturan partidos; nunca ven notas, evaluaciones, reportes, pruebas de otros ni tu laboratorio. Lo que capturan queda a tu nombre. Puedes quitarles el acceso cuando quieras.
+- **Pruebas físicas** (*Jugadores → Pruebas físicas*): salto (My Jump), velocidad de 10 m, alcance de remate, agilidad (prueba T), plancha y estatura. Captura rápida para todo el equipo y gráfica de avance por jugador; cada jugador ve solo las suyas. La tarjeta del jugador muestra una mini gráfica de salto, 10 m y plancha (la línea sube cuando mejora). En *Ajustes → Entrenamientos* eliges cada cuántas semanas medir (10 por defecto) y *Hoy* te lo recuerda.
+- **Mejoras:** las ideas sugeridas que ya están dentro de Remate se marcan como «Ya está» y no se copian al pedir cambios.
 - **Tarea de casa:** en la ficha del jugador o en *En casa*, elige rutinas o ejercicios y cuántas veces por semana. El jugador la ve arriba de todo en su sección *En casa*.
 - **Planear temporada** (*Entrenamientos*): bloques de 3 a 6 semanas con enfoque y una o dos plantillas que se alternan. *Crear entrenamientos* los pone en tus días de entrenamiento sin tocar los que ya existen.
 - **Insignias:** se ganan solas por constancia y logros (racha de asistencia, semanas entrenando en casa, retos, aces, recepciones perfectas, salto...). Las ven el jugador y tú.
+- **¿Qué dice mi radar?** (botón en la tarjeta del jugador): explicación detallada de su radar. Dice en qué fase va cada habilidad según tu última evaluación, cuántas cumple para el siguiente nivel, qué cambió desde la evaluación anterior, su plan (las 2 o 3 habilidades donde más le falta) y, por habilidad, qué hace hoy, qué sigue, consejos, ejercicios, rutinas de casa y retos. Desde la ficha del jugador, *Ver la explicación que recibe* te muestra exactamente lo que él lee.
+- **Teoría** (*Entrenos* del jugador; *Entrenamientos* o *Más* para ti): 24 lecciones de 3 a 5 minutos en 4 módulos (reglas FIVB 2025-2028, fundamentos técnicos, posiciones y sistemas, táctica), con diagramas de cancha y un quiz al final de cada una. Cada módulo tiene un examen de 10 preguntas al azar: con 8 o más, el jugador te pide su **reto de teoría** y lo apruebas en *Hoy* o en *Ruta* (ves su calificación). También hay glosario y *Situaciones de partido* para practicar decisiones. El avance de cada quiz se guarda en el celular de cada jugador. Para compartir una lección, ábrela y toca el ícono de compartir.
+- **Antes y después** (ficha del jugador): elige dos fechas de evaluación (por defecto la primera y la última) y ves los dos radares encimados, el cambio por habilidad, el nivel y la asistencia del periodo. Escribe un comentario para la familia (se imprime, no se guarda) y toca *Imprimir o guardar PDF*. Para que funcione, evalúa al inicio y al final de la temporada.
+- **Versiones:** cada versión nueva cambia el número en `js/version.js` y el nombre de la caché en `sw.js`. Al abrir la app después de subirla, aparece una vez el aviso *Remate se actualizó* con enlace a **Novedades** (*Más → Novedades* o *Ajustes → Acerca de Remate*).
 - **Avisos:** *Hoy → Avisar al equipo*. El aviso aparece en el Inicio de los jugadores y ayudantes, se puede mandar por WhatsApp y llega como notificación a quien la activó en *Ajustes* (en iPhone, con la app instalada en la pantalla de inicio). Al cambiar la fecha u hora de un entrenamiento publicado, Remate te ofrece avisar.
 
 ## 6. Cómo cambiar niveles, exámenes y ejercicios
@@ -110,7 +120,8 @@ Los números de Remate son **propuestas de partida**, no verdades científicas: 
 | Qué quieres cambiar | Archivo (en GitHub, lápiz para editar) |
 |---|---|
 | Fases pedidas por nivel y criterios de examen | `js/content/levels.js` |
-| Retos y sus puntos XP | `js/content/challenges.js` |
+| Retos y sus puntos XP (incluye los de teoría) | `js/content/challenges.js` |
+| Lecciones de teoría, quiz y glosario | `js/content/teoria.js` |
 | Descripción de cada fase de cada habilidad | `js/content/skills.js` |
 | Plantillas de entrenamiento | `js/content/templates.js` |
 | Ejercicios incluidos | `js/content/ex-*.js` |

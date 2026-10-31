@@ -1,8 +1,7 @@
 // Arranque de Remate: entrada, rutas, encabezado, navegación y re-dibujo cuando cambian los datos.
-import { h, ic, $ } from './util.js';
+import { h, ic, $, applyTheme } from './util.js';
 import { state, onChange, getPlayer, pendingCount } from './store.js';
 import { boot } from './auth.js';
-import { applyTheme } from './theme.js';
 import { renderGate } from './views/gate.js';
 import hoy from './views/hoy.js';
 import jugadores from './views/jugadores.js';
@@ -27,11 +26,15 @@ import asistir from './views/asistir.js';
 import pruebas from './views/pruebas.js';
 import temporada from './views/temporada.js';
 import avisos from './views/avisos.js';
-import { casaReady, isStaff } from './store.js';
+import radar, { comparar } from './views/radar-guia.js';
+import teoria from './views/teoria.js';
+import torneo from './views/torneos.js';
+import novedades, { unseenUpdate, firstRun, markSeen, updateBanner, SEEN_KEY } from './views/novedades.js';
+import { casaReady, isStaff, ls } from './store.js';
 
-const COACH = { hoy, jugadores, jugador, sesiones, sesion, ejercicios, ejercicio, ruta, ajustes, ayuda, partidos, partido, lab, reportes, mas, casa, mejoras, pruebas, temporada, avisos };
-const PLAYER = { inicio, ruta, entrenos, partidos, partido, ejercicios, ejercicio, casa, pruebas, avisos, asistir, ajustes, ayuda };
-const ASSISTANT = { asistir, partidos, partido, avisos, ejercicios, ejercicio, ajustes, ayuda };
+const COACH = { hoy, jugadores, jugador, sesiones, sesion, ejercicios, ejercicio, ruta, ajustes, ayuda, partidos, partido, lab, reportes, mas, casa, mejoras, pruebas, temporada, avisos, radar, novedades, teoria, comparar, torneo };
+const PLAYER = { inicio, ruta, entrenos, partidos, partido, ejercicios, ejercicio, casa, pruebas, avisos, asistir, ajustes, ayuda, radar, novedades, teoria, torneo };
+const ASSISTANT = { asistir, partidos, partido, avisos, ejercicios, ejercicio, ajustes, ayuda, novedades, torneo };
 const TABLES = { coach: COACH, player: PLAYER, assistant: ASSISTANT };
 const HOME = { coach: '#/hoy', player: '#/inicio', assistant: '#/asistir' };
 // [ruta, texto, ícono, dónde se ve]: 'wide' solo en pantalla grande (barra lateral), 'narrow' solo en celular.
@@ -43,11 +46,11 @@ const NAV = {
   player: [['inicio', 'Inicio', 'house'], ['entrenos', 'Entrenos', 'calendar-days'], ['partidos', 'Partidos', 'volleyball'], ['ejercicios', 'Ejercicios', 'book-open'], ['ruta', 'Ruta', 'flag']],
   assistant: [['asistir', 'Asistir', 'clipboard-check'], ['partidos', 'Partidos', 'volleyball'], ['avisos', 'Avisos', 'bell'], ['ejercicios', 'Ejercicios', 'book-open']],
 };
-const PARENT = { jugador: 'jugadores', sesion: 'sesiones', ejercicio: 'ejercicios', partido: 'partidos', casa: 'ejercicios', pruebas: 'jugadores', temporada: 'sesiones', avisos: 'hoy', asistir: 'inicio' };   // sección que se ilumina en la navegación
-const UNDER_MAS = new Set(['ejercicios', 'ruta', 'lab', 'reportes', 'ajustes', 'ayuda', 'mejoras', 'mas']);
+const PARENT = { jugador: 'jugadores', sesion: 'sesiones', ejercicio: 'ejercicios', partido: 'partidos', casa: 'ejercicios', pruebas: 'jugadores', temporada: 'sesiones', avisos: 'hoy', asistir: 'inicio', novedades: 'ajustes', comparar: 'jugadores', torneo: 'partidos' };   // sección que se ilumina en la navegación
+const UNDER_MAS = new Set(['ejercicios', 'ruta', 'lab', 'reportes', 'ajustes', 'ayuda', 'mejoras', 'mas', 'novedades']);
 // Pantalla en la que estás → sección de la mejora (para anotarla rápido desde el foco del encabezado).
 const IDEA_AREA = { hoy: 'hoy', jugadores: 'jugadores', jugador: 'jugadores', sesiones: 'entrenos', sesion: 'entrenos', partidos: 'partidos', partido: 'partidos',
-  casa: 'casa', lab: 'laboratorio', reportes: 'reportes', ruta: 'ruta', ejercicios: 'ejercicios', ejercicio: 'ejercicios', ajustes: 'ajustes' };          // en celular, estas iluminan "Más"
+  casa: 'casa', lab: 'laboratorio', reportes: 'reportes', ruta: 'ruta', ejercicios: 'ejercicios', ejercicio: 'ejercicios', ajustes: 'ajustes', teoria: 'entrenos', comparar: 'jugadores', radar: 'jugadores', torneo: 'partidos' };          // en celular, estas iluminan "Más"
 
 const root = $('#root');
 const uiState = new Map();
@@ -79,7 +82,7 @@ function render({ fresh = false } = {}) {
   const ctx = { role, me, readonly: !!state.viewAs, args, ui: uiState.get(key), rerender: () => render() };
   let view;
   try { view = table[name](ctx); } catch (e) { view = errorView(e); }
-  const nav = (PARENT[name] || name);
+  const nav = name === 'radar' ? (role === 'coach' ? 'jugadores' : 'inicio') : name === 'teoria' ? (role === 'coach' ? 'sesiones' : 'entrenos') : (PARENT[name] || name);
 
   const sync = state.mode === 'demo' ? h('span', { class: 'sync' }, 'Demo')
     : !state.online ? h('span', { class: 'sync warn' }, pendingCount() ? `Sin internet, ${pendingCount()} por enviar` : 'Sin internet')
@@ -98,7 +101,9 @@ function render({ fresh = false } = {}) {
     h('a', { href: `#/${id}`, class: where ? `${where}-only` : null, 'aria-current': id === nav || (id === 'mas' && UNDER_MAS.has(nav)) ? 'page' : null }, ic(icon, 22), h('span', {}, label))));
   const banner = state.viewAs ? h('div', { class: 'viewas', role: 'status' }, h('span', {}, `Vista previa: así lo ve ${me.name}`),
     h('button', { class: 'btn sm', type: 'button', onclick: () => { const id = state.viewAs; state.viewAs = null; location.hash = `#/jugador/${id}`; } }, 'Salir')) : null;
-  const main = h('main', { class: 'main', id: 'main', tabindex: '-1', 'aria-labelledby': 'page-title' }, banner, view.el);
+  // Aviso de una sola vez cuando el celular abre una versión nueva de Remate.
+  const upd = !state.viewAs && name !== 'novedades' && unseenUpdate() ? updateBanner(() => render()) : null;
+  const main = h('main', { class: 'main', id: 'main', tabindex: '-1', 'aria-labelledby': 'page-title' }, banner, upd, view.el);
   root.replaceChildren(h('div', { class: 'app' }, header, navEl, main));
   document.title = `${view.title} · Remate`;
   if (fresh) { window.scrollTo(0, 0); main.focus({ preventScroll: true }); } else window.scrollTo(0, y);
@@ -108,11 +113,13 @@ function schedule() { if (queued) return; queued = true; requestAnimationFrame((
 
 function mountApp() {
   mounted = true;
+  if (firstRun()) ls.set(SEEN_KEY, 'anterior');   // ya usaba Remate antes de que hubiera versiones: que vea el aviso
   if (!location.hash || location.hash === '#') location.replace(HOME[state.role] || '#/inicio');
   render({ fresh: true });
 }
 function mountGate() {
   mounted = false;
+  if (firstRun()) markSeen();   // celular nuevo: no hay "actualización" que avisar
   root.replaceChildren(renderGate(() => { location.hash = ''; mountApp(); }));
   document.title = 'Remate';
 }
