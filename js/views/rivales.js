@@ -1,10 +1,10 @@
 // Scouting del rival: una ficha por rival con lo que anotas tú (jugadores clave, a dónde sacan, sistema, rotación débil, plan)
 // y lo que Remate calcula solo con tus partidos contra ellos. Se guarda en tu perfil privado: solo tú lo ves.
-import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr, rivalKey } from '../util.js';
+import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr, rivalKey, plural } from '../util.js';
 import { state, profile, saveProfile, players, labReady } from '../store.js';
-import { result, replay, phaseStats, byRotation, rotLabel, zoneCounts, addCounts, metrics, fmtEff } from '../match-calc.js';
+import { result, replay, phaseStats, byRotation, rotLabel, zoneCounts, addCounts, metrics, fmtEff, rivalStats } from '../match-calc.js';
 import { sectionTitle, note, empty, field, options } from './ui.js';
-import { zoneMapEl } from './partido-summary.js';
+import { zoneMapEl, rivalSection } from './partido-summary.js';
 import { missingSqlNote } from './lab.js';
 
 export { rivalKey };
@@ -77,6 +77,39 @@ function scoutSheet(rv) {
   });
 }
 
+// «Pasar a mi ficha»: lo capturado en los partidos llena las zonas de saque y los atacantes de la ficha.
+export function capturedSuggestions(rv, r) {
+  const sc = rv.sc || {};
+  const svTotal = Object.values(r.sv.zones).reduce((a, c) => a + c.n, 0);
+  const zones = svTotal >= 3 ? Object.entries(r.sv.zones).filter(([, c]) => c.n / svTotal >= 0.2).map(([z]) => Number(z)) : [];
+  const newZones = zones.filter((z) => !(sc.serveZones || []).includes(z));
+  const known = new Map((sc.players || []).map((p) => [String(p.num), p]));
+  const atTotal = r.at.n;
+  const attackers = r.at.by.filter((x) => x.n >= 3 && (!atTotal || x.n / atTotal >= 0.15));
+  const servers = r.sv.by.filter((x) => x.n >= 3 && x.errs / x.n >= 0.3);
+  const addPlayers = [], markAttack = [], notes = [];
+  for (const x of attackers) { const p = known.get(x.rn); if (!p) addPlayers.push(x.rn); else if (!p.attacks) markAttack.push(x.rn); }
+  for (const x of servers) if (!known.has(x.rn) && !addPlayers.includes(x.rn)) notes.push(x.rn);
+  return { zones, newZones, attackers, servers, addPlayers, markAttack, notes, any: newZones.length + addPlayers.length + markAttack.length + notes.length > 0 };
+}
+async function passToFicha(rv, r) {
+  const sg = capturedSuggestions(rv, r);
+  if (!sg.any) { toast('Tu ficha ya tiene todo lo que capturaste'); return; }
+  const lines = [
+    sg.newZones.length ? `Zonas a donde sacan: ${sg.newZones.join(', ')}.` : null,
+    sg.addPlayers.length ? `Agregar como atacantes: ${sg.addPlayers.map((n) => `#${n}`).join(', ')}.` : null,
+    sg.markAttack.length ? `Marcar «Ataca mucho»: ${sg.markAttack.map((n) => `#${n}`).join(', ')}.` : null,
+    sg.notes.length ? `Agregar sacadores que fallan mucho: ${sg.notes.map((n) => `#${n}`).join(', ')}.` : null].filter(Boolean).join(' ');
+  if (!(await confirmSheet({ title: 'Pasar a mi ficha', text: `${lines} Lo que ya escribiste no se borra.`, ok: 'Pasar' }))) return;
+  const sc = { name: rv.name, system: '', weakRot: null, weakNote: '', serveZones: [], players: [], strengths: '', weaknesses: '', plan: '', ...(rv.sc || {}) };
+  const by = new Map(r.at.by.map((x) => [x.rn, x])), sv = new Map(r.sv.by.map((x) => [x.rn, x]));
+  const players = (sc.players || []).map((p) => (sg.markAttack.includes(String(p.num)) ? { ...p, attacks: true } : p));
+  for (const n of sg.addPlayers) { const x = by.get(n); players.push({ num: n, pos: '', attacks: true, note: `Capturado: ${plural(x.n, 'ataque', 'ataques')}, ${plural(x.pts, 'punto', 'puntos')}, ${plural(x.errs, 'error', 'errores')}.` }); }
+  for (const n of sg.notes) { const x = sv.get(n); players.push({ num: n, pos: '', attacks: false, note: `Saque: falla ${x.errs} de ${x.n}.` }); }
+  const row = { ...sc, serveZones: [...new Set([...(sc.serveZones || []), ...sg.newZones])].sort(), players, updated: todayStr() };
+  saveProfile({ scouting: { ...scouting(), [rv.key]: row } }); toast('Ficha actualizada con lo capturado');
+}
+
 // ---------- pantallas ----------
 function list(ctx) {
   const all = rivals(), ro = !labReady();
@@ -98,6 +131,18 @@ function newRivalSheet() {
     actions: [{ label: 'Cancelar' }, { label: 'Crear ficha', kind: 'primary', onClick: () => {
       const n = name.value.trim(), k = rivalKey(n); if (!k) { toast('Escribe el nombre'); return false; }
       setTimeout(() => { location.hash = `#/rival/${k}`; const rv = rivals().find((x) => x.key === k) || { key: k, name: n, matches: [], sc: null }; scoutSheet(rv); }, 60); return true; } }] });
+}
+
+function capturedEl(rv, ro) {
+  const log = rv.matches.flatMap((m) => state.data.matchLogs.find((l) => l.match_id === m.id)?.log || []);
+  const r = rivalStats(log);
+  if (!r.any) return h('section', { class: 'stack' }, sectionTitle('Lo que capturaste del rival'),
+    h('p', { class: 'row-sub', style: { margin: 0 } }, 'Todavía nada. En la captura del partido, el panel «Lo que hace el rival» anota a dónde sacan, quién ataca y sus errores; aquí se junta lo de todos tus partidos contra ellos.'));
+  const sg = capturedSuggestions(rv, r);
+  return h('div', { class: 'stack' },
+    rivalSection(log, rv.name, { title: 'Lo que capturaste del rival' }),
+    ro ? null : h('div', { class: 'cluster' }, h('button', { class: `btn ${sg.any ? 'primary' : ''}`, type: 'button', onclick: () => passToFicha(rv, r) }, ic('clipboard-check', 18), 'Pasar a mi ficha'),
+      sg.any ? h('span', { class: 'row-sub' }, [sg.newZones.length ? `${plural(sg.newZones.length, 'zona nueva', 'zonas nuevas')} de saque` : null, sg.addPlayers.length + sg.markAttack.length ? `${plural(sg.addPlayers.length + sg.markAttack.length, 'atacante', 'atacantes')}` : null, sg.notes.length ? `${plural(sg.notes.length, 'sacador', 'sacadores')} que falla` : null].filter(Boolean).join(', ')) : h('span', { class: 'row-sub' }, 'Tu ficha ya lo tiene.')));
 }
 
 function ficha(ctx, key) {
@@ -137,7 +182,9 @@ function ficha(ctx, key) {
         sc.weaknesses ? h('div', { class: 'panel' }, h('strong', {}, 'Debilidades'), h('p', { style: { margin: '4px 0 0' } }, sc.weaknesses)) : null,
         sc.plan ? h('div', { class: 'panel sc-plan' }, h('strong', {}, 'Plan para el siguiente partido'), h('p', { style: { margin: '4px 0 0' } }, sc.plan)) : null,
         sc.updated ? h('p', { class: 'row-sub', style: { margin: 0 } }, `Actualizada el ${fmtDate(sc.updated, { day: 'numeric', month: 'long' })}.`) : null)
-        : h('p', { class: 'row-sub', style: { margin: 0 } }, 'Anota sus jugadores clave, a dónde sacan, su sistema, su rotación débil y tu plan. Remate no captura las acciones del rival, así que esto lo llenas tú al verlos jugar o en video.')),
+        : h('p', { class: 'row-sub', style: { margin: 0 } }, 'Anota sus jugadores clave, a dónde sacan, su sistema, su rotación débil y tu plan. Si en la captura usas «Lo que hace el rival», abajo aparece lo que hicieron y lo pasas a tu ficha con un toque.')),
+    // Lo que capturaste del rival en la captura en vivo
+    capturedEl(rv, ro),
     // Lo que calcula Remate
     h('section', { class: 'stack' }, sectionTitle('De tus partidos contra ellos'),
       rv.matches.length ? h('div', { class: 'rows' }, rv.matches.slice().sort((a, b) => b.match_date.localeCompare(a.match_date)).map((m) => { const r = result(m);

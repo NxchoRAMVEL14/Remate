@@ -1,5 +1,5 @@
 // Un entrenamiento: datos, plan por bloques (editable), lista de asistencia y modo cancha.
-import { h, ic, toast, plural, addDays, parseDate, fmtDate, openSheet, confirmSheet } from '../util.js';
+import { h, ic, toast, plural, addDays, parseDate, fmtDate, openSheet, confirmSheet, todayStr } from '../util.js';
 import { state, getSession, patch, add, remove, settings, players } from '../store.js';
 import { planMinutes, focusOf } from '../calc.js';
 import { SKILL_BY_ID } from '../content/skills.js';
@@ -7,7 +7,7 @@ import { TEMPLATES, TEMPLATE_BY_ID, planFromTemplate, WARMUPS, warmupFor } from 
 import { getExercise, KINDS, levelLabel } from '../content/exercises.js';
 import { courtSVG } from '../court.js';
 import { sectionTitle, empty, note, longDate, field, options, STATUS_LABEL } from './ui.js';
-import { sessionFormSheet, attendanceSheet, pickExerciseSheet, undoDone } from './sheets-session.js';
+import { sessionFormSheet, attendanceSheet, pickExerciseSheet, undoDone, calButton, sessionEvent } from './sheets-session.js';
 import { noticeSheet } from './avisos.js';
 import { openCourtMode } from './court-mode.js';
 
@@ -28,6 +28,7 @@ export default function sesion(ctx) {
     focus.length ? h('div', { class: 'cluster' }, focus.map((k) => h('span', { class: 'chip' }, SKILL_BY_ID[k].name))) : null,
     h('div', { class: 'cluster' },
       s.status !== 'cancelada' ? h('button', { class: 'btn primary', type: 'button', onclick: () => attendanceSheet(s) }, ic('clipboard-check', 18), marks.length ? 'Editar lista' : 'Pasar lista') : null,
+      s.status !== 'cancelada' && s.session_date === todayStr() ? h('a', { class: 'btn ball', href: `#/lista-qr/${s.id}` }, ic('qr-code', 18), 'Lista con QR') : null,
       plan.length && s.status !== 'cancelada' ? h('button', { class: 'btn', type: 'button', onclick: () => openCourtMode(s) }, ic('timer', 18), 'Modo cancha') : null,
       plan.length ? h('button', { class: 'btn', type: 'button', onclick: () => window.print() }, ic('printer', 18), 'Imprimir plan') : null),
     h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: s.published ? true : null, onchange: (e) => { patch('sessions', s.id, { published: e.target.checked }); toast(e.target.checked ? 'Publicado: tus jugadores ya lo ven' : 'Oculto para los jugadores'); } }),
@@ -36,6 +37,7 @@ export default function sesion(ctx) {
     h('div', { class: 'cluster' },
       h('button', { class: 'btn sm', type: 'button', onclick: () => sessionFormSheet(s) }, ic('pencil', 16), 'Editar datos'),
       h('button', { class: 'btn sm', type: 'button', onclick: () => duplicate(s) }, ic('copy', 16), 'Duplicar'),
+      s.status !== 'cancelada' && s.session_date >= todayStr() ? calButton({ name: 'entrenamiento', events: [sessionEvent(s)] }) : null,
       s.status === 'hecha' ? h('button', { class: 'btn sm', type: 'button', title: 'Por si pasaste lista por error', onclick: () => undoDone(s) }, ic('undo-2', 16), 'Regresar a Por hacer') : null,
       s.status === 'cancelada'
         ? h('button', { class: 'btn sm', type: 'button', onclick: () => { patch('sessions', s.id, { status: marks.length ? 'hecha' : 'planeada' }); toast('Entrenamiento reactivado'); } }, 'Reactivar')

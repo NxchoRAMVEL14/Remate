@@ -1,28 +1,50 @@
 // Resumen del partido: marcador, side-out y break point, rotaciones, estadística por jugador, mapa, video y convocatoria.
 import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr, plural, atTime, isUrl, parseTime, fmtClock, ytId, rivalKey } from '../util.js';
 import { state, add, patch, remove, players, playerById, isStaff, inTeam, teamOf } from '../store.js';
-import { countsFor, playersIn, metrics, teamSummary, addCounts, fmtEff, result, replay, phaseStats, byRotation, rotLabel, RIVAL_GRID, zoneCounts } from '../match-calc.js';
+import { countsFor, playersIn, metrics, teamSummary, addCounts, fmtEff, result, replay, phaseStats, byRotation, rotLabel, RIVAL_GRID, ZONE_ORDER, zoneCounts, rivalStats, OPP_KINDS } from '../match-calc.js';
 import { note, empty, sectionTitle, field, options } from './ui.js';
 import { getLog, nameOf } from './partido-capture.js';
 import { coachLogSheet } from './lab-coaching.js';
 import { torneoById } from './torneos.js';
+import { calButton, matchEvent } from './sheets-session.js';
 
 const k = (n, l) => h('div', { class: 'kpi' }, h('span', { class: 'n' }, n), h('span', { class: 'l' }, l));
 const pctTxt = (x) => (x == null ? '—' : `${x}%`);
 
 // ---------- Mapa de zonas ----------
-export function zoneMapEl(counts, { caption = '' } = {}) {
+export function zoneMapEl(counts, { caption = '', ours = false } = {}) {
   const max = Math.max(1, ...Object.values(counts).map((c) => c.n));
   const total = Object.values(counts).reduce((a, c) => a + c.n, 0);
-  return h('figure', { class: 'zmap', style: { margin: 0 } },
-    h('div', { class: 'zm-grid', role: 'img', 'aria-label': `${caption}: ${Object.entries(counts).map(([z, c]) => `zona ${z}, ${c.n}`).join('; ')}` },
-      RIVAL_GRID.map((row) => row.map((z) => {
-        const c = counts[z], a = c.n ? 0.15 + 0.75 * (c.n / max) : 0;
-        return h('div', { class: 'zm-cell', style: `--a:${a.toFixed(2)}` }, h('span', { class: 'zm-z' }, `Zona ${z}`), h('b', {}, String(c.n)),
-          h('span', { class: 'zm-p' }, c.n ? `${total ? Math.round((c.n / total) * 100) : 0}% · ${plural(c.pts, 'punto', 'puntos')}` : ''));
-      }))),
-    h('div', { class: 'zm-net' }, 'Red'),
-    h('figcaption', {}, caption ? `${caption}. ` : '', 'Cancha del rival vista desde tu banca. Más intenso = más balones.'));
+  const net = h('div', { class: `zm-net ${ours ? 'net-up' : ''}` }, 'Red');
+  const grid = h('div', { class: 'zm-grid', role: 'img', 'aria-label': `${caption}: ${Object.entries(counts).map(([z, c]) => `zona ${z}, ${c.n}`).join('; ')}` },
+    (ours ? [ZONE_ORDER.front, ZONE_ORDER.back] : RIVAL_GRID).map((row) => row.map((z) => {
+      const c = counts[z], a = c.n ? 0.15 + 0.75 * (c.n / max) : 0;
+      return h('div', { class: `zm-cell ${ours ? 'ours' : ''}`, style: `--a:${a.toFixed(2)}` }, h('span', { class: 'zm-z' }, `Zona ${z}`), h('b', {}, String(c.n)),
+        h('span', { class: 'zm-p' }, c.n ? `${total ? Math.round((c.n / total) * 100) : 0}% · ${plural(c.pts, 'punto', 'puntos')}` : ''));
+    })));
+  return h('figure', { class: 'zmap', style: { margin: 0 } }, ours ? net : null, grid, ours ? null : net,
+    h('figcaption', {}, caption ? `${caption}. ` : '', ours ? 'Tu cancha vista desde tu banca (la red arriba). Más intenso = más balones.' : 'Cancha del rival vista desde tu banca. Más intenso = más balones.'));
+}
+
+// Lo que hizo el rival (saque, ataque y errores): se llena con el panel «Lo que hace el rival» de la captura.
+export function rivalSection(log, rivalName, { title } = {}) {
+  const r = rivalStats(log);
+  if (!r.any) return null;
+  const who = (list, what) => (list.length ? h('div', { class: 'rows' }, list.slice(0, 6).map((x) => h('div', { class: 'row' },
+    h('span', { class: 'jersey', 'aria-hidden': 'true' }, x.rn),
+    h('span', { class: 'row-main' }, h('strong', {}, `#${x.rn}`), h('span', { class: 'row-sub' }, `${plural(x.n, what[0], what[1])}: ${plural(x.pts, what[2], what[3])}, ${plural(x.errs, 'error', 'errores')}`))))) : null);
+  const errs = Object.entries(r.errors).filter(([, n]) => n);
+  return h('section', { class: 'stack' }, sectionTitle(title || `Lo que hizo ${rivalName}`),
+    h('div', { class: 'kpis' },
+      k(r.sv.n ? `${r.sv.inPct}%` : '—', `Sus saques dentro (${r.sv.n})`),
+      k(String(r.sv.aces), 'Aces suyos'),
+      k(r.at.n ? fmtEff(r.at.eff) : '—', `Su eficiencia de ataque (${r.at.n})`)),
+    h('p', { style: { margin: 0 } }, `Nos regalaron ${plural(r.gifts, 'punto', 'puntos')} con errores${errs.length ? ` (${errs.map(([kk, n]) => `${OPP_KINDS[kk]}: ${n}`).join(', ')})` : ''}. Puntos suyos por ace o ataque: ${r.sv.aces + r.at.kills}.`),
+    Object.values(r.sv.zones).some((c) => c.n) || Object.values(r.at.zones).some((c) => c.n) ? h('div', { class: 'grid' },
+      Object.values(r.sv.zones).some((c) => c.n) ? zoneMapEl(r.sv.zones, { caption: 'A dónde nos sacan', ours: true }) : null,
+      Object.values(r.at.zones).some((c) => c.n) ? zoneMapEl(r.at.zones, { caption: 'A dónde nos atacan', ours: true }) : null) : null,
+    r.at.by.length ? h('div', { class: 'stack' }, h('strong', {}, 'Quién ataca'), who(r.at.by, ['ataque', 'ataques', 'punto', 'puntos'])) : null,
+    r.sv.by.length ? h('div', { class: 'stack' }, h('strong', {}, 'Quién saca'), who(r.sv.by, ['saque', 'saques', 'ace', 'aces'])) : null);
 }
 
 export function zoneSection(log, ctx, { title = 'Mapa de saque y ataque' } = {}) {
@@ -136,7 +158,8 @@ export function summaryView(m, ctx, { canEdit, coach }) {
       h('div', { class: 'split' }, h('h2', {}, m.status === 'terminado' ? `${r.win ? 'Ganamos' : 'Perdimos'} ${r.text}` : `Sets ${r.text}`), m.status !== 'terminado' ? h('span', { class: 'chip warn' }, m.status === 'planeado' ? 'Próximo' : 'En juego') : null),
       (m.sets || []).length ? h('div', { class: 'cluster' }, m.sets.map((s, i) => h('span', { class: `chip ${s.us > s.them ? 'ok' : s.them > s.us ? 'bad' : ''}` }, `Set ${i + 1}: ${s.us}-${s.them}`))) : h('p', { style: { margin: 0 } }, 'Todavía no hay puntos.'),
       m.venue ? h('span', { class: 'row-sub' }, m.venue) : null, m.note ? h('p', { style: { margin: 0 } }, m.note) : null,
-      coach ? h('div', { class: 'cluster' }, h('a', { class: 'btn sm', href: `#/rival/${rivalKey(m.rival)}` }, ic('eye', 16), `Scouting de ${m.rival}`)) : null),
+      h('div', { class: 'cluster' }, coach ? h('a', { class: 'btn sm', href: `#/rival/${rivalKey(m.rival)}` }, ic('eye', 16), `Scouting de ${m.rival}`) : null,
+        m.status !== 'terminado' && m.match_date >= todayStr() ? calButton({ name: 'partido', events: [matchEvent(m)] }) : null)),
     torneoById(m.tournament_id) && !state.data.rsvps.some((x) => x.match_id === m.id) ? tourRsvpNote(m)
       : upcoming || state.data.rsvps.some((x) => x.match_id === m.id) ? rsvpSection(m) : null,
     rows.length ? h('div', { class: 'kpis' }, k(fmtEff(tm.atEff), 'Eficiencia de ataque'), k(pctTxt(tm.recPos), 'Recepción buena o perfecta'), k(pctTxt(tm.svIn), 'Saques dentro')) : null,
@@ -160,6 +183,7 @@ export function summaryView(m, ctx, { canEdit, coach }) {
           h('td', {}, x.m.blocks || x.m.blkTouch ? `${x.m.blocks} pts, ${x.m.blkTouch} toques` : '—'),
           h('td', {}, x.m.digs ? `${x.m.digOk}/${x.m.digs}` : '—'))))))) : empty('Sin estadística', canEdit ? 'Captura las acciones en la pestaña Captura para ver la estadística por jugador.' : 'Este partido no tiene acciones capturadas.'),
     zoneSection(log, ctx),
+    rivalSection(log, m.rival),
     videoSection(m, canEdit),
     rows.length ? h('details', { class: 'panel' }, h('summary', {}, h('strong', {}, 'Cómo leer estos números')),
       h('ul', { class: 'plain', style: { marginTop: '10px' } },
@@ -185,7 +209,8 @@ export function playerMatchView(m, ctx) {
       h('div', { class: 'split' }, h('h2', {}, m.status === 'terminado' ? `${r.win ? 'Ganamos' : 'Perdimos'} ${r.text}` : upcoming ? 'Próximo partido' : `Sets ${r.text}`)),
       h('p', { style: { margin: 0 } }, `${fmtDate(m.match_date, { weekday: 'long', day: 'numeric', month: 'long' })}${m.venue ? `, ${m.venue}` : ''}`),
       (m.sets || []).length ? h('div', { class: 'cluster' }, m.sets.map((s, i) => h('span', { class: `chip ${s.us > s.them ? 'ok' : s.them > s.us ? 'bad' : ''}` }, `Set ${i + 1}: ${s.us}-${s.them}`))) : null,
-      m.note ? h('p', { style: { margin: 0 } }, m.note) : null),
+      m.note ? h('p', { style: { margin: 0 } }, m.note) : null,
+      upcoming && !ctx.readonly ? h('div', { class: 'cluster' }, calButton({ name: 'partido', events: [matchEvent(m)] })) : null),
     upcoming && me ? (torneoById(m.tournament_id) ? tourRsvpNote(m) : h('section', { class: 'stack' }, sectionTitle('¿Vas?'), rsvpControl(m, me, ctx.readonly))) : null,
     mm ? h('section', { class: 'stack' }, sectionTitle('Tus números'),
       h('div', { class: 'kpis' }, k(String(mm.points), 'Puntos'), k(mm.serves ? `${mm.svIn}%` : '—', `Saques dentro (${mm.serves})`), k(mm.recs ? `${mm.recAvg}` : '—', 'Recepción (0 a 3)')),

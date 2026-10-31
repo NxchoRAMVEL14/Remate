@@ -1,6 +1,6 @@
 // Hojas del laboratorio de salto: registrar una prueba, registrar una sesión y "Mis datos".
 import { h, toast, openSheet, confirmSheet, todayStr } from '../util.js';
-import { add, patch, remove, profile, saveProfile } from '../store.js';
+import { add, patch, remove, profile, saveProfile, sql37Ready } from '../store.js';
 import { TEST_KINDS, METHODS, isTouch, num, best, round1, rsi } from '../lab-calc.js';
 import { PROTOCOLS, LAB_BY_ID, itemContacts, repsText } from '../content/lab-salto.js';
 import { field, options, note } from './ui.js';
@@ -14,13 +14,16 @@ const numInput = (value, attrs = {}) => h('input', { type: 'number', inputmode: 
 const errBox = () => h('div', { class: 'note bad', role: 'alert', hidden: true });
 const fail = (box, msg) => { box.textContent = msg; box.hidden = false; return false; };
 const inRange = (v, a, b) => v == null || (v >= a && v <= b);
+// «Video en Remate» necesita el SQL de la v3.7 (la base de datos solo acepta los métodos que conoce).
+const methodOpts = (cur) => Object.entries(METHODS).filter(([k]) => k !== 'remate' || sql37Ready() || cur === 'remate');
+const REMATE_HOW = ['Abre «Medir con video» (Laboratorio o Pruebas físicas) y elige la prueba.', 'Graba en cámara lenta, de lado y con los pies a la vista; marca el despegue y el aterrizaje cuadro por cuadro.', 'Guarda los 3 intentos desde ahí: se registran aquí solos. Si lo mediste antes, anota aquí las alturas que te dio.'];
 
 // ---------- prueba de salto ----------
 export function testSheet(t = null) {
   const pr = profile();
   const date = h('input', { type: 'date', max: todayStr(), value: t?.test_date || todayStr() });
   const kind = h('select', {}, options(Object.entries(TEST_KINDS), t?.kind || 'cmj'));
-  const method = h('select', {}, options(Object.entries(METHODS), t?.method || pr.method || 'myjump'));
+  const method = h('select', {}, options(methodOpts(t?.method), t?.method || (pr.method === 'remate' && !sql37Ready() ? 'myjump' : pr.method) || 'myjump'));
   const tries = [0, 1, 2].map((i) => numInput(t?.attempts?.[i], { 'aria-label': `Intento ${i + 1}`, placeholder: `Intento ${i + 1}` }));
   const reach = numInput(pr.reach_cm, { min: 150, max: 300, placeholder: 'Por ejemplo 232' });
   const dropCm = numInput(t?.drop_cm, { min: 10, max: 80, step: '1', placeholder: '30' });
@@ -45,7 +48,7 @@ export function testSheet(t = null) {
     const touch = isTouch(method.value);
     triesLabel.textContent = touch ? 'Marca más alta en cada intento (cm)' : 'Altura de cada intento (cm)';
     reachRow.hidden = !touch; dropRow.hidden = kind.value !== 'drop';
-    how.replaceChildren(...(PROTOCOLS[method.value] || []).map((x) => h('li', {}, x)));
+    how.replaceChildren(...(method.value === 'remate' ? REMATE_HOW : PROTOCOLS[method.value] || []).map((x) => h('li', {}, x)));
     const c = compute();
     if (c.height == null) live.textContent = c.touch && c.top != null && !c.r ? 'Anota tu alcance de pie para calcular el salto.' : '';
     else {
@@ -90,7 +93,8 @@ export function testSheet(t = null) {
       live,
       field('Peso corporal (kg)', body, 'Opcional. Ayuda a interpretar cambios.'),
       field('Nota', text),
-      h('details', {}, h('summary', {}, 'Cómo medir con este método'), how),
+      h('details', {}, h('summary', {}, 'Cómo medir con este método'), how,
+        h('a', { class: 'btn sm', href: '#/medir/cmj/lab', onclick: (e) => { e.currentTarget.closest('dialog')?.close(); e.currentTarget.closest('dialog')?.remove(); } }, 'Medir con video en Remate')),
       err),
     actions: [
       { label: 'Cancelar' },
@@ -167,7 +171,7 @@ export function profileSheet() {
   const pr = profile();
   const reach = numInput(pr.reach_cm, { min: 150, max: 300, placeholder: 'Por ejemplo 232' });
   const net = h('select', {}, options([['M', 'Varonil, 2.43 m'], ['F', 'Femenil, 2.24 m']], pr.net || 'M'));
-  const method = h('select', {}, options(Object.entries(METHODS), pr.method || 'myjump'));
+  const method = h('select', {}, options(methodOpts(pr.method), pr.method || 'myjump'));
   const start = h('input', { type: 'date', value: pr.program_start || '' });
   const err = errBox();
   openSheet({

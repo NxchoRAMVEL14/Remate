@@ -1,7 +1,7 @@
 // Captura en vivo: marcador por set, alineación y rotación, acciones por jugador y zona del saque o del ataque.
-import { h, ic, toast, openSheet, confirmSheet, uid, fmtDate, shareText } from '../util.js';
-import { state, add, patch, players, playerById, ls, group, teamName, teamOf, inTeam } from '../store.js';
-import { ACTIONS, GROUPS, score, storedSets, countsFor, playersIn, setsToWin, replay, rotLabel, ZONE_ORDER, RIVAL_GRID, ZONE_ACTIONS } from '../match-calc.js';
+import { h, ic, toast, openSheet, confirmSheet, uid, fmtDate, shareText, rivalKey } from '../util.js';
+import { state, add, patch, players, playerById, ls, group, teamName, teamOf, inTeam, profile } from '../store.js';
+import { ACTIONS, GROUPS, score, storedSets, countsFor, playersIn, setsToWin, replay, rotLabel, ZONE_ORDER, RIVAL_GRID, ZONE_ACTIONS, rivalLabel } from '../match-calc.js';
 import { note, sectionTitle, field, options } from './ui.js';
 
 export const getLog = (m) => state.data.matchLogs.find((l) => l.match_id === m.id) || null;
@@ -10,7 +10,7 @@ const pjersey = (p) => (p ? (p.jersey != null ? String(p.jersey) : p.name.slice(
 
 // Preferencias de captura de este celular (marcador automático y zonas).
 const PREF = 'remate.captura';
-export const capPrefs = () => { try { return { auto: true, zones: false, ...JSON.parse(ls.get(PREF) || '{}') }; } catch { return { auto: true, zones: false }; } };
+export const capPrefs = () => { try { return { auto: true, zones: false, rival: true, ...JSON.parse(ls.get(PREF) || '{}') }; } catch { return { auto: true, zones: false, rival: true }; } };
 const setPref = (k, v) => ls.set(PREF, JSON.stringify({ ...capPrefs(), [k]: v }));
 
 // Guarda el registro, el marcador del partido y la estadística de los jugadores tocados.
@@ -33,6 +33,76 @@ function logEvent(m, a, pid, extra = {}) {
   log.push({ id: uid().slice(0, 8), set: sc.idx, p: pid || null, a, pt, ...extra });
   commit(m, log, [pid]);
   if (pid && ACTIONS[a]) toast(`${nameOf(pid)}: ${GROUPS[ACTIONS[a].g].toLowerCase()}, ${ACTIONS[a].label.toLowerCase()}${extra.z ? `, zona ${extra.z}` : ''}`, 1400);
+  else if (/^opp_/.test(a)) toast(`${m.rival}: ${rivalLabel({ a, ...extra }).toLowerCase()}${log[log.length - 1].pt ? (log[log.length - 1].pt === 'us' ? ' (+1 nuestro)' : ' (+1 rival)') : ''}`, 1400);
+}
+
+// ---------- Lo que hace el rival ----------
+// Números de playera del rival: los de tu ficha de scouting y los que ya anotaste en este partido.
+function rivalNums(m) {
+  const sc = (profile().scouting || {})[rivalKey(m.rival)];
+  const nums = new Set([...(sc?.players || []).map((p) => String(p.num || '')), ...(getLog(m)?.log || []).map((e) => (e.rn ? String(e.rn) : ''))].filter(Boolean));
+  return [...nums].sort((a, b) => Number(a) - Number(b));
+}
+const RIVAL_TITLE = { opp_sv: 'Saque dentro', opp_at: 'Ataque en juego', 'opp_pt:sv': 'Ace', 'opp_pt:at': 'Punto de ataque', 'opp_err:sv': 'Error de saque', 'opp_err:at': 'Error de ataque' };
+// Una sola hoja: quién lo hizo (su número) y a qué zona de tu cancha fue. Tocar la zona guarda.
+function rivalSheet(m, a, k) {
+  const log = getLog(m)?.log || [], sc = score(log, m.best_of);
+  if (sc.over) { toast('El partido ya tiene ganador. Termínalo o deshaz la última acción.'); return; }
+  const needZone = a !== 'opp_err';
+  const givesPt = capPrefs().auto && !!ACTIONS[a].pt;
+  // Si lo último fue un error de tu jugador que ya le dio el punto al rival, probablemente es el mismo punto.
+  const last = [...log].reverse().find((e) => e.a !== 'sub');
+  const dup = givesPt && a === 'opp_pt' && last && last.a !== 'set_end' && last.set === sc.idx && last.p && last.pt === 'them' ? last : null;
+  let num = null;
+  const addPt = h('input', { type: 'checkbox', checked: dup ? null : true });
+  const save = (close, z) => { close(); logEvent(m, a, null, { ...(k ? { k } : {}), ...(num ? { rn: num } : {}), ...(z ? { z } : {}), ...(givesPt && !addPt.checked ? { pt: null } : {}) }); };
+  const other = h('input', { type: 'text', inputmode: 'numeric', maxlength: 3, placeholder: '#', 'aria-label': 'Otro número', class: 'rv-other' });
+  const chips = h('div', { class: 'rv-nums', role: 'group', 'aria-label': 'Su número' });
+  const body = (close) => {
+    const pickNum = (n) => { num = num === n ? null : n; if (!needZone) save(close); else drawChips(); };
+    const drawChips = () => chips.replaceChildren(
+      ...rivalNums(m).map((n) => h('button', { type: 'button', class: 'rv-num', 'aria-pressed': num === n ? 'true' : 'false', onclick: () => pickNum(n) }, `#${n}`)),
+      h('span', { class: 'rv-otherbox' }, other, h('button', { type: 'button', class: 'btn sm', onclick: () => { const v = other.value.replace(/\D/g, '').slice(0, 3); if (!v) { other.focus(); return; } other.value = ''; pickNum(v); } }, needZone ? 'Usar' : 'Guardar')),
+      ...(needZone ? [] : [h('button', { type: 'button', class: 'rv-num', onclick: () => { num = null; save(close); } }, 'No sé')]));
+    drawChips();
+    const zbtn = (z) => h('button', { type: 'button', class: 'zp', onclick: () => save(close, z) }, h('b', {}, String(z)), h('small', {}, z === 1 || z === 5 || z === 6 ? 'fondo' : 'junto a la red'));
+    return h('div', { class: 'stack' },
+      h('div', { class: 'field' }, h('span', { class: 'label' }, needZone ? '¿Quién? (su número, opcional)' : '¿Quién fue? (su número)'), chips),
+      needZone ? h('div', { class: 'field' }, h('span', { class: 'label' }, '¿A dónde fue? Toca la zona de tu cancha'),
+        h('div', { class: 'zone-pick ours' }, h('div', { class: 'zp-net' }, 'Red'), h('div', { class: 'zp-row' }, ZONE_ORDER.front.map(zbtn)), h('div', { class: 'zp-row' }, ZONE_ORDER.back.map(zbtn))),
+        h('span', { class: 'hint' }, 'Tu cancha vista desde tu banca: la red arriba, tu fondo abajo.')) : null,
+      givesPt ? h('label', { class: 'check' }, addPt, h('span', {}, `Sumar el punto ${ACTIONS[a].pt === 'us' ? 'a tu equipo' : `a ${m.rival}`}`)) : null,
+      dup ? note(`Lo último que anotaste fue «${GROUPS[ACTIONS[dup.a]?.g] || ''} ${ACTIONS[dup.a]?.label.toLowerCase() || ''}» de ${nameOf(dup.p)}, que ya le dio el punto a ${m.rival}. Por eso no se suma otra vez; solo queda anotado quién y a dónde.`, 'warn') : null);
+  };
+  openSheet({ title: `${m.rival}: ${RIVAL_TITLE[k ? `${a}:${k}` : a] || ACTIONS[a].label}`, body,
+    actions: needZone ? [{ label: 'Cancelar' }, { label: 'Guardar sin zona', onClick: (close) => { save(close); } }] : [{ label: 'Cancelar' }] });
+}
+
+function rivalPanel(m, ctx, sc) {
+  const pr = capPrefs(), off = sc.over ? true : null;
+  const tag = (pt) => (pr.auto && pt ? h('small', {}, pt === 'us' ? ' +1 nuestro' : ' +1 rival') : null);
+  const b = (label, tone, pt, onclick) => h('button', { type: 'button', class: `act ${tone}`, disabled: off, onclick }, label, tag(pt));
+  const quickErr = (k) => logEvent(m, 'opp_err', null, { k });
+  if (!pr.rival) {
+    return h('section', { class: 'stack rv-panel' }, h('div', { class: 'split' }, h('strong', {}, `3. Lo que hace ${m.rival}`),
+      h('button', { type: 'button', class: 'btn ghost sm', onclick: () => { setPref('rival', true); ctx.rerender(); } }, 'Mostrar')),
+      h('div', { class: 'cluster' },
+        h('button', { type: 'button', class: 'btn sm', disabled: off, onclick: () => logEvent(m, 'opp_err', null) }, 'Error del rival'),
+        h('button', { type: 'button', class: 'btn sm', disabled: off, onclick: () => logEvent(m, 'opp_pt', null) }, 'Punto del rival (sin error nuestro)')));
+  }
+  return h('section', { class: 'stack rv-panel' },
+    h('div', { class: 'split' }, h('strong', {}, `3. Lo que hace ${m.rival}`),
+      h('button', { type: 'button', class: 'btn ghost sm', onclick: () => { setPref('rival', false); ctx.rerender(); } }, 'Ocultar')),
+    h('div', { class: 'pad' },
+      h('div', { class: 'pad-g rv' }, h('span', { class: 'pad-t' }, 'Su saque'),
+        h('div', { class: 'pad-b' }, b('Dentro', '', null, () => rivalSheet(m, 'opp_sv')), b('Ace', 'bad', 'them', () => rivalSheet(m, 'opp_pt', 'sv')), b('Error', 'ok', 'us', () => rivalSheet(m, 'opp_err', 'sv')))),
+      h('div', { class: 'pad-g rv' }, h('span', { class: 'pad-t' }, 'Su ataque'),
+        h('div', { class: 'pad-b' }, b('Punto', 'bad', 'them', () => rivalSheet(m, 'opp_pt', 'at')), b('En juego', '', null, () => rivalSheet(m, 'opp_at')), b('Error', 'ok', 'us', () => rivalSheet(m, 'opp_err', 'at')))),
+      h('div', { class: 'pad-g rv' }, h('span', { class: 'pad-t' }, 'Otros errores suyos'),
+        h('div', { class: 'pad-b' }, b('Recepción', 'ok', 'us', () => quickErr('rc')), b('Red o invasión', 'ok', 'us', () => quickErr('red')), b('Otro error', 'ok', 'us', () => quickErr('otro')))),
+      h('div', { class: 'pad-g rv' }, h('span', { class: 'pad-t' }, 'Otro punto suyo'),
+        h('div', { class: 'pad-b' }, b('Punto sin error nuestro', 'bad', 'them', () => logEvent(m, 'opp_pt', null, { k: 'otro' }))))),
+    h('p', { class: 'row-sub', style: { margin: 0 } }, 'Con esto se llena solo el scouting del rival: a dónde saca, quién ataca y cuánto falla. Si el punto ya lo sumaste con el error de tu jugador, Remate no lo vuelve a sumar.'));
 }
 
 // Con "marcar zona" encendido, el saque y el ataque que caen en la cancha rival piden la zona.
@@ -50,7 +120,7 @@ function undo(m) {
   const log = [...(getLog(m)?.log || [])];
   const e = log.pop(); if (!e) return;
   commit(m, log, [e.p, e.out]);
-  toast(`Deshecho: ${e.a === 'set_end' ? 'cierre de set' : e.a === 'sub' ? 'cambio' : `${e.p ? `${nameOf(e.p)}, ` : ''}${ACTIONS[e.a]?.label.toLowerCase() || e.a}`}`, 1600);
+  toast(`Deshecho: ${e.a === 'set_end' ? 'cierre de set' : e.a === 'sub' ? 'cambio' : /^opp_/.test(e.a) ? rivalLabel(e).toLowerCase() : `${e.p ? `${nameOf(e.p)}, ` : ''}${ACTIONS[e.a]?.label.toLowerCase() || e.a}`}`, 1600);
 }
 
 function closeSet(m) {
@@ -183,17 +253,15 @@ export function capture(m, ctx) {
       h('div', { class: 'pad-b' }, Object.entries(ACTIONS).filter(([, a]) => a.g === g).map(([k, a]) =>
         h('button', { type: 'button', class: `act ${a.tone}`, disabled: !ui.sel || sc.over ? true : null, onclick: () => act(m, k, ui.sel) },
           a.short ? h('b', {}, a.short) : null, a.label, pr.auto && a.pt ? h('small', {}, a.pt === 'us' ? ' +1' : ' +1 rival') : null)))))),
-    h('div', { class: 'cluster' },
-      h('button', { type: 'button', class: 'btn sm', disabled: sc.over ? true : null, onclick: () => logEvent(m, 'opp_err', null) }, 'Error del rival'),
-      h('button', { type: 'button', class: 'btn sm', disabled: sc.over ? true : null, onclick: () => logEvent(m, 'opp_pt', null) }, 'Punto del rival (sin error nuestro)')),
-    !ui.sel ? h('p', { class: 'row-sub', style: { margin: 0 } }, 'Primero elige al jugador. Para puntos sin jugador usa los botones del marcador o los de error y punto del rival.') : null);
+    !ui.sel ? h('p', { class: 'row-sub', style: { margin: 0 } }, 'Primero elige al jugador. Para puntos sin jugador usa los botones del marcador o lo que hace el rival (abajo).') : null);
 
   const feed = log.slice(-6).reverse();
-  return h('div', { class: 'stack capture' }, board, pick, pad,
+  return h('div', { class: 'stack capture' }, board, pick, pad, rivalPanel(m, ctx, sc),
     feed.length ? h('section', { class: 'stack' }, sectionTitle('Últimas acciones'),
       h('div', { class: 'rows' }, feed.map((e) => h('div', { class: 'row' }, h('span', { class: 'row-main' },
         h('strong', {}, e.a === 'set_end' ? `Fin del set ${e.set + 1}` : e.a === 'sub' ? `Cambio: entra ${nameOf(e.p)} por ${nameOf(e.out)}`
-          : `${e.p ? `${nameOf(e.p)}: ` : ''}${e.p ? `${GROUPS[ACTIONS[e.a].g]}, ${ACTIONS[e.a].label.toLowerCase()}` : ACTIONS[e.a]?.label || e.a}${e.z ? `, zona ${e.z}` : ''}`),
+          : e.p ? `${nameOf(e.p)}: ${GROUPS[ACTIONS[e.a].g]}, ${ACTIONS[e.a].label.toLowerCase()}${e.z ? `, zona ${e.z}` : ''}`
+            : /^opp_/.test(e.a) ? `${m.rival}: ${rivalLabel(e).replace(/^./, (c) => c.toLowerCase())}` : ACTIONS[e.a]?.label || e.a),
         h('span', { class: 'row-sub' }, `Set ${e.set + 1}${e.pt ? `, punto ${e.pt === 'us' ? 'nuestro' : 'del rival'}` : ''}`)))))) : null);
 }
 

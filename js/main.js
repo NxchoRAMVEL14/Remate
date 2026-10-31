@@ -14,14 +14,13 @@ import ruta from './views/ruta.js';
 import ajustes from './views/ajustes.js';
 import inicio from './views/inicio.js';
 import entrenos from './views/entrenos.js';
-import partidos from './views/partidos.js';
-import partido from './views/partido.js';
+import partidos, { partido } from './views/partidos.js';
 import lab from './views/lab.js';
 import reportes from './views/reportes.js';
 import mas, { selfSheet, enterSelf, leaveSelf } from './views/mas.js';
 import casa from './views/casa.js';
 import mejoras, { ideaSheet } from './views/mejoras.js';
-import asistir from './views/asistir.js';
+import asistir, { listaQr, llegue } from './views/asistir.js';
 import pruebas from './views/pruebas.js';
 import temporada from './views/temporada.js';
 import avisos from './views/avisos.js';
@@ -31,11 +30,12 @@ import torneo from './views/torneos.js';
 import { alineacion } from './views/partido-capture.js';
 import rivales from './views/rivales.js';
 import gym from './views/gym.js';
+import medir from './views/medir.js';
 import ayuda, { novedades, unseenUpdate, firstRun, markSeen, updateBanner, SEEN_KEY } from './views/ayuda.js';
 import { casaReady, isStaff, ls, myPlayer } from './store.js';
 
-const COACH = { hoy, jugadores, jugador, sesiones, sesion, ejercicios, ejercicio, ruta, ajustes, ayuda, partidos, partido, lab, reportes, mas, casa, mejoras, pruebas, temporada, avisos, radar, novedades, teoria, comparar, torneo, alineacion, rivales, rival: rivales, gym };
-const PLAYER = { inicio, ruta, entrenos, partidos, partido, ejercicios, ejercicio, casa, pruebas, avisos, asistir, ajustes, ayuda, radar, novedades, teoria, torneo, gym };
+const COACH = { hoy, jugadores, jugador, sesiones, sesion, ejercicios, ejercicio, ruta, ajustes, ayuda, partidos, partido, lab, reportes, mas, casa, mejoras, pruebas, temporada, avisos, radar, novedades, teoria, comparar, torneo, alineacion, rivales, rival: rivales, gym, medir, 'lista-qr': listaQr, llegue };
+const PLAYER = { inicio, ruta, entrenos, partidos, partido, ejercicios, ejercicio, casa, pruebas, avisos, asistir, ajustes, ayuda, radar, novedades, teoria, torneo, gym, medir, llegue };
 const ASSISTANT = { asistir, partidos, partido, avisos, ejercicios, ejercicio, ajustes, ayuda, novedades, torneo, alineacion };
 const TABLES = { coach: COACH, player: PLAYER, assistant: ASSISTANT };
 const HOME = { coach: '#/hoy', player: '#/inicio', assistant: '#/asistir' };
@@ -48,11 +48,11 @@ const NAV = {
   player: [['inicio', 'Inicio', 'house'], ['entrenos', 'Entrenos', 'calendar-days'], ['partidos', 'Partidos', 'volleyball'], ['ejercicios', 'Ejercicios', 'book-open'], ['ruta', 'Ruta', 'flag']],
   assistant: [['asistir', 'Asistir', 'clipboard-check'], ['partidos', 'Partidos', 'volleyball'], ['avisos', 'Avisos', 'bell'], ['ejercicios', 'Ejercicios', 'book-open']],
 };
-const PARENT = { jugador: 'jugadores', sesion: 'sesiones', ejercicio: 'ejercicios', partido: 'partidos', casa: 'ejercicios', pruebas: 'jugadores', temporada: 'sesiones', avisos: 'hoy', asistir: 'inicio', novedades: 'ajustes', comparar: 'jugadores', torneo: 'partidos', alineacion: 'partidos', rivales: 'partidos', rival: 'partidos' };   // sección que se ilumina en la navegación
+const PARENT = { jugador: 'jugadores', sesion: 'sesiones', ejercicio: 'ejercicios', partido: 'partidos', casa: 'ejercicios', pruebas: 'jugadores', temporada: 'sesiones', avisos: 'hoy', asistir: 'inicio', novedades: 'ajustes', comparar: 'jugadores', torneo: 'partidos', alineacion: 'partidos', rivales: 'partidos', rival: 'partidos', 'lista-qr': 'sesiones', llegue: 'inicio' };   // sección que se ilumina en la navegación
 const UNDER_MAS = new Set(['ejercicios', 'ruta', 'lab', 'reportes', 'ajustes', 'ayuda', 'mejoras', 'mas', 'novedades', 'gym']);
 // Pantalla en la que estás → sección de la mejora (para anotarla rápido desde el foco del encabezado).
 const IDEA_AREA = { hoy: 'hoy', jugadores: 'jugadores', jugador: 'jugadores', sesiones: 'entrenos', sesion: 'entrenos', partidos: 'partidos', partido: 'partidos',
-  casa: 'casa', lab: 'laboratorio', reportes: 'reportes', ruta: 'ruta', ejercicios: 'ejercicios', ejercicio: 'ejercicios', ajustes: 'ajustes', teoria: 'entrenos', comparar: 'jugadores', radar: 'jugadores', torneo: 'partidos', gym: 'gym' };          // en celular, estas iluminan "Más"
+  casa: 'casa', lab: 'laboratorio', reportes: 'reportes', ruta: 'ruta', ejercicios: 'ejercicios', ejercicio: 'ejercicios', ajustes: 'ajustes', teoria: 'entrenos', comparar: 'jugadores', radar: 'jugadores', torneo: 'partidos', gym: 'gym', medir: 'laboratorio', 'lista-qr': 'entrenos' };          // en celular, estas iluminan "Más"
 
 const root = $('#root');
 const uiState = new Map();
@@ -89,7 +89,7 @@ function render({ fresh = false } = {}) {
   const ctx = { role, me, readonly: !!state.viewAs && !state.self, self: !!state.viewAs && state.self, args, ui: uiState.get(key), rerender: () => render() };
   let view;
   try { view = table[name](ctx); } catch (e) { view = errorView(e); }
-  const nav = name === 'radar' ? (role === 'coach' ? 'jugadores' : 'inicio') : name === 'teoria' ? (role === 'coach' ? 'sesiones' : 'entrenos') : name === 'gym' ? (role === 'coach' ? 'gym' : 'ejercicios') : (PARENT[name] || name);
+  const nav = name === 'radar' ? (role === 'coach' ? 'jugadores' : 'inicio') : name === 'teoria' ? (role === 'coach' ? 'sesiones' : 'entrenos') : name === 'gym' ? (role === 'coach' ? 'gym' : 'ejercicios') : name === 'medir' ? (role === 'coach' ? 'lab' : 'inicio') : (PARENT[name] || name);
 
   const sync = state.mode === 'demo' ? h('span', { class: 'sync' }, 'Demo')
     : !state.online ? h('span', { class: 'sync warn' }, pendingCount() ? `Sin internet, ${pendingCount()} por enviar` : 'Sin internet')
@@ -138,7 +138,7 @@ addEventListener('hashchange', () => render({ fresh: true }));
 
 (async function start() {
   applyTheme();
-  root.replaceChildren(h('p', { style: { padding: '24px', color: 'var(--ink-2)' } }, 'Cargando Remate…'));
+  root.replaceChildren(h('div', { class: 'boot', role: 'status' }, h('img', { class: 'hero-icon', src: 'icons/icon-192.png', alt: '', width: 150, height: 150 }), h('p', {}, 'Cargando Remate…')));
   let where = 'gate';
   try { where = await boot(); } catch (e) { console.error(e); }
   if (where === 'app') mountApp(); else mountGate();

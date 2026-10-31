@@ -54,6 +54,7 @@ export default function hoy() {
       focus.length ? h('div', { class: 'cluster', style: { marginTop: '10px' } }, focus.map((k) => h('span', { class: 'chip' }, SKILL_BY_ID[k].name))) : null,
       h('div', { class: 'cluster' },
         h('button', { class: 'btn ball', type: 'button', onclick: () => attendanceSheet(next) }, ic('clipboard-check', 18), 'Pasar lista'),
+        next.session_date === todayStr() ? h('a', { class: 'btn', href: `#/lista-qr/${next.id}` }, ic('qr-code', 18), 'Lista con QR') : null,
         h('a', { class: 'btn', href: `#/sesion/${next.id}` }, ic('book-open', 18), blocks ? 'Ver plan' : 'Armar plan'),
         blocks ? h('button', { class: 'btn', type: 'button', onclick: () => openCourtMode(next) }, ic('timer', 18), 'Modo cancha') : null)));
   } else {

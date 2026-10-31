@@ -190,7 +190,7 @@ export function fmtClock(t) {
 // ---------- calendario (.ics) ----------
 // Mismo formato que la función "calendario" de Supabase. Zona horaria del Bajío: UTC-6 todo el año.
 const ICS_TZ = 'America/Mexico_City';
-const icsEsc = (s) => String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+const icsEsc = (s) => String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
 function icsFold(line) {
   const enc = new TextEncoder(), out = []; let cur = '';
   for (const ch of line) { if (enc.encode(cur + ch).length > (out.length ? 74 : 75)) { out.push(cur); cur = ch; } else cur += ch; }
@@ -201,7 +201,7 @@ function icsLocal(date, time, plusMin = 0) {
   const t = new Date(Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10), hh, mm + plusMin));
   return `${t.getUTCFullYear()}${pad(t.getUTCMonth() + 1)}${pad(t.getUTCDate())}T${pad(t.getUTCHours())}${pad(t.getUTCMinutes())}00`;
 }
-// events: [{ uid, summary, date: 'AAAA-MM-DD', end?, time?: 'HH:MM', minutes?, location?, desc?, alarm?: minutos antes }]
+// events: [{ uid, summary, date: 'AAAA-MM-DD', end?, time?: 'HH:MM', minutes?, location?, desc?, alarm?: minutos antes (null = sin aviso), rrule? }]
 export function buildICS(events, calName = 'Remate') {
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
   const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Remate//Calendario del equipo//ES', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
@@ -211,6 +211,7 @@ export function buildICS(events, calName = 'Remate') {
     L.push('BEGIN:VEVENT', `UID:${e.uid}@remate`, `DTSTAMP:${stamp}`);
     if (e.time) L.push(`DTSTART;TZID=${ICS_TZ}:${icsLocal(e.date, e.time)}`, `DTEND;TZID=${ICS_TZ}:${icsLocal(e.date, e.time, e.minutes || 90)}`);
     else L.push(`DTSTART;VALUE=DATE:${e.date.replaceAll('-', '')}`, `DTEND;VALUE=DATE:${addDays(e.end || e.date, 1).replaceAll('-', '')}`);
+    if (e.rrule) L.push(`RRULE:${e.rrule}`);                      // se repite (por ejemplo, cada semana hasta que termina el bloque)
     L.push(`SUMMARY:${icsEsc(e.summary)}`);
     if (e.location) L.push(`LOCATION:${icsEsc(e.location)}`);
     if (e.desc) L.push(`DESCRIPTION:${icsEsc(e.desc)}`);
@@ -220,6 +221,23 @@ export function buildICS(events, calName = 'Remate') {
   }
   L.push('END:VCALENDAR');
   return `${L.map(icsFold).join('\r\n')}\r\n`;
+}
+
+// Días de la semana en iCalendar (0 = domingo, como Date.getDay()).
+export const BYDAY = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+// Repetir cada semana esos días hasta una fecha (incluida).
+export const weeklyRule = (days, until) => `FREQ=WEEKLY;BYDAY=${[...days].sort((a, b) => a - b).map((d) => BYDAY[d]).join(',')}${until ? `;UNTIL=${until.replaceAll('-', '')}T235959Z` : ''}`;
+// Primera fecha desde «from» (incluida) que cae en ese día de la semana.
+export const nextWeekday = (from, wd) => addDays(from, (wd - parseDate(from).getDay() + 7) % 7);
+// Enlace para agregar UN evento a Google Calendar (con su repetición, si tiene).
+export function googleCalUrl(e) {
+  const p = new URLSearchParams({ action: 'TEMPLATE', text: e.summary });
+  if (e.time) { p.set('dates', `${icsLocal(e.date, e.time)}/${icsLocal(e.date, e.time, e.minutes || 90)}`); p.set('ctz', ICS_TZ); }
+  else p.set('dates', `${e.date.replaceAll('-', '')}/${addDays(e.end || e.date, 1).replaceAll('-', '')}`);
+  if (e.desc) p.set('details', e.desc);
+  if (e.location) p.set('location', e.location);
+  if (e.rrule) p.set('recur', `RRULE:${e.rrule}`);
+  return `https://calendar.google.com/calendar/render?${p}`;
 }
 
 // Clave de un rival: el nombre sin mayúsculas, acentos ni signos («Prepa Las Lomas» = «prepa las lomas»).

@@ -31,6 +31,7 @@ export default function lab(ctx) {
     h('div', { class: 'labcards' },
       card('#/lab/salto', 'zap', 'Salto vertical', 'Pruebas, programa de 12 semanas y bitácora de carga.',
         pos && !pos.notStarted && !pos.finished ? `Semana ${pos.week} de 12` : cmj ? `Mejor salto: ${cmj.best} cm` : null),
+      card('#/medir/cmj/lab', 'video', 'Medir con video', 'Tu salto, el salto en profundidad, 10 m y prueba T con la cámara lenta del celular. Sin apps de paga.', 'Nuevo'),
       card('#/lab/vision', 'eye', 'Visión de juego', 'Situaciones de partido: elige la mejor decisión y mide tu tiempo.',
         vis.n ? `${vis.pct}% de aciertos` : null),
       card('#/lab/coaching', 'messages-square', 'Coaching', 'Bitácora, autoevaluación del mes y guías para entrenar y dirigir.',

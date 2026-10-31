@@ -1,11 +1,37 @@
 // Laboratorio de salto vertical del entrenador: pruebas, programa de 12 semanas y bitácora de carga.
-import { h, ic, fmtDate, todayStr, addDays, plural } from '../util.js';
-import { state, profile, saveProfile, labReady } from '../store.js';
+import { h, ic, fmtDate, todayStr, addDays, plural, nextWeekday } from '../util.js';
+import { state, profile, saveProfile, labReady, settings } from '../store.js';
 import { TEST_KINDS, KIND_SHORT, METHODS, NET_CM, summary, testsOf, noise, attackReach, rsi, weeklyLoad, painAlert, programPosition, programEnds, weekStart } from '../lab-calc.js';
 import { PROGRAM, TEST_WEEKS, RULES, SOURCES, LAB_BY_ID, itemSets, itemContacts, sessionContacts, sessionMinutes, repsText } from '../content/lab-salto.js';
 import { sectionTitle, note, empty, field } from './ui.js';
 import { lineChart } from './chart.js';
 import { testSheet, jumpLogSheet, profileSheet, FOCUS, PAIN_ZONES } from './sheets-lab.js';
+import { calItemSheet } from './sheets-session.js';
+import { weekPlan } from '../content/gym.js';
+
+// Calendario del programa: sesión A y B en los 2 días que elijas, de hoy a la semana 12.
+export function labCalDefaults() {
+  const pr = profile(), pos = programPosition(pr.program_start);
+  if (!pr.program_start || pos?.finished) return null;
+  return { days: weekPlan(2, settings().days || []).map((x) => x.wd), time: '07:00' };
+}
+export function labCalEvents(days, time, alarm = 60) {
+  const pr = profile(); if (!pr.program_start) return [];
+  const ds = [...days].sort((a, b) => (a || 7) - (b || 7)), ev = [];
+  for (let w = 1; w <= 12; w++) {
+    const ws = addDays(pr.program_start, (w - 1) * 7), b = PROGRAM[Math.floor((w - 1) / 3)], wib = ((w - 1) % 3) + 1;
+    ds.slice(0, 2).map((wd) => nextWeekday(ws, wd)).sort().forEach((date, i) => {   // dentro de cada semana, A va primero
+      const k = i ? 'B' : 'A';
+      if (date < todayStr()) return;
+      ev.push({ uid: `lab-${pr.program_start}-${w}${k}`, summary: `Salto vertical · semana ${w}, sesión ${k}`, date, time, minutes: sessionMinutes(b[k], wib) || 45,
+        desc: `Bloque ${b.name}: ${b[k].title}.${TEST_WEEKS.includes(w) && k === 'A' ? ' Esta semana toca medir tu salto al inicio de la sesión.' : ''}`, alarm });
+    });
+  }
+  return ev;
+}
+const labCalSheet = () => { const def = labCalDefaults(); if (!def) return;
+  calItemSheet({ title: 'Programa de salto en el calendario', name: 'laboratorio', intro: 'Elige tus 2 días (deja al menos uno de descanso entre ellos). Cada semana: sesión A el primero y sesión B el segundo, hasta la semana 12.',
+    weekly: { days: def.days, time: def.time, need: 2 }, events: ({ days, time, alarm }) => labCalEvents(days, time, alarm) }); };
 
 const TABS = [['pruebas', 'Pruebas'], ['programa', 'Programa'], ['bitacora', 'Bitácora']];
 const FOCUS_OF = { base: ['fuerza', 'aterrizaje'], fuerza: ['fuerza', 'pliometria'], potencia: ['potencia', 'pliometria'], transferencia: ['potencia', 'pliometria'] };
@@ -30,10 +56,11 @@ function pruebas(ctx, ro) {
   if (!ui.kind || !kinds.includes(ui.kind)) ui.kind = kinds.includes('cmj') ? 'cmj' : kinds[0];
   const tools = h('div', { class: 'cluster' },
     ro ? null : h('button', { class: 'btn primary', type: 'button', onclick: () => testSheet() }, ic('plus', 18), 'Registrar prueba'),
+    h('a', { class: 'btn', href: '#/medir/cmj/lab' }, ic('video', 18), 'Medir con video'),
     ro ? null : h('button', { class: 'btn', type: 'button', onclick: () => profileSheet() }, ic('ruler', 18), 'Mis datos'));
   if (!tests.length) {
     return h('div', { class: 'stack' }, tools,
-      empty('Todavía no hay pruebas', 'Mide tu salto antes de empezar el programa. Así sabrás cuánto mejoras. Con el celular (My Jump) o con una marca en la pared basta.'),
+      empty('Todavía no hay pruebas', 'Mide tu salto antes de empezar el programa. Así sabrás cuánto mejoras. Con «Medir con video» (la cámara lenta de tu celular) o con una marca en la pared basta.'),
       howToMeasure(pr.method));
   }
   const list = testsOf(tests, ui.kind), sm = summary(tests, ui.kind), nz = noise(list);
@@ -73,6 +100,7 @@ function howToMeasure(method) {
       h('li', {}, 'Haz 3 intentos con 1 minuto de descanso y guarda los tres; Remate toma el mejor.'),
       h('li', {}, 'No midas cansado ni al día siguiente de una sesión fuerte de saltos.'),
       h('li', {}, `Método que usas: ${METHODS[method || 'myjump']}. Al registrar una prueba verás los pasos de cada método.`),
+      h('li', {}, 'Sin apps de paga: «Medir con video» calcula tu salto con el tiempo en el aire, cuadro por cuadro, igual que My Jump. Su guía explica cada prueba.'),
       h('li', {}, 'Pruebas recomendadas: con contramovimiento (manos en la cadera) para ver tu fuerza de pierna, y de remate con aproximación para ver tu salto de juego.')));
 }
 
@@ -98,7 +126,8 @@ function programa(ctx, ro) {
     ? h('section', { class: 'panel stack' }, h('h2', {}, 'Empieza tu programa'),
       h('p', { style: { margin: 0 } }, '12 semanas, 2 sesiones por semana de 35 a 50 minutos, con tu peso corporal, conos, un escalón y tus polainas (solo para fuerza de cadera, nunca para saltar).'),
       ro ? null : startControl(ctx))
-    : pos.notStarted ? note(`Tu programa empieza el ${fmtDate(pr.program_start, { weekday: 'long', day: 'numeric', month: 'long' })} (en ${plural(pos.startsIn, 'día', 'días')}). Mientras, puedes revisar las sesiones.`)
+    : pos.notStarted ? h('div', { class: 'stack' }, note(`Tu programa empieza el ${fmtDate(pr.program_start, { weekday: 'long', day: 'numeric', month: 'long' })} (en ${plural(pos.startsIn, 'día', 'días')}). Mientras, puedes revisar las sesiones.`),
+      ro ? null : h('div', { class: 'cluster' }, h('button', { class: 'btn sm', type: 'button', onclick: labCalSheet }, ic('calendar-plus', 16), 'Agregar al calendario')))
       : pos.finished ? h('section', { class: 'panel stack' }, h('h2', {}, 'Terminaste las 12 semanas'),
         h('p', { style: { margin: 0 } }, 'Haz tu prueba final y compárala con la primera. Para seguir mejorando, repite el programa desde el bloque de fuerza o empieza otro ciclo.'),
         ro ? null : startControl(ctx, 'Empezar otro ciclo'))
@@ -107,7 +136,8 @@ function programa(ctx, ro) {
           h('h2', {}, `Bloque ${pos.block + 1}: ${PROGRAM[pos.block].name}`),
           h('p', { style: { margin: 0 } }, PROGRAM[pos.block].weekNotes[pos.weekInBlock - 1]),
           h('p', { class: 'when', style: { margin: 0 } }, thisWeek.length >= 2 ? `Esta semana ya llevas ${thisWeek.length} sesiones. Descansa y juega.` : `Esta semana llevas ${plural(thisWeek.length, 'sesión', 'sesiones')} de 2. Te toca la sesión ${suggested(pos)}.`),
-          TEST_WEEKS.includes(pos.week) ? h('p', { style: { margin: 0 } }, ic('ruler', 16), ' Esta semana toca medir tu salto, al inicio de una sesión.') : null);
+          TEST_WEEKS.includes(pos.week) ? h('p', { style: { margin: 0 } }, ic('ruler', 16), ' Esta semana toca medir tu salto, al inicio de una sesión.') : null,
+          ro ? null : h('div', { class: 'cluster' }, h('button', { class: 'btn sm', type: 'button', onclick: labCalSheet }, ic('calendar-plus', 16), 'Agregar al calendario')));
 
   const weekSel = h('select', { 'aria-label': 'Semana del programa' }, PROGRAM.flatMap((b, i) => [1, 2, 3].map((w) => {
     const n = i * 3 + w; return h('option', { value: n, selected: n === week ? true : null }, `Semana ${n}, ${b.name}${live && n === pos.week ? ' (esta semana)' : ''}`);

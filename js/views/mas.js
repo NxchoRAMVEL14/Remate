@@ -3,7 +3,7 @@ import { h, ic, openSheet, toast } from '../util.js';
 import { state, pendingClaims, players, myPlayer, saveSettings, getPlayer } from '../store.js';
 import { VERSION } from '../version.js';
 import { unseenUpdate } from './ayuda.js';
-import { field, options, note } from './ui.js';
+import { field, options, note, brandBand } from './ui.js';
 import { playerFormSheet } from './sheets-player.js';
 
 // ---------- perfil de jugador del entrenador ----------
@@ -46,7 +46,7 @@ export default function mas() {
   const claims = pendingClaims().length;
   const ideasPending = state.data.ideas.filter((x) => ['idea', 'lista'].includes(x.status)).length;
   const me = myPlayer();
-  return { title: 'Más', el: h('div', { class: 'page' }, h('div', { class: 'labcards' },
+  return { title: 'Más', el: h('div', { class: 'page' }, brandBand(), h('div', { class: 'labcards' },
     item('#/lab', 'zap', 'Laboratorio', 'Tu salto vertical, tu visión de juego y tu coaching. Solo tú lo ves.'),
     item('#/yo', 'user-check', 'Mi perfil de jugador', me ? `Entra como ${me.name}: tu tarjeta, radar, Teoría, En casa y retos.` : 'Si juegas con ellos (por ejemplo en un equipo mixto), ten tu propia ficha.'),
     item('#/ejercicios', 'book-open', 'Ejercicios', 'La biblioteca con diagramas, progresiones y tus ejercicios propios.'),

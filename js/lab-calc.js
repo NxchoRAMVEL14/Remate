@@ -10,7 +10,7 @@ export const TEST_KINDS = {
   drop: 'Salto en profundidad (drop jump)',
 };
 export const KIND_SHORT = { cmj: 'CMJ', cmj_arms: 'CMJ con brazos', sj: 'Desde sentadilla', spike: 'Remate', block: 'Bloqueo', drop: 'En profundidad' };
-export const METHODS = { myjump: 'Celular con My Jump', sargent: 'Marca en la pared (Sargent)', mat: 'Tapete o plataforma', otro: 'Otro' };
+export const METHODS = { remate: 'Video en Remate (cuadro por cuadro)', myjump: 'Celular con My Jump', sargent: 'Marca en la pared (Sargent)', mat: 'Tapete o plataforma', otro: 'Otro' };
 export const NET_CM = { M: 243, F: 224 };                 // altura oficial de la red, varonil y femenil (FIVB)
 
 // Con la marca en la pared se anota la altura que alcanzas; el salto es esa altura menos tu alcance de pie.
@@ -24,6 +24,12 @@ export function rsi(heightCm, contactMs) {
   if (!(heightCm > 0) || !(contactMs > 0)) return null;
   return Math.round(((heightCm / 100) / (contactMs / 1000)) * 100) / 100;
 }
+
+// Altura con el tiempo de vuelo: h = g·t²/8 (el mismo principio que My Jump y los tapetes de contacto).
+export const G = 9.81;
+export const flightHeightCm = (t) => (t > 0 ? round1(((G * t * t) / 8) * 100) : null);
+// Cuánto cambia la altura si un cuadro se marca uno antes o uno después: Δh ≈ g·t·Δt/4.
+export const heightErrorCm = (t, dt) => (t > 0 && dt > 0 ? Math.max(0.1, round1(((G * t * dt) / 4) * 100)) : null);
 
 export const testsOf = (tests, kind) => tests.filter((t) => t.kind === kind).sort((a, b) => `${a.test_date}${a.created_at}`.localeCompare(`${b.test_date}${b.created_at}`));
 

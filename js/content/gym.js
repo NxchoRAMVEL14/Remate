@@ -7,9 +7,9 @@ import { addDays, diffDays, todayStr } from '../util.js';
 // =====================================================================
 export const PTESTS = {
   cmj: { name: 'Salto vertical', short: 'Salto', unit: 'cm', better: 'up', min: 5, max: 120, step: 0.1,
-    how: ['Manos en la cadera, baja rápido a media sentadilla y salta lo más alto posible.', 'Mídelo con My Jump (celular en cámara lenta) o con un tapete de salto.', 'Tres intentos con 1 minuto de descanso; anota el mejor.'] },
+    how: ['Manos en la cadera, baja rápido a media sentadilla y salta lo más alto posible.', 'Mídelo con «Medir con video» de Remate (celular en cámara lenta), con My Jump o con un tapete de salto.', 'Tres intentos con 1 minuto de descanso; anota el mejor.'] },
   vel10: { name: 'Velocidad 10 m', short: '10 m', unit: 's', better: 'down', min: 1, max: 6, step: 0.01,
-    how: ['Calienta bien. Marca la salida y una línea a 10 m en piso que no resbale.', 'Sale parado, con un pie adelante, a la cuenta de «3, 2, 1, ya». Corre a máxima velocidad hasta pasar la línea.', 'Lo más preciso son las fotoceldas. Sin ellas: graba de lado en cámara lenta y mide del primer movimiento a cuando el tronco cruza la línea, o usa cronómetro, siempre con la misma persona.', 'Tres intentos con 2 a 3 minutos de descanso; anota el mejor (menos segundos es mejor).'] },
+    how: ['Calienta bien. Marca la salida y una línea a 10 m en piso que no resbale.', 'Sale parado, con un pie adelante, a la cuenta de «3, 2, 1, ya». Corre a máxima velocidad hasta pasar la línea.', 'Lo más preciso son las fotoceldas. Sin ellas: graba de lado en cámara lenta y mídelo con «Medir con video» de Remate (del primer movimiento a cuando el tronco cruza la línea), o usa cronómetro, siempre con la misma persona.', 'Tres intentos con 2 a 3 minutos de descanso; anota el mejor (menos segundos es mejor).'] },
   alcance: { name: 'Alcance de remate', short: 'Alcance', unit: 'cm', better: 'up', min: 150, max: 380, step: 1,
     how: ['Con aproximación de remate, toca lo más alto posible una pared marcada (o una regla junto a la red).', 'Anota la marca más alta de tres intentos, en centímetros desde el piso.', 'Compárala con la red: 2.24 m femenil y 2.43 m varonil.'] },
   agilidad: { name: 'Agilidad (prueba T)', short: 'Agilidad', unit: 's', better: 'down', min: 5, max: 30, step: 0.01,
@@ -19,6 +19,67 @@ export const PTESTS = {
   estatura: { name: 'Estatura', short: 'Estatura', unit: 'cm', better: 'up', min: 120, max: 230, step: 0.5,
     how: ['Descalzo, talones, glúteos y espalda contra la pared.', 'Útil para entender cambios de salto y alcance mientras crecen.'] },
 };
+
+// =====================================================================
+// Medir con video (v3.7): guía de cada prueba que Remate mide cuadro por cuadro, sin apps de paga.
+// type: 'jump' (tiempo de vuelo), 'drop' (contacto + vuelo), 'time' (de la salida a la llegada).
+// lab: tipo de prueba del laboratorio del entrenador; ptest: prueba física del jugador donde se puede guardar.
+// =====================================================================
+export const TEST_GUIDE = {
+  cmj: { name: 'Salto con contramovimiento (CMJ)', short: 'CMJ', type: 'jump', lab: 'cmj', ptest: 'cmj',
+    what: 'La fuerza explosiva de las piernas, sin la ayuda de los brazos. Es la prueba de salto más usada y la más fácil de repetir igual.',
+    how: ['Manos en la cadera todo el salto.', 'Parado, baja rápido a media sentadilla (a donde te salga natural) y sube de inmediato lo más alto que puedas.', 'Piernas estiradas en el aire y cae en el mismo lugar, con las puntas de los pies primero y las piernas casi estiradas.', '3 intentos con 1 minuto de descanso. Remate guarda el mejor.'],
+    errors: ['Doblar las rodillas en el aire o al caer: el vuelo dura más y el salto sale más alto de lo real.', 'Soltar las manos de la cadera.', 'Caer lejos de donde despegaste.'] },
+  cmj_arms: { name: 'Salto con contramovimiento y brazos', short: 'Con brazos', type: 'jump', lab: 'cmj_arms',
+    what: 'Tu salto vertical con el impulso de los brazos, más parecido al bloqueo y al salto de juego.',
+    how: ['Brazos libres: bájalos al hacer la media sentadilla y súbelos con fuerza al saltar.', 'Mismo cuidado al caer: piernas casi estiradas y en el mismo lugar.', '3 intentos con 1 minuto de descanso.'],
+    errors: ['Doblar las rodillas al caer.', 'Dar un paso antes de saltar (eso ya es otra prueba).'] },
+  sj: { name: 'Salto desde sentadilla (SJ)', short: 'Desde sentadilla', type: 'jump', lab: 'sj',
+    what: 'La fuerza de las piernas sin rebote. Comparado con el CMJ te dice qué tanto aprovechas el rebote (ciclo de estiramiento y acortamiento).',
+    how: ['Manos en la cadera. Baja a media sentadilla (rodillas a unos 90°) y quédate quieto 2 a 3 segundos.', 'Sube lo más rápido que puedas sin bajar antes. Si bajas aunque sea un poco, repítelo.', '3 intentos con 1 minuto de descanso.'],
+    errors: ['Hacer un pequeño rebote antes de subir.', 'Doblar las rodillas al caer.'] },
+  block: { name: 'Salto de bloqueo', short: 'Bloqueo', type: 'jump', lab: 'block',
+    what: 'Tu salto de bloqueo sin desplazamiento, con los brazos arriba como en la red.',
+    how: ['Frente a la red o a una pared, manos a la altura de la frente.', 'Media sentadilla rápida y salta con los brazos extendidos hacia arriba.', 'Cae en el mismo lugar, piernas casi estiradas. 3 intentos.'],
+    errors: ['Caer adelante o de lado (pasa con frecuencia junto a la red).', 'Doblar las rodillas al caer.'] },
+  spike: { name: 'Salto de remate (con aproximación)', short: 'Remate', type: 'jump', lab: 'spike',
+    what: 'Tu salto de juego con la aproximación de 3 o 4 pasos. Es el que más se parece al partido.',
+    how: ['Haz tu aproximación normal y salta como para rematar, sin balón o con balón colgado.', 'Graba de lado, lejos (3 a 4 m) para que se vea el despegue y la caída en el cuadro.', '3 intentos con 1 a 2 minutos de descanso.'],
+    errors: ['Con aproximación casi siempre caes adelante y con las rodillas dobladas: toma el resultado como referencia tuya, no para comparar con otros.', 'Que el celular no alcance a ver los pies en la caída.'] },
+  drop: { name: 'Salto en profundidad (drop jump) e índice de fuerza reactiva', short: 'En profundidad', type: 'drop', lab: 'drop',
+    what: 'Qué tan rápido y qué tan alto rebotas después de caer: el índice de fuerza reactiva (altura ÷ tiempo de contacto). Mide la «reactividad» que usas en el segundo salto y en los rebotes.',
+    how: ['Párate en un cajón firme de unos 30 cm, manos en la cadera.', 'Déjate caer (no saltes del cajón) y en cuanto toques el piso rebota lo más alto y lo más rápido posible.', 'Piensa «el piso quema»: el contacto debe ser cortísimo.', '3 intentos con 1 a 2 minutos de descanso. Anota la altura del cajón.'],
+    errors: ['Saltar desde el cajón en lugar de dejarte caer.', 'Hundirte mucho al caer (contacto largo): si pasa de unos 250 ms ya es otro salto.', 'Doblar las rodillas en el aire o al caer.'] },
+  vel10: { name: 'Velocidad 10 m', short: '10 m', type: 'time', ptest: 'vel10',
+    what: 'La aceleración de los primeros pasos, la que usas para llegar a un balón.',
+    how: ['Marca la salida y una línea a 10 m en piso que no resbale.', 'Sale parado, con un pie adelante, cuando quiera (sin señal): el tiempo empieza con su primer movimiento.', 'Graba de lado, a la altura de la línea de llegada, lo suficientemente lejos para ver también la salida (o pide que alguien con otro celular grabe la salida).', '3 intentos con 2 a 3 minutos de descanso.'],
+    errors: ['Arrancar con un rebote o un paso hacia atrás.', 'Frenar antes de la línea.'] },
+  agilidad: { name: 'Agilidad (prueba T)', short: 'Prueba T', type: 'time', ptest: 'agilidad',
+    what: 'Cambios de dirección: sprint, desplazamiento lateral y de espaldas, como en la defensa.',
+    how: ['Cuatro conos en T: A en la salida, B a 9.14 m al frente, C y D a 4.57 m a cada lado de B.', 'Sprint de A a B, lateral a C, lateral a D, lateral de regreso a B y de espaldas hasta A. Toca la base de cada cono.', 'Graba desde atrás de A para ver la salida y la llegada.', '3 intentos con 2 a 3 minutos de descanso.'],
+    errors: ['Cruzar los pies en los desplazamientos laterales.', 'No tocar un cono (el intento no cuenta).'] },
+};
+// Qué cuadros se marcan en cada tipo de prueba.
+export const MARKS = {
+  jump: [['off', 'Despegue', 'El primer cuadro en que los dos pies ya no tocan el piso.'], ['land', 'Aterrizaje', 'El primer cuadro en que un pie vuelve a tocar el piso.']],
+  drop: [['touch', 'Contacto', 'El primer cuadro en que los pies tocan el piso al caer del cajón.'], ['off', 'Despegue', 'El primer cuadro en que ya están en el aire otra vez.'], ['land', 'Aterrizaje', 'El primer cuadro en que vuelven a tocar el piso.']],
+  time: [['start', 'Salida', 'El primer cuadro en que se mueve (pie de atrás o cadera).'], ['end', 'Llegada', 'El cuadro en que el tronco cruza la línea (en la prueba T, cuando pasa por el cono A).']],
+};
+export const FILM_TIPS = [
+  'Graba en cámara lenta: 120 o 240 cuadros por segundo. Entre más cuadros, más precisa la medida.',
+  'Celular firme (en el piso, un banco o un tripié), no en la mano. Para saltos ponlo a la altura de los pies, a 1.5 o 2 m, de lado.',
+  'Que se vean los pies completos todo el salto y que haya buena luz (en luz baja la cámara lenta sale oscura y movida).',
+  'Un intento por video es lo más fácil, pero puedes grabar los 3 seguidos y marcarlos uno por uno.',
+  'Si el video se ve en cámara lenta, en Remate elige «Velocidad del video»: ×4 si grabaste a 120 y ×8 si grabaste a 240.',
+];
+export const MEDIR_SOURCES = [
+  ['Balsalobre-Fernández, Glaister y Lockey (2015), validez y confiabilidad de una app de iPhone para medir el salto vertical (My Jump). Journal of Sports Sciences. Mide el tiempo de vuelo marcando despegue y aterrizaje en video a 120 cuadros por segundo.', 'https://doi.org/10.1080/02640414.2014.996184'],
+  ['Revisión metaanalítica (2023): la app My Jump es válida y confiable para medir el salto vertical con el tiempo de vuelo. Remate usa el mismo principio.', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC10656545/'],
+  ['Flanagan y Comyns (2008), uso del tiempo de contacto y del índice de fuerza reactiva (altura ÷ contacto) en el salto en profundidad. Strength and Conditioning Journal.', 'https://journals.lww.com/nsca-scj/fulltext/2008/10000/the_use_of_contact_time_and_the_reactive_strength.5.aspx'],
+  ['Flanagan, Ebben y Jensen (2008), confiabilidad del índice de fuerza reactiva en saltos en profundidad desde 30 cm. Journal of Strength and Conditioning Research.', 'https://pubmed.ncbi.nlm.nih.gov/18714215/'],
+  ['Romero-Franco y cols. (2017): medir el tiempo de un sprint con el video en cámara lenta del celular coincide casi perfecto con las fotoceldas. European Journal of Sport Science.', 'https://doi.org/10.1080/17461391.2016.1249031'],
+  ['Prueba T de agilidad: protocolo de Semenick (1990) y confiabilidad de Pauole y cols. (2000), Journal of Strength and Conditioning Research.', 'https://www.topendsports.com/testing/tests/t-test.htm'],
+];
 
 // Cambio entre la primera y la última prueba; "mejor" según si conviene subir o bajar.
 export function testTrend(list, kind) {

@@ -4,6 +4,7 @@ import { state, add, patch, remove, group, players, playerById, torneosReady, la
 import { result, KINDS } from '../match-calc.js';
 import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
 import { noticeSheet, waLink } from './avisos.js';
+import { calButton, tourEvent } from './sheets-session.js';
 
 export const RAMAS = { F: 'Femenil', M: 'Varonil', X: 'Mixto' };
 const RSVP = { voy: ['Voy', 'ok'], duda: ['En duda', 'warn'], no: ['No voy', 'bad'] };
@@ -343,7 +344,8 @@ export default function torneo(ctx) {
     h('section', { class: 'band next stack' }, h('span', { class: 'when' }, `${PHASE[ph][0]} · ${RAMAS[t.branch]}`), h('h2', {}, t.name),
       h('p', { style: { margin: 0 } }, [dates(t), t.venue].filter(Boolean).join(' · ')),
       t.place || t.result ? h('p', { class: 'tr-result' }, ic('medal', 20), ` ${[placeText(t.place), t.result].filter(Boolean).join('. ')}`) : null,
-      t.note ? h('p', { style: { margin: 0 } }, t.note) : null),
+      t.note ? h('p', { style: { margin: 0 } }, t.note) : null,
+      ph !== 'fin' && !ctx.readonly ? h('div', { class: 'cluster' }, calButton({ name: 'torneo', events: [tourEvent(t)] })) : null),
     // Jugador: su convocatoria
     !coach && !staff && me ? (roster.includes(me.id)
       ? h('section', { class: 'panel stack' }, h('strong', {}, ph === 'fin' ? 'Estuviste convocado a este torneo.' : 'Estás convocado. ¿Vas al torneo?'), ph === 'fin' ? null : tRsvpControl(t, me, ctx.readonly))

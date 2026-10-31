@@ -1,5 +1,6 @@
 // Cálculos de partidos (puros, sin pantalla): marcador desde el registro, estadística por jugador y del equipo.
 // Registro: [{ id, set, p: id de jugador o null, a: acción, pt: 'us' | 'them' | null }]. 'set_end' cierra el set en curso.
+// Acciones del rival (sin jugador nuestro): k = qué fue (saque, ataque...), rn = su número de playera, z = zona de NUESTRA cancha.
 
 // pt: a quién le da el punto cuando el marcador automático está encendido.
 export const ACTIONS = {
@@ -22,6 +23,8 @@ export const ACTIONS = {
   // sin jugador
   opp_err: { g: 'tm', label: 'Error del rival', tone: 'ok', pt: 'us' },
   opp_pt: { g: 'tm', label: 'Punto del rival', tone: 'bad', pt: 'them' },
+  opp_sv: { g: 'tm', label: 'Saque del rival', tone: '' },          // saque del rival que entra y se juega
+  opp_at: { g: 'tm', label: 'Ataque del rival', tone: '' },         // ataque del rival que sigue en juego
   pt_us: { g: 'tm', label: '+1 nuestro', tone: 'ok', pt: 'us' },
   pt_them: { g: 'tm', label: '+1 rival', tone: 'bad', pt: 'them' },
 };
@@ -123,6 +126,7 @@ export function replay(log = [], lineups = [], players = []) {
     // Si no sabemos quién saca, una acción de saque o de recepción nuestra lo dice.
     if (!serving && /^sv_/.test(e.a)) serving = 'us';
     if (!serving && /^rc_/.test(e.a)) serving = 'them';
+    if (!serving && (e.a === 'opp_sv' || (e.k === 'sv' && /^opp_/.test(e.a)))) serving = 'them';
     if (e.pt !== 'us' && e.pt !== 'them') continue;
     rallies.push({ set, serving, key: slots ? rotKey(slots, setters, n) : null, won: e.pt === 'us' });
     if (serving && e.pt !== serving && e.pt === 'us' && slots) { slots = rotate(slots); n++; }
@@ -156,4 +160,47 @@ export function zoneCounts(log = [], kind = 'sv', playerId = null) {
     c[e.z].n++; if (e.a === 'sv_ace' || e.a === 'at_k') c[e.z].pts++;
   }
   return c;
+}
+
+// ---------- Lo que hace el rival ----------
+export const OPP_KINDS = { sv: 'saque', at: 'ataque', rc: 'recepción', red: 'red o invasión', otro: 'otro' };
+const isOpp = (e) => /^opp_/.test(e.a || '');
+export const hasRivalCapture = (log = []) => log.some((e) => e.a === 'opp_sv' || e.a === 'opp_at' || (isOpp(e) && (e.k || e.rn || e.z)));
+
+// Texto corto de una acción del rival para la lista de últimas acciones.
+export function rivalLabel(e) {
+  const who = e.rn ? ` del #${e.rn}` : '', z = e.z ? `, a zona ${e.z}` : '';
+  if (e.a === 'opp_sv') return `Saque dentro${who}${z}`;
+  if (e.a === 'opp_at') return `Ataque en juego${who}${z}`;
+  if (e.a === 'opp_pt') return e.k === 'sv' ? `Ace${who}${z}` : e.k === 'at' ? `Punto de ataque${who}${z}` : 'Punto del rival';
+  if (e.a === 'opp_err') return e.k ? `Error de ${OPP_KINDS[e.k] || 'otro'}${who}` : 'Error del rival';
+  return ACTIONS[e.a]?.label || e.a;
+}
+
+// Saques, ataques y errores del rival: zonas de nuestra cancha a donde mandan el balón y quién lo hace.
+export function rivalStats(log = []) {
+  const zones = () => { const c = {}; for (let z = 1; z <= 6; z++) c[z] = { n: 0, pts: 0 }; return c; };
+  const sv = { n: 0, aces: 0, errs: 0, zones: zones(), by: new Map() };
+  const at = { n: 0, kills: 0, errs: 0, zones: zones(), by: new Map() };
+  const errors = { sv: 0, at: 0, rc: 0, red: 0, otro: 0 };
+  let points = 0, gifts = 0;
+  const bump = (map, rn, key) => { if (!rn) return; const x = map.get(rn) || { rn, n: 0, pts: 0, errs: 0 }; x.n++; if (key) x[key]++; map.set(rn, x); };
+  for (const e of log) {
+    if (!isOpp(e)) continue;
+    const kind = e.a === 'opp_sv' ? 'sv' : e.a === 'opp_at' ? 'at' : e.k || null;
+    if (e.a === 'opp_err') { errors[e.k && errors[e.k] != null ? e.k : 'otro']++; gifts++; }
+    if (e.a === 'opp_pt') points++;
+    const box = kind === 'sv' ? sv : kind === 'at' ? at : null;
+    if (!box) continue;
+    box.n++;
+    const pt = e.a === 'opp_pt', err = e.a === 'opp_err';
+    if (pt) box[kind === 'sv' ? 'aces' : 'kills']++;
+    if (err) box.errs++;
+    if (e.z && box.zones[e.z]) { box.zones[e.z].n++; if (pt) box.zones[e.z].pts++; }
+    bump(box.by, e.rn ? String(e.rn) : null, pt ? 'pts' : err ? 'errs' : null);
+  }
+  const list = (m) => [...m.values()].sort((a, b) => b.n - a.n || b.pts - a.pts || Number(a.rn) - Number(b.rn));
+  const eff = at.n ? Math.round(((at.kills - at.errs) / at.n) * 1000) / 1000 : null;
+  return { sv: { ...sv, by: list(sv.by), inPct: sv.n ? Math.round(((sv.n - sv.errs) / sv.n) * 100) : null },
+    at: { ...at, by: list(at.by), eff }, errors, points, gifts, any: sv.n + at.n + gifts + points > 0 };
 }

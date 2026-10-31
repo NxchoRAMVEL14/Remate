@@ -29,7 +29,8 @@ export function testSheet(p, t = null, kind0 = 'cmj') {
   openSheet({
     title: t ? 'Editar prueba' : `Prueba de ${p.name}`,
     body: h('div', { class: 'stack' }, h('div', { class: 'grid' }, field('Fecha', date), field('Prueba', kind)), field('Resultado', val), field('Nota', text),
-      h('details', {}, h('summary', {}, 'Cómo se mide'), how), err),
+      h('details', {}, h('summary', {}, 'Cómo se mide'), how,
+        ['cmj', 'vel10', 'agilidad'].includes(kind.value) ? h('a', { class: 'btn sm', href: `#/medir/${kind.value}/pruebas`, onclick: (e) => { const d = e.currentTarget.closest('dialog'); d?.close(); d?.remove(); } }, 'Medir con video en Remate') : null), err),
     actions: [{ label: 'Cancelar' },
       t ? { label: 'Borrar', kind: 'danger', onClick: async () => { if (!(await confirmSheet({ title: '¿Borrar esta prueba?', text: 'No se puede deshacer.', ok: 'Borrar', danger: true }))) return false; remove('playerTests', t.id); toast('Prueba borrada'); return true; } } : null,
       { label: 'Guardar', kind: 'primary', onClick: () => {
@@ -48,7 +49,8 @@ export function testsPanel(p, { canEdit = false } = {}) {
   const kinds = Object.keys(PTESTS).filter((k) => list.some((t) => t.kind === k));
   return h('div', { class: 'stack' },
     canEdit ? h('div', { class: 'cluster' }, h('button', { class: 'btn primary sm', type: 'button', disabled: teamReady() ? null : true, onclick: () => testSheet(p) }, ic('plus', 16), 'Registrar prueba'),
-      h('a', { class: 'btn sm', href: '#/pruebas' }, ic('users', 16), 'Pruebas de todo el equipo')) : null,
+      h('a', { class: 'btn sm', href: '#/pruebas' }, ic('users', 16), 'Pruebas de todo el equipo'),
+      h('a', { class: 'btn sm', href: '#/medir/cmj/jugadores' }, ic('video', 16), 'Medir con video')) : null,
     kinds.length ? kinds.map((k) => {
       const tr = testTrend(list, k), d = PTESTS[k];
       return h('section', { class: 'panel stack' },
@@ -65,7 +67,9 @@ export function testsPanel(p, { canEdit = false } = {}) {
 export default function pruebas(ctx) {
   if (ctx.role !== 'coach') {
     const me = ctx.me;
-    return { title: 'Mis pruebas físicas', back: '#/inicio', el: h('div', { class: 'page' }, me ? testsPanel(me) : null,
+    return { title: 'Mis pruebas físicas', back: '#/inicio', el: h('div', { class: 'page' },
+      h('a', { class: 'labcard', href: '#/medir/cmj/pruebas' }, h('span', { class: 'lc-ic' }, ic('video', 26)), h('span', { class: 'lc-t' }, h('strong', {}, 'Medir con video'), h('span', {}, 'Mide tu salto, tu velocidad de 10 m o la prueba T con la cámara lenta de tu celular, y mándale el resultado a tu entrenador.')), ic('chevron-right', 20)),
+      me ? testsPanel(me) : null,
       note('Las pruebas se repiten cada 2 o 3 meses, siempre igual, para comparar contigo mismo. Lo que importa es tu avance, no compararte con otros.')) };
   }
   // Entrenador: captura rápida de una prueba para todo el equipo.
@@ -100,6 +104,7 @@ export default function pruebas(ctx) {
     h('p', { class: 'row-sub', style: { margin: 0 } }, due.last ? `Última toma del equipo: ${fmtDate(due.last, { day: 'numeric', month: 'long' })} (hace ${due.days} días). Te recuerdo en Hoy cada ${testsEvery()} semanas; lo cambias en Ajustes.` : `Te recuerdo en Hoy cada ${testsEvery()} semanas; lo cambias en Ajustes.`),
     h('div', { class: 'grid' }, field('Prueba', kind), field('Fecha', date)),
     h('details', { class: 'panel' }, h('summary', {}, h('strong', {}, `Cómo se mide: ${d.name}`)), h('ol', { class: 'plain', style: { marginTop: '10px' } }, d.how.map((x) => h('li', {}, x)))),
+    ['cmj', 'vel10', 'agilidad'].includes(ui.kind) ? h('div', { class: 'cluster' }, h('a', { class: 'btn', href: `#/medir/${ui.kind}/pruebas` }, ic('video', 18), `Medir ${PTESTS[ui.kind].short.toLowerCase()} con video`)) : null,
     list.length ? h('div', { class: 'rows tests-entry' }, rows) : empty('Sin jugadores', 'Agrega jugadores primero.'),
     list.length ? h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', disabled: teamReady() ? null : true, onclick: save }, ic('check', 18), 'Guardar resultados')) : null,
     note('Deja en blanco a quien no hizo la prueba. Cada jugador ve sus propias pruebas y su avance, nunca las de los demás.'));

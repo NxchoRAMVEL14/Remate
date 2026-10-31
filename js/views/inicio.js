@@ -10,6 +10,7 @@ import { playerCard, playerStats, badgesEl } from './card.js';
 import { homeWeek, planOf } from './casa.js';
 import { gymVisible, gymLine, coachPlanOf } from './gym.js';
 import { unseenBanner } from './avisos.js';
+import { calButton, sessionEvent } from './sheets-session.js';
 import { isStaff } from '../store.js';
 import { PTESTS, testTrend } from '../content/gym.js';
 
@@ -20,10 +21,16 @@ export default function inicio(ctx) {
   if (!me) return { title: 'Inicio', el: h('div', { class: 'page' }, empty('Tu cuenta ya no está ligada a un jugador', 'Pasa cuando tu entrenador generó un código nuevo o cambió tus datos. Pídele tu código actual y vuelve a entrar.',
     h('a', { class: 'btn primary', href: '#/ajustes' }, 'Ir a Ajustes'))) };
   const stats = playerStats(me), { gap, att } = stats;
-  const el = h('div', { class: 'page' }, unseenBanner(ctx),
+  // Hay entrenamiento hoy y todavía no marca su llegada: el atajo a la lista con QR, hasta arriba.
+  const todayS = sessions().find((s) => s.session_date === todayStr() && s.status !== 'cancelada' && !state.data.attendance.some((a) => a.session_id === s.id && a.player_id === me.id));
+  const el = h('div', { class: 'page' },
+    todayS ? h('a', { class: 'labcard checkin-card', href: '#/llegue' }, h('span', { class: 'lc-ic' }, ic('qr-code', 26)),
+      h('span', { class: 'lc-t' }, h('strong', {}, 'Marcar mi llegada'), h('span', {}, `Hoy hay entreno${todayS.start_time ? ` a las ${String(todayS.start_time).slice(0, 5)}` : ''}. Al llegar, escanea el QR de tu entrenador.`)), ic('chevron-right', 20)) : null,
+    unseenBanner(ctx),
     isStaff() ? h('a', { class: 'labcard', href: '#/asistir' }, h('span', { class: 'lc-ic' }, ic('clipboard-check', 26)),
       h('span', { class: 'lc-t' }, h('strong', {}, 'Modo capitán'), h('span', {}, 'Pasa lista y captura los partidos del equipo.')), ic('chevron-right', 20)) : null,
     playerCard(me, stats));
+
 
   // próximo entrenamiento publicado
   const next = nextSession(sessions());
@@ -33,7 +40,8 @@ export default function inicio(ctx) {
       h('div', {}, h('div', { class: 'row-sub' }, 'Tu próximo entrenamiento'), h('h2', {}, next.title || 'Entrenamiento'), h('div', {}, `${sessionWhen(next)}, ${next.minutes} min`)),
       focus.length ? h('div', { class: 'cluster' }, focus.map((k) => h('span', { class: 'chip info' }, SKILL_BY_ID[k].name))) : null,
       plan.length ? h('p', { class: 'row-sub', style: { margin: 0 } }, `Vamos a trabajar: ${plan.map((b) => (b.ex ? getEx(b.ex)?.name : b.text)).filter(Boolean).slice(0, 4).join(', ')}${plan.length > 4 ? ' y más' : ''}.`) : null,
-      h('a', { class: 'btn', href: '#/entrenos' }, ic('calendar-days', 18), 'Ver el plan completo')));
+      h('div', { class: 'cluster' }, h('a', { class: 'btn', href: '#/entrenos' }, ic('calendar-days', 18), 'Ver el plan completo'),
+        ctx.readonly ? null : calButton({ name: 'entrenamiento', events: [sessionEvent(next)] }))));
   } else {
     el.append(note('Tu entrenador todavía no publica el siguiente entrenamiento. Cuando lo haga, lo verás aquí.'));
   }

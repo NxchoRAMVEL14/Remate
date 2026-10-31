@@ -154,6 +154,8 @@ function coach() {
       h('div', { class: 'field' }, h('span', { class: 'label' }, 'Días de entrenamiento'), days),
       h('div', { class: 'grid' }, field('Hora de inicio', start), field('Duración (min)', mins)),
       field('Retardos que cuentan como 1 falta', late, 'Pon 0 para que los retardos nunca se conviertan en faltas. Las faltas justificadas no restan.'),
+      field('Lista con QR: tolerancia (minutos)', h('input', { type: 'number', min: 0, max: 60, inputmode: 'numeric', value: st.checkin_late ?? 10, onchange: (e) => { saveSettings({ checkin_late: Math.min(60, Math.max(0, Math.round(Number(e.target.value)) || 0)) }); toast('Guardado'); } }),
+        'Quien escanea el QR después de la hora de inicio más estos minutos queda con retardo.'),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.warmup_prev !== false ? true : null, onchange: (e) => { saveSettings({ warmup_prev: e.target.checked }); toast(e.target.checked ? 'Calentamiento preventivo activado' : 'Calentamiento preventivo desactivado'); } }),
         h('span', {}, 'Empezar cada entrenamiento con el calentamiento preventivo (tobillo, rodilla y hombro). Se turnan las versiones A, B y C por semana.')),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.gym_players !== false ? true : null, onchange: (e) => { saveSettings({ gym_players: e.target.checked }); toast(e.target.checked ? 'Tus jugadores ya ven Gym' : 'Gym oculto para tus jugadores'); } }),

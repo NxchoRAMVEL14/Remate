@@ -1,13 +1,14 @@
 // Físico en el gym: rutina de pesas según lo que quieres lograr, registro de cargas y cómo llegar bien al entreno.
 // El jugador arma su rutina (se guarda en su celular) o usa la que le asigna el entrenador (columna gym_plan de su ficha).
 // Las sesiones que registra se guardan en la nube (gym_logs): las ven él y su entrenador.
-import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr, addDays, plural, DAYS, DAYS_LONG } from '../util.js';
+import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr, addDays, plural, DAYS, DAYS_LONG, nextWeekday, weeklyRule } from '../util.js';
 import { state, add, remove, patch, players, settings, gymReady, ls, multiTeam, teamOf, inTeam } from '../store.js';
 import { weekStart, num } from '../lab-calc.js';
 import { GYM, GYM_BY_ID, GROUPS, NEED, EQUIP, EXP, TIER, PHASE, MINUTES, GOALS, buildRoutine, normSpec, isSpec, maxDays, weekPlan,
   nextStep, blockWeek, topReps, lowReps, available, groupOf, gymName, WARMUP, COOLDOWN, READ, RULES, ARRIVE, GYM_SOURCES } from '../content/gym.js';
 import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
 import { lineChart } from './chart.js';
+import { calItemSheet } from './sheets-session.js';
 
 // ---------- datos ----------
 const KEY = { mine: (id) => `remate.gym.mine.${id}`, use: (id) => `remate.gym.use.${id}`, draft: (id) => `remate.gym.draft.${id}` };
@@ -25,6 +26,26 @@ export function activeSpec(me) {
   if (coachSpec && (ls.get(KEY.use(me.id)) !== 'mine' || !own)) return { spec: coachSpec, src: 'coach', coachSpec, own };
   if (own) return { spec: own, src: 'mine', coachSpec, own };
   return { spec: null, src: null, coachSpec, own };
+}
+
+// Calendario: cada día de la rutina en un día de la semana, cada semana hasta que termina el bloque de 6 semanas.
+export function gymCalDefaults(me) {
+  const act = activeSpec(me); if (!act.spec) return null;
+  const r = buildRoutine(act.spec);
+  return { n: r.days.length, days: weekPlan(r.days.length, settings().days || []).map((x) => x.wd), time: '18:00' };
+}
+export function gymCalEvents(me, days, time, alarm = 60) {
+  const act = activeSpec(me); if (!act.spec) return [];
+  const r = buildRoutine(act.spec), bw = blockWeek(act.spec.since || act.spec.updated_at);
+  const until = bw?.ends && bw.ends > todayStr() ? bw.ends : addDays(todayStr(), 41);
+  const ds = [...days].sort((a, b) => (a || 7) - (b || 7));
+  return r.days.slice(0, ds.length).map((d, i) => ({ uid: `gym-${me.id}-${d.key}`, summary: `Gym · día ${d.key}: ${d.name}`, date: nextWeekday(todayStr(), ds[i]), time,
+    minutes: d.min || 60, rrule: weeklyRule([ds[i]], until), desc: `Tu rutina de Remate: ${d.items.map((rx) => gymName(rx.ex)).join(', ')}.`, alarm }));
+}
+export function gymCalSheet(me) {
+  const def = gymCalDefaults(me); if (!def) return;
+  calItemSheet({ title: 'Mi gym en el calendario', name: 'gym', intro: `Elige qué días vas al gym (${plural(def.n, 'día', 'días')}). Cada día de tu rutina se repite cada semana hasta que termina tu bloque; al empezar el siguiente, vuelve a agregarlo.`,
+    weekly: { days: def.days, time: def.time, need: def.n }, events: ({ days, time, alarm }) => gymCalEvents(me, days, time, alarm) });
 }
 
 export function gymStats(pid) {
@@ -242,7 +263,8 @@ function routineTab(ctx, me, canLog) {
       act.src === 'coach' && s.note ? h('p', { style: { margin: 0 } }, `Tu entrenador: “${s.note}”`) : null,
       bw?.light ? note('Semana ligera: haz una serie menos en cada ejercicio y no subas peso. La siguiente semana vuelve a armar tu rutina (o súbele la experiencia si ya dominas la técnica).') : null,
       ctx.readonly ? null : h('div', { class: 'cluster' }, h('button', { class: 'btn sm', type: 'button', onclick: () => { ui.edit = true; ui.draftSpec = normSpec(act.src === 'mine' ? s : (act.own || s)); ctx.rerender(); } },
-        ic('pencil', 16), act.src === 'coach' && !act.own ? 'Armar la mía' : 'Cambiar mi rutina'))),
+        ic('pencil', 16), act.src === 'coach' && !act.own ? 'Armar la mía' : 'Cambiar mi rutina'),
+        h('button', { class: 'btn sm', type: 'button', onclick: () => gymCalSheet(me) }, ic('calendar-plus', 16), 'Agregar al calendario'))),
     routineBlock(r, { pid: me.id, canLog, me }),
     readPanel(), rulesPanel());
 }

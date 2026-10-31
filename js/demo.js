@@ -140,6 +140,25 @@ function simulate(R, starters, bestOf, edges) {
   return log;
 }
 
+// Lo que hace el rival (3.7): patrón fijo sobre el registro ya simulado, sin tocar el marcador.
+function addRivalCapture(log) {
+  const SV = ['4', '9', '4', '11', '2', '9', '4', '6'], SZ = [5, 1, 5, 6, 5, 1, 5, 6, 6, 1];
+  const AT = ['10', '10', '7', '14', '10', '7', '10', '3'], AZ = [5, 6, 1, 5, 5, 6, 4, 5, 1, 6];
+  const EK = ['at', 'sv', 'red', 'at', 'rc', 'otro', 'sv', 'at'];
+  let i = 0; const out = [];
+  for (const e of log) {
+    const n = i++;
+    if (/^rc_[123]$/.test(e.a)) out.push({ id: `${e.id}s`, set: e.set, p: null, a: 'opp_sv', pt: null, k: 'sv', rn: SV[n % SV.length], z: SZ[n % SZ.length] });
+    if (e.a === 'dg_ok') out.push({ id: `${e.id}a`, set: e.set, p: null, a: 'opp_at', pt: null, rn: AT[n % AT.length], z: AZ[n % AZ.length] });
+    if (e.a === 'opp_pt') Object.assign(e, { k: 'at', rn: AT[n % AT.length], z: AZ[n % AZ.length] });
+    if (e.a === 'opp_err') { const k = EK[n % EK.length]; Object.assign(e, { k }, k === 'sv' ? { rn: SV[n % SV.length] } : k === 'at' ? { rn: AT[n % AT.length] } : {}); }
+    out.push(e);
+    if (e.a === 'rc_0') out.push({ id: `${e.id}s`, set: e.set, p: null, a: 'opp_pt', pt: null, k: 'sv', rn: SV[n % SV.length], z: SZ[n % SZ.length] });
+    if (e.a === 'dg_err') out.push({ id: `${e.id}a`, set: e.set, p: null, a: 'opp_pt', pt: null, k: 'at', rn: AT[n % AT.length], z: AZ[n % AZ.length] });
+  }
+  return out;
+}
+
 function makeDemoPhase2({ R, players, sessions, gid }) {
   const today = todayStr();
   const iso = (daysAgo) => new Date(Date.now() - daysAgo * 864e5).toISOString();
@@ -153,10 +172,11 @@ function makeDemoPhase2({ R, players, sessions, gid }) {
   ];
   const matches = [], matchLogs = [], matchStats = [];
   for (const m of defs) {
-    const log = simulate(R, starters, 3, m.edges);
+    let log = simulate(R, starters, 3, m.edges);
     // Zonas de saque y ataque (patrón fijo para que el demo siempre se vea igual).
     const Z = [1, 5, 6, 1, 5, 2, 4, 1, 6, 5, 3, 1, 5, 6, 4];
     log.forEach((e, i) => { if (['sv_ace', 'sv_in', 'at_k', 'at_in'].includes(e.a)) e.z = Z[i % Z.length]; });
+    if (m.id === 'demo-m2') log = addRivalCapture(log);
     const sc = score(log, 3);
     const slots = ['demo-p1', 'demo-p3', 'demo-p4', 'demo-p2', 'demo-p6', 'demo-p7'];   // colocadora en 1, opuesto en 4, puntas en 2 y 5, centrales en 3 y 6
     const lineups = [{ slots, libero: 'demo-p5', serve: 'us' }, { slots, libero: 'demo-p5', serve: 'them' }, { slots, libero: 'demo-p5', serve: 'us' }];

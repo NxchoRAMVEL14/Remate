@@ -1,10 +1,10 @@
 // Ayuda: cómo usar Remate, cómo funcionan niveles y asistencia, y de dónde sale cada cosa.
 import { h, ic, fmtDate } from '../util.js';
 import { ls } from '../store.js';
-import { sectionTitle } from './ui.js';
+import { sectionTitle, brandBand } from './ui.js';
 import { XP_RULES } from '../calc.js';
 import { VERSION, CHANGELOG } from '../version.js';
-import { GYM_SOURCES } from '../content/gym.js';
+import { GYM_SOURCES, MEDIR_SOURCES } from '../content/gym.js';
 
 const link = (href, text) => h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, text);
 const list = (items) => h('ul', { class: 'plain' }, items.filter(Boolean).map((x) => h('li', {}, x)));
@@ -27,6 +27,10 @@ const COACH_STEPS = [
   'Avisos: desde Hoy publicas un aviso que aparece en el Inicio de tus jugadores, se puede mandar por WhatsApp y llega como notificación a quien la activó.',
   'Gym (en Más o en Ejercicios): tus jugadores arman su rutina de pesas según lo que quieren lograr y registran sus cargas. Tú ves quién va al gym, sus sesiones y si reportó molestia, y puedes asignarle una rutina desde su ficha. Se oculta en Ajustes → Entrenamientos.',
   'Si pasaste lista por error en un entrenamiento que todavía no llega, ábrelo y toca «Regresar a Por hacer»: se borra esa lista y vuelve a pendiente.',
+  'Lista con QR: el día del entrenamiento, en Hoy o en el entrenamiento toca «Lista con QR». Tu celular muestra un QR que cambia cada 20 segundos; cada jugador lo escanea desde su Remate y queda presente (o con retardo después de la tolerancia que eliges en Ajustes). Tú solo revisas a los que faltan y cierras la lista.',
+  'Captura del rival: en la captura de un partido, el panel «Lo que hace el rival» anota a dónde saca, quién ataca (por número) y sus errores. El scouting de ese rival se llena solo y con «Pasar a mi ficha» lo agregas a tus notas.',
+  'Medir con video (Laboratorio o Pruebas físicas): mide el salto, el salto en profundidad, los 10 m y la prueba T con la cámara lenta del celular, cuadro por cuadro, como My Jump pero sin pagar. Su «Guía de pruebas» explica cada prueba.',
+  'Calendario: en Entrenos → «Calendario en el celular» descargas en un solo archivo tus entrenos, partidos, torneos, el programa del laboratorio y las pruebas físicas. Cada entrenamiento, partido, torneo, rutina de gym y programa de salto tiene su botón «Agregar al calendario».',
 ];
 const PLAYER_STEPS = [
   'En Inicio ves tu tarjeta: tu nivel, tu radar de habilidades y lo que falta para subir.',
@@ -38,11 +42,32 @@ const PLAYER_STEPS = [
   'En Partidos contestas la convocatoria (Voy, En duda, No voy) y ves el video y tus números de cada partido.',
   'En Inicio ves tus insignias, tus pruebas físicas y los avisos del entrenador. En Ajustes puedes activar las notificaciones.',
   'En Inicio → Físico en el gym armas tu rutina de pesas según lo que quieres mejorar, registras tus pesos y ves cómo llegar bien al entreno. Ve siempre con un instructor o un adulto que sepa.',
+  'Al llegar al entrenamiento, en Inicio toca «Marcar mi llegada» y escanea el QR del celular de tu entrenador. Escanéalo desde Remate (no con la cámara normal). Si no lee, escribe el código de 6 números.',
+  'En Mis pruebas físicas, «Medir con video» mide tu salto, tu velocidad de 10 m o la prueba T con la cámara lenta de tu celular. Mándale el resultado a tu entrenador.',
+  'Calendario: en Entrenos → «Calendario en el celular» agregas a tu calendario los entrenos, partidos, torneos, tu rutina de gym y tu tarea de casa, con aviso.',
 ];
+
+// Manuales en PDF (carpeta manuales/). El jugador ve el suyo; el entrenador, los dos.
+const MANUALS = [
+  { file: 'manuales/manual-jugador.pdf', title: 'Manual del jugador', text: 'Cómo entrar con el código, marcar tu llegada con QR, la tarjeta y el radar, medir tu salto con video, entrenos, teoría, En casa, gym, calendario, partidos y retos.' },
+  { file: 'manuales/manual-entrenador.pdf', title: 'Manual del entrenador', text: 'Jugadores, evaluaciones, entrenamientos, lista con QR, calendario, partidos, captura del rival y torneos, medir con video, gym, reportes, avisos y ayudantes.', coach: true },
+];
+function manualsSection(coach) {
+  const url = (f) => new URL(f, location.href.split('#')[0]).href;
+  return h('section', { class: 'stack' }, h('h2', {}, 'Manuales'),
+    h('p', {}, coach ? 'Con imágenes y en PDF. Manda el del jugador a tus chavos por WhatsApp para que sepan usar Remate.' : 'Todo lo que necesitas para usar Remate, con imágenes y en PDF.'),
+    MANUALS.filter((m) => coach || !m.coach).map((m) => h('div', { class: 'panel stack manual' },
+      h('div', { class: 'cluster' }, ic('file-text', 22), h('strong', {}, m.title)),
+      h('span', { class: 'row-sub' }, m.text),
+      h('div', { class: 'cluster' },
+        h('a', { class: 'btn primary sm', href: m.file, target: '_blank', rel: 'noopener' }, ic('book-open', 16), 'Abrir PDF'),
+        h('a', { class: 'btn sm', href: `https://wa.me/?text=${encodeURIComponent(`${m.title} de Remate (PDF): ${url(m.file)}`)}`, target: '_blank', rel: 'noopener' }, ic('message-circle', 16), 'Mandar por WhatsApp')))));
+}
 
 export default function ayuda(ctx) {
   const coach = ctx.role === 'coach';
   const el = h('div', { class: 'page help' },
+    manualsSection(coach),
     h('section', {}, h('h2', {}, coach ? 'Primeros pasos' : 'Cómo usar Remate'), h('ol', { class: 'plain' }, (coach ? COACH_STEPS : PLAYER_STEPS).map((x) => h('li', {}, x)))),
     h('section', {}, h('h2', {}, 'Cómo funcionan los niveles'),
       h('p', {}, 'Cada habilidad (saque, recepción, colocación, remate, bloqueo, defensa, físico y juego) se evalúa en cuatro fases: iniciación, adquisición, consolidación y refinamiento. Cada nivel pide una fase mínima por habilidad y un examen práctico.'),
@@ -61,6 +86,7 @@ export default function ayuda(ctx) {
     h('section', {}, h('h2', {}, 'Asistencia y puntos XP'),
       list(['Presente suma asistencia completa, retardo también cuenta como asistencia, falta resta y justificada no resta.',
         'Cada cierto número de retardos (lo eliges en Ajustes) se cuenta como una falta.',
+        'Con la lista con QR, quien escanea después de la hora de inicio más la tolerancia (Ajustes, 10 minutos de inicio) queda con retardo. El código cambia cada 20 segundos y sale de un secreto que solo conoce el celular del entrenador, así que una foto del QR no sirve desde la casa.',
         `Los puntos XP son un reconocimiento al compromiso: ${XP_RULES.presente} por entrenamiento a tiempo, ${XP_RULES.retardo} con retardo, los de cada reto aprobado y ${XP_RULES.examen} por cada examen aprobado. No cambian el nivel.`])),
     h('section', {}, h('h2', {}, 'Partidos y estadística'),
       list(['Recepción: 3 perfecta (el colocador puede elegir cualquier opción), 2 buena, 1 mala (solo una bola alta), 0 error. El promedio va de 0 a 3.',
@@ -68,8 +94,9 @@ export default function ayuda(ctx) {
         'Con el marcador automático, cada ace, remate punto, bloqueo punto o error suma el punto solo. Si lo apagas, usa los botones +1.',
         'Los sets van a 25 con diferencia de 2 y el decisivo a 15, como en las reglas FIVB. Si tu liga usa otro formato, cierra el set cuando corresponda y termina el partido a mano.',
         coach ? 'Hoja para la mesa: en un partido, el ícono de impresora arma una hoja por set con las posiciones I a VI, el líbero y el orden de saque. Si recibes primero, tu primer saque es de la posición II. Puedes dejar listas las alineaciones de todos los sets antes del partido.' : null,
+        coach ? 'Captura del rival: «Lo que hace el rival» guarda su saque (dentro, ace o error, con su número y la zona de tu cancha a donde fue), su ataque (punto, en juego o error) y sus otros errores. Si el punto ya lo sumaste con el error de tu jugador, Remate no lo vuelve a sumar. En el resumen del partido y en la ficha del rival ves a dónde te sacan, quién ataca y cuánto falla.' : null,
         coach ? 'Scouting de rivales (en Partidos): una ficha privada por rival con sus jugadores clave, a dónde sacan, su sistema, su rotación débil y tu plan, más tu side-out, tu rotación más débil y dónde les haces daño en tus partidos contra ellos.' : null,
-        'Calendario en el celular (en Entrenos): suscríbete una vez y los entrenamientos publicados, partidos y torneos llegan a tu calendario con aviso, aunque no abras Remate. También puedes descargar un archivo .ics.',
+        'Calendario en el celular (en Entrenos): suscríbete una vez y los entrenamientos publicados, partidos y torneos llegan a tu calendario con aviso, aunque no abras Remate. Con «Mi calendario» descargas un archivo con lo que elijas: además del equipo, tu gym, el laboratorio, las pruebas o tu tarea de casa.',
         coach ? 'Torneos (en Partidos): crea el torneo con sede, fechas y rama, elige a los convocados y ellos confirman desde su celular. Agrega los partidos del torneo, escribe la tabla (tu fila se llena con tus partidos) y al final pon el lugar. Puedes filtrar por rama.' : 'Torneos: en Partidos ves los torneos de tu equipo. Si estás convocado, contesta si vas.',
         coach ? 'Equipos A y B (en Ajustes → Equipos): divide tu grupo en dos o más equipos, por ejemplo «CETAC A» y «CETAC B». Cada jugador y cada partido es de un equipo; en Jugadores y Partidos filtras por equipo y en un torneo eliges cuáles de tus equipos juegan.' : null,
         coach ? 'Eliminación directa: al crear el torneo elige «Eliminación directa» y arma el cuadro con la primera ronda y los pases directos. Remate arma semifinales y final; toca al ganador de cada partido o captura los tuyos y el ganador avanza solo.' : 'Eliminación directa: en el torneo ves el cuadro con quién va ganando cada partido y quién avanza.',
@@ -85,6 +112,12 @@ export default function ayuda(ctx) {
         '«Te sobran 2» quiere decir elegir un peso con el que todavía podrías hacer 2 repeticiones más. Remate nunca pide probar el máximo y sugiere cuándo subir de peso al registrar.',
         'Pierna pesada y saltos, al menos 48 horas antes de un partido. Si hay partido en los próximos días, Remate lo avisa en la rutina.',
         coach ? 'Lo que el jugador registra lo ven él y tú. Si marca «Me dolió algo», te aparece en Gym y en su ficha.' : 'Lo que registras lo ven tú y tu entrenador. Si algo te duele en una articulación, para y avísale.'])),
+    h('section', {}, h('h2', {}, 'Medir con video'),
+      list(['Remate calcula la altura con el tiempo en el aire: altura = 9.81 × t² ÷ 8. Es el mismo principio que My Jump y los tapetes de contacto. Tú marcas el cuadro del despegue y el del aterrizaje.',
+        'Graba en cámara lenta (120 o 240 cuadros por segundo), con el celular firme, de lado y con los pies a la vista. A 240 cps el error por cuadro es de medio centímetro; a 30 cps, de unos 4 cm.',
+        'Si el video se ve lento, elige en «Velocidad del video» cuántas veces (×4 a 120 cps, ×8 a 240 cps). Si te equivocas, Remate te avisa que el vuelo es demasiado largo para un salto.',
+        'También mide el salto en profundidad (contacto e índice de fuerza reactiva) y pruebas de tiempo: 10 m y prueba T. El video no se sube a ningún lado; solo se guarda el resultado.',
+        h('span', {}, 'Todo sobre cada prueba está en la ', h('a', { href: '#/medir/guia' }, 'Guía de pruebas'), '.')])),
     h('section', {}, h('h2', {}, 'Sin internet'),
       h('p', {}, 'Remate guarda tus cambios en el celular y los envía cuando vuelve la conexión. Si ves “por enviar” arriba, no cierres sesión hasta que desaparezca.')),
     h('section', {}, h('h2', {}, 'Qué tan firmes son los números'),
@@ -110,6 +143,9 @@ export default function ayuda(ctx) {
         h('li', {}, 'Notificaciones: usan Web Push con una función de Supabase (', link('https://supabase.com/docs/guides/functions', 'Edge Functions'), '). En iPhone solo llegan con la app instalada en la pantalla de inicio.'),
         h('li', {}, 'Side-out, break point, insignias, bloques de temporada y tareas de casa: propuestas de Remate basadas en práctica común de entrenamiento, no en un estudio.'),
         GYM_SOURCES.map(([t, u]) => h('li', {}, `Gym. ${t} `, link(u, 'Ver fuente'))),
+        MEDIR_SOURCES.map(([t, u]) => h('li', {}, `Medir con video. ${t} `, link(u, 'Ver fuente'))),
+        h('li', {}, 'Lista con QR: el QR se dibuja con ', link('https://github.com/kazuhikoarase/qrcode-generator', 'qrcode-generator'), ' (licencia MIT) y se lee con el lector del celular o con ', link('https://github.com/cozmo/jsQR', 'jsQR'), ' (licencia Apache 2.0), los dos desde jsDelivr. El código de 6 números es un HMAC-SHA256 que cambia cada 20 segundos; la base de datos lo revisa y frena los intentos fallidos. Diseño propio de Remate.'),
+        h('li', {}, 'Captura del rival y scouting automático: forma de capturar propia de Remate, con las zonas 1 a 6 de las reglas FIVB.'),
         h('li', {}, 'Gym: las rutinas, la elección de ejercicios y las series y descansos de cada objetivo son propuesta de Remate sobre esas fuentes, no un programa probado en un estudio.'),
         h('li', {}, 'Leer de una imagen: ', link('https://github.com/naptha/tesseract.js', 'Tesseract.js'), ' (licencia Apache 2.0), el motor de texto Tesseract compilado para el navegador; corre en tu celular y la imagen no se manda a ningún servidor. Los datos de idioma español se descargan de ', link('https://www.jsdelivr.com/package/npm/@tesseract.js-data/spa', 'jsDelivr'), '. La forma de reconocer partidos, horarios y pases directos es propia de Remate.'))),
     h('section', {}, h('h2', {}, 'Versión'),
@@ -145,8 +181,7 @@ export function novedades(ctx) {
   markSeen();
   const back = ctx.role === 'coach' ? '#/ajustes' : null;
   const el = h('div', { class: 'page' },
-    h('section', { class: 'band next stack' }, h('span', { class: 'when' }, 'Estás usando'), h('h2', {}, `Remate ${VERSION}`),
-      h('p', { style: { margin: 0 } }, 'Cuando subes una versión nueva a GitHub, cada celular la descarga sola al abrir Remate con internet. Si no la ves, cierra la app por completo y vuelve a abrirla.')),
+    brandBand('Cuando subes una versión nueva a GitHub, cada celular la descarga sola al abrir Remate con internet. Si no la ves, cierra la app por completo y vuelve a abrirla.'),
     h('section', { class: 'stack' }, sectionTitle('Qué cambió'),
       h('ol', { class: 'changelog' }, CHANGELOG.map((c, i) => h('li', { class: 'panel' },
         h('div', { class: 'cl-head' }, h('strong', {}, `Versión ${c.v}`), i === 0 ? h('span', { class: 'chip ball' }, 'Actual') : null, h('span', { class: 'row-sub' }, when(c.f))),

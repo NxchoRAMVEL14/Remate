@@ -10,7 +10,9 @@ export function renderGate(onDone) {
   let signup = false;
   const box = h('div', { class: 'box' });
   const wrap = h('div', { class: 'gate' },
-    h('div', {}, h('div', { class: 'brand' }, 'Remate'), h('p', { class: 'tag' }, 'Entrena voleibol de sala, de tus primeros toques al nivel competitivo.')),
+    h('div', { class: 'hero-wrap' }, h('h1', { class: 'sr-only' }, 'Remate'),
+      h('img', { class: 'hero-icon', src: 'icons/icon-512.png', alt: '', width: 232, height: 232, decoding: 'async' }),
+      h('p', { class: 'tag' }, 'Entrena voleibol de sala, de tus primeros toques al nivel competitivo.')),
     box,
     h('button', { class: 'btn ghost', type: 'button', style: { color: '#fff' }, onclick: () => { startDemo(); onDone(); } }, 'Probar el modo demo'),
     h('p', { class: 'gate-ver' }, `Remate v${VERSION}`));

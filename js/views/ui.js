@@ -3,6 +3,7 @@ import { h, ic, initials, fmtDate, relDay, fmtTime } from '../util.js';
 import { POSITION_NAME, BRANCHES } from '../content/skills.js';
 import { LEVELS } from '../content/levels.js';
 import { positionsOf } from '../calc.js';
+import { VERSION } from '../version.js';
 
 export const sectionTitle = (title, right) => h('div', { class: 'section-title' }, h('h2', {}, title), right || null);
 
@@ -86,4 +87,10 @@ export function radarSVG({ values, target = [], labels, before = null }, label =
     s += `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}">${escSVG(t)}</text>`;
   });
   return s + '</svg>';
+}
+
+// Encabezado con el icono de Remate (también lo usa Novedades).
+export function brandBand(text = 'Voleibol de sala para CETAC: entrenos, partidos, laboratorio y gym en un solo lugar.') {
+  return h('section', { class: 'brandband' }, h('img', { src: 'icons/icon-192.png', alt: '', width: 84, height: 84 }),
+    h('div', {}, h('h2', {}, 'Remate'), h('p', {}, text), h('span', { class: 'bb-ver' }, `v${VERSION}`)));
 }

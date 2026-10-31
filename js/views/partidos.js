@@ -4,7 +4,8 @@ import { state, add, patch, group, labReady, isStaff, torneosReady, multiTeam, t
 import { KINDS, result, metrics, addCounts, fmtEff } from '../match-calc.js';
 import { sectionTitle, note, empty, field, options } from './ui.js';
 import { missingSqlNote } from './lab.js';
-import { rsvpCounts, rsvpControl, zoneSection, RSVP } from './partido-summary.js';
+import { rsvpCounts, rsvpControl, zoneSection, RSVP, summaryView, playerMatchView } from './partido-summary.js';
+import { capture } from './partido-capture.js';
 import { tournamentsSection, tournamentsSorted, torneoById, myUpcomingTournaments, tRsvpControl, RAMAS } from './torneos.js';
 
 export const matchesSorted = () => state.data.matches.slice().sort((a, b) => `${b.match_date}${b.created_at}`.localeCompare(`${a.match_date}${a.created_at}`));
@@ -125,4 +126,24 @@ function jugador(ctx) {
         h('span', { class: 'row-end' }, m.video?.url ? ic('video', 18) : null, resultChip(m), ic('chevron-right', 18)));
     })) : empty('Sin partidos todavía', 'Aquí verás los resultados de tu equipo y tus números en cada partido.'));
   return { title: 'Partidos', el };
+}
+
+// ---------- Un partido: captura en vivo y resumen (entrenador y ayudantes) o la vista del jugador (antes js/views/partido.js) ----------
+export function partido(ctx) {
+  const m = state.data.matches.find((x) => x.id === ctx.args[0]);
+  if (!m) return { title: 'Partido', back: '#/partidos', el: h('div', { class: 'page' }, empty('No encontré ese partido', 'Puede que se haya borrado.', h('a', { class: 'btn', href: '#/partidos' }, 'Ver partidos'))) };
+  const r = result(m);
+  const tor = torneoById(m.tournament_id);
+  const sub = `${multiTeam() ? `${teamName(teamOf(m))} · ` : ''}${fmtDate(m.match_date, { weekday: 'short', day: 'numeric', month: 'short' })} · ${tor ? tor.name : KINDS[m.kind]}${m.status === 'terminado' ? ` · ${r.win ? 'Ganado' : 'Perdido'} ${r.text}` : ''}`;
+  const backTo = tor ? `#/torneo/${tor.id}` : '#/partidos';
+  const coach = ctx.role === 'coach';
+  const canEdit = (coach || (isStaff() && !ctx.readonly)) && labReady();
+  if (!coach && !canEdit) return { title: `Contra ${m.rival}`, sub, back: backTo, el: playerMatchView(m, ctx) };
+  const ui = ctx.ui;
+  ui.tab = ui.tab || (m.status === 'terminado' || !canEdit ? 'resumen' : 'captura');
+  const tabs = h('div', { class: 'tabs', role: 'tablist' }, [['captura', m.status === 'terminado' ? 'Corregir captura' : 'Captura'], ['resumen', 'Resumen']].map(([id, label]) =>
+    h('button', { type: 'button', role: 'tab', 'aria-selected': ui.tab === id ? 'true' : 'false', disabled: id === 'captura' && !canEdit ? true : null, onclick: () => { ui.tab = id; ctx.rerender(); } }, label)));
+  const body = ui.tab === 'captura' && canEdit ? capture(m, ctx) : summaryView(m, ctx, { canEdit, coach });
+  return { title: `Contra ${m.rival}`, sub, back: backTo,
+    actions: canEdit ? [{ icon: 'printer', label: 'Hoja de alineación para la mesa', href: `#/alineacion/${m.id}` }, { icon: 'pencil', label: 'Editar partido', onClick: () => matchSheet(m) }] : [], el: h('div', { class: 'page' }, tabs, body) };
 }

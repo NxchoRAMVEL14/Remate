@@ -2,7 +2,8 @@
 -- Incluye: núcleo, laboratorio y partidos, En casa y mejoras, equipo de apoyo (ayudantes, convocatoria, pruebas, avisos),
 -- torneos con su convocatoria y la prueba de 10 m (v3.3), el calendario del equipo (v3.4)
 -- varios equipos por grupo, torneos de eliminación directa y jugadores comodín (v3.5)
--- y Gym con rutinas y registro de cargas, más jugadores en varios equipos (v3.6).
+-- Gym con rutinas y registro de cargas, más jugadores en varios equipos (v3.6)
+-- y la lista de asistencia con QR más el método «Video en Remate» del laboratorio (v3.7).
 -- Es seguro correrlo más de una vez: no borra datos.
 
 -- =====================================================================
@@ -1147,3 +1148,107 @@ create trigger gym_logs_set_owner before insert on public.gym_logs
 
 revoke all on public.gym_logs from anon;
 grant select, insert, update, delete on public.gym_logs to authenticated;
+
+-- =====================================================================
+-- REMATE · v3.7: lista de asistencia con QR y método «Video en Remate» en el laboratorio
+-- Va después de 01 a 09 (si usas instalar.sql ya viene incluido).
+-- Es seguro correrlo más de una vez. Agrega 1 tabla y 1 función, y acepta un método nuevo en jump_tests.
+--
+-- Lista con QR: el entrenador abre la lista de un entrenamiento y su celular muestra un QR con un código
+-- de 6 números que cambia cada 20 segundos. Cada jugador lo escanea desde Remate y queda presente
+-- (o con retardo después de la tolerancia). El código sale de un secreto que solo conoce el entrenador:
+-- una foto del QR deja de servir en un minuto. Varios intentos fallidos seguidos frenan al jugador.
+-- =====================================================================
+
+create table if not exists public.session_checkins (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  session_id uuid not null unique references public.sessions(id) on delete cascade,
+  secret text not null check (char_length(secret) between 16 and 128),   -- solo lo ven el entrenador y la función check_in
+  open_until timestamptz,                                                  -- hasta cuándo se puede escanear
+  late_after timestamptz,                                                  -- después de esta hora queda como retardo
+  created_at timestamptz not null default now()
+);
+alter table public.session_checkins enable row level security;
+
+drop policy if exists session_checkins_coach on public.session_checkins;
+create policy session_checkins_coach on public.session_checkins for all to authenticated
+  using (owner_id = auth.uid() and public.is_coach())
+  with check (owner_id = auth.uid() and public.is_coach()
+              and session_id in (select id from public.sessions where owner_id = auth.uid()));
+revoke all on public.session_checkins from anon;
+grant select, insert, update, delete on public.session_checkins to authenticated;
+
+-- El jugador marca su llegada con el código del QR. Devuelve { status, already, name } o { error: 'bad_code' }.
+create or replace function public.check_in(p_session uuid, p_code text)
+returns jsonb
+language plpgsql security definer set search_path = public, extensions as $$
+declare
+  ck public.session_checkins;
+  s public.sessions;
+  pid uuid;
+  pname text;
+  n int;
+  w bigint := floor(extract(epoch from now()) / 20);
+  c text := regexp_replace(coalesce(p_code, ''), '\D', '', 'g');
+  matched boolean := false;
+  st text;
+  cur text;
+  i int;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated' using errcode = '28000'; end if;
+
+  select count(*) into n from public.join_attempts
+   where uid = auth.uid() and not ok and at > now() - interval '10 minutes';
+  if n >= 10 then raise exception 'too_many_attempts' using errcode = '54000'; end if;
+
+  select * into s from public.sessions where id = p_session;
+  if not found then raise exception 'session_not_found' using errcode = 'P0002'; end if;
+
+  select id, name into pid, pname from public.players
+   where user_id = auth.uid() and active and group_id = s.group_id limit 1;
+  if pid is null then raise exception 'not_in_team' using errcode = '42501'; end if;
+
+  select * into ck from public.session_checkins where session_id = p_session;
+  if not found or ck.open_until is null or ck.open_until < now() then
+    raise exception 'checkin_closed' using errcode = 'P0001';
+  end if;
+
+  -- Código válido: el de ahora o el de hasta un minuto antes (cambia cada 20 segundos).
+  for i in -3..1 loop
+    if lpad(((('x' || substr(encode(hmac((w + i)::text, ck.secret, 'sha256'), 'hex'), 1, 7))::bit(28)::int) % 1000000)::text, 6, '0') = c then
+      matched := true; exit;
+    end if;
+  end loop;
+  if not matched then
+    -- Se devuelve en lugar de lanzar un error para que el intento fallido sí quede anotado.
+    insert into public.join_attempts(uid, ok) values (auth.uid(), false);
+    return jsonb_build_object('error', 'bad_code');
+  end if;
+
+  st := case when ck.late_after is not null and now() > ck.late_after then 'retardo' else 'presente' end;
+  select status into cur from public.attendance where session_id = p_session and player_id = pid;
+  if cur is not null and cur <> 'falta' then
+    return jsonb_build_object('status', cur, 'already', true, 'name', pname);
+  end if;
+  insert into public.attendance (session_id, player_id, status)
+  values (p_session, pid, st)
+  on conflict (session_id, player_id) do update set status = excluded.status;
+  return jsonb_build_object('status', st, 'already', false, 'name', pname);
+end $$;
+revoke all on function public.check_in(uuid, text) from public, anon;
+grant execute on function public.check_in(uuid, text) to authenticated;
+
+-- ---------- Laboratorio: método nuevo «Video en Remate» (cuadro por cuadro) ----------
+do $$
+declare c record;
+begin
+  for c in select conname from pg_constraint
+            where conrelid = 'public.jump_tests'::regclass and contype = 'c' and pg_get_constraintdef(oid) ilike '%method%'
+  loop
+    execute format('alter table public.jump_tests drop constraint %I', c.conname);
+  end loop;
+end $$;
+alter table public.jump_tests add constraint jump_tests_method_check
+  check (method in ('myjump', 'sargent', 'mat', 'otro', 'remate'));
+
