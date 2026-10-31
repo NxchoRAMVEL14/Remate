@@ -25,12 +25,28 @@ export const hasRatings = (playerId, ratings) => ratings.some((r) => r.player_id
 // ---------- nivel ----------
 export const nextLevelN = (player) => Math.min(6, (player.level || 1) + 1);
 
+// ---------- posiciones (jugadores comodín) ----------
+// La principal va primero; después las que también juega bien.
+export function positionsOf(p) {
+  const extra = Array.isArray(p?.positions) ? p.positions.filter((x) => x && x !== 'sin_definir' && x !== p.position) : [];
+  return [p?.position || 'sin_definir', ...new Set(extra)];
+}
+export const isWildcard = (p) => positionsOf(p).length > 1;
+// Lo que pide un nivel en una habilidad para una o varias posiciones: con varias, lo más exigente de ellas.
+export function needFor(pos, skillId, level) {
+  const nums = (Array.isArray(pos) ? pos : [pos]).map((x) => required(x, skillId, level)).filter((v) => v !== null);
+  return nums.length ? Math.max(...nums) : null;
+}
+// view: vacío o 'principal' = la posición principal (decide el nivel y el examen); 'todas' = todas sus posiciones; o una posición.
+const posFor = (p, view) => (!view || view === 'principal' ? p.position : view === 'todas' ? positionsOf(p) : view);
+
 // Compara las fases actuales con lo que pide el siguiente nivel (ajustado por posición).
-export function levelGap(player, ratings) {
+export function levelGap(player, ratings, view = null) {
   const cur = currentRatings(player.id, ratings);
   const target = nextLevelN(player);
+  const pos = posFor(player, view);
   const rows = SKILLS.map((s) => {
-    const need = required(player.position, s.id, target);
+    const need = needFor(pos, s.id, target);
     const have = cur[s.id] || 0;
     const na = need === null;
     return { skill: s.id, name: s.name, need: na ? 0 : need, have, na, ok: na || have >= need };
@@ -42,8 +58,8 @@ export function levelGap(player, ratings) {
 }
 
 // Valores para el radar: actual y objetivo (0 si no aplica).
-export function radarValues(player, ratings) {
-  const g = levelGap(player, ratings);
+export function radarValues(player, ratings, view = null) {
+  const g = levelGap(player, ratings, view);
   return { values: g.rows.map((r) => r.have), target: g.rows.map((r) => (r.na ? 0 : r.need)), labels: SKILLS.map((s) => s.name) };
 }
 

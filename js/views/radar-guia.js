@@ -1,15 +1,15 @@
 // "¿Qué dice mi radar?": explicación detallada y personal del radar de habilidades, para el jugador (y su entrenador).
 import { h, ic, fmtDate } from '../util.js';
 import { state, getPlayer, settings, group } from '../store.js';
-import { levelGap, radarValues, currentRatings, ratingHistory, attendanceFor } from '../calc.js';
+import { levelGap, radarValues, currentRatings, ratingHistory, attendanceFor, isWildcard, positionsOf } from '../calc.js';
 import { LESSONS } from '../content/teoria.js';
 import { SKILLS, PHASES, POSITION_NAME, POSITION_ADJUST } from '../content/skills.js';
 import { LEVELS } from '../content/levels.js';
 import { CHALLENGES } from '../content/challenges.js';
 import { allExercises, filterExercises } from '../content/exercises.js';
 import { HOME_BY_ID } from '../content/casa.js';
-import { radarSVG } from '../radar.js';
-import { sectionTitle, note, empty, dots } from './ui.js';
+import { sectionTitle, note, empty, dots, radarSVG, radarViewPicker, posView } from './ui.js';
+import { RADAR_VIEW } from './card.js';
 
 // Consejos prácticos por habilidad (propuesta de Remate) y ejercicios de casa que la trabajan.
 const TIPS = {
@@ -38,7 +38,7 @@ function change(pid, skill) {
   return { last, prev, d: prev ? last.score - prev.score : null };
 }
 
-function skillCard(p, row, s, open, you) {
+function skillCard(p, row, s, open, you, view) {
   const have = row.have, need = row.na ? null : row.need, ch = change(p.id, s.id);
   const target = levelGap(p, state.data.ratings).target;
   const exs = filterExercises(allExercises(state.data.customEx), { skill: s.id, level: p.level }).slice(0, 3);
@@ -55,7 +55,7 @@ function skillCard(p, row, s, open, you) {
     h('div', { class: 'stack rg-body' },
       have ? h('div', {}, h('h4', {}, you ? 'Lo que ya haces' : 'Lo que ya hace'), h('p', {}, s.phases[have - 1]))
         : h('p', {}, you ? 'Tu entrenador todavía no evalúa esta habilidad. En cuanto lo haga, aquí verás en qué fase vas.' : 'Todavía no evalúas esta habilidad.'),
-      row.na ? note(`En ${tu} posición (${POSITION_NAME[p.position]}) esta habilidad no se exige para subir de nivel. Igual sirve practicarla.`)
+      row.na ? note(view && view !== 'principal' ? `Jugando de ${posView(p, view).toLowerCase()} esta habilidad no se exige. Igual sirve practicarla.` : `En ${tu} posición (${POSITION_NAME[p.position]}) esta habilidad no se exige para subir de nivel. Igual sirve practicarla.`)
         : !row.ok && have < 4 ? h('div', {}, h('h4', {}, `Para el nivel ${target} ${te} falta llegar a ${phaseName(need)}`),
           h('p', {}, `El siguiente paso (${phaseName(have + 1)}): ${s.phases[have]}`),
           need > have + 1 ? h('p', {}, `Y después (${phaseName(need)}): ${s.phases[need - 1]}`) : null)
@@ -76,7 +76,9 @@ export default function radarGuia(ctx) {
   const back = coach ? (p ? `#/jugador/${p.id}` : '#/jugadores') : '#/inicio';
   if (!p) return { title: 'Tu radar', back, el: h('div', { class: 'page' }, empty('No encontré al jugador', null)) };
   const you = !coach;
-  const d = state.data, gap = levelGap(p, d.ratings), rv = radarValues(p, d.ratings), cur = currentRatings(p.id, d.ratings);
+  // Comodín: la explicación cambia según la posición que elijas (la principal decide el nivel y el examen).
+  const wild = isWildcard(p), view = wild ? (ctx.ui.view ?? RADAR_VIEW.get(p.id) ?? 'principal') : 'principal', main = view === 'principal';
+  const d = state.data, gap = levelGap(p, d.ratings, view), rv = radarValues(p, d.ratings, view), cur = currentRatings(p.id, d.ratings);
   const rated = rv.values.some((v) => v > 0);
   const lastDate = d.ratings.filter((r) => r.player_id === p.id).map((r) => r.rated_at).sort().pop();
   const rows = gap.rows.map((r) => ({ ...r, s: SKILLS.find((x) => x.id === r.skill) }));
@@ -84,7 +86,8 @@ export default function radarGuia(ctx) {
   const top = Math.max(0, ...rows.map((r) => r.have));
   const strong = top ? rows.filter((r) => r.have === top) : [];
   const even = strong.length === rows.filter((r) => r.have > 0).length && strong.length > 2;   // todas en la misma fase
-  const adj = POSITION_ADJUST[p.position] || {};
+  const adjPos = view === 'principal' ? p.position : view;
+  const adj = view === 'todas' ? {} : POSITION_ADJUST[adjPos] || {};
   const adjText = Object.entries(adj).map(([k, v]) => { const n = SKILLS.find((x) => x.id === k)?.name.toLowerCase(); return v === null ? `${n} no se exige` : v > 0 ? `${n} pide una fase más` : `${n} pide una fase menos`; });
   const lvl = LEVELS[p.level - 1];
 
@@ -94,28 +97,34 @@ export default function radarGuia(ctx) {
       h('span', { class: 'when' }, `Nivel ${p.level}: ${lvl.name}${lastDate ? ` · última evaluación: ${fmtDate(lastDate, { day: 'numeric', month: 'long' })}` : ''}`),
       h('h2', {}, rated ? (gap.top ? (you ? 'Estás en el nivel más alto' : 'Está en el nivel más alto') : `${you ? 'Cumples' : 'Cumple'} ${gap.met} de ${gap.total} habilidades para el nivel ${gap.target}`) : (you ? 'Todavía no te evalúan' : 'Todavía no tiene evaluación')),
       rated ? h('p', { style: { margin: 0 } }, gap.top ? `Lo que sigue es mantener ${you ? 'tu' : 'su'} nivel en partidos difíciles y ayudar a ${you ? 'tus' : 'sus'} compañeros.`
+        : gap.ready && !main ? `${you ? 'Ya cumples' : 'Ya cumple'} todo lo que pide el nivel ${gap.target} jugando de ${posView(p, view).toLowerCase()}.`
         : gap.ready ? `${you ? 'Ya cumples' : 'Ya cumple'} todas las fases del nivel ${gap.target} (${gap.targetLevel.name}). ${you ? 'Pídele a tu entrenador el examen: el nivel solo sube aprobándolo.' : 'Puede presentar el examen.'}`
           : `${even ? `${you ? 'Vas' : 'Va'} parejo: todas ${you ? 'tus' : 'sus'} habilidades evaluadas están en ${phaseName(top)}. ` : strong.length ? `${you ? 'Tu fuerte' : 'Su fuerte'}: ${strong.map((r) => r.name.toLowerCase()).join(', ')} (${phaseName(top)}). ` : ''}${pending.length ? `${you ? 'Donde más te falta' : 'Donde más le falta'}: ${pending.slice(0, 2).map((r) => r.name.toLowerCase()).join(' y ')}.` : ''}`)
         : h('p', { style: { margin: 0 } }, you ? 'Tu entrenador te evalúa durante los entrenamientos. Cuando lo haga, aquí aparece tu radar con la explicación de cada habilidad.' : 'Evalúalo desde su ficha con el botón Evaluar. En cuanto lo hagas, aquí aparece su radar con la explicación de cada habilidad.')),
+    wild ? h('section', { class: 'stack' }, h('p', { class: 'row-sub', style: { margin: 0 } }, `${you ? 'Juegas' : 'Juega'} varias posiciones (${positionsOf(p).map((x) => POSITION_NAME[x]).join(', ')}). Elige con cuál ver lo que pide el nivel:`),
+      radarViewPicker(p, view, (v) => { ctx.ui.view = v; RADAR_VIEW.set(p.id, v); ctx.rerender(); }),
+      note(main ? `El nivel y el examen se deciden con ${you ? 'tu' : 'su'} posición principal (${POSITION_NAME[p.position]}).`
+        : view === 'todas' ? `Con «Todas», la línea punteada pide en cada habilidad lo más exigente de ${you ? 'tus' : 'sus'} posiciones. Sirve para ser un comodín completo; el nivel y el examen se siguen decidiendo con la posición principal (${POSITION_NAME[p.position]}).`
+          : `Así se ve lo que pide jugar de ${POSITION_NAME[view].toLowerCase()}. El nivel y el examen se siguen decidiendo con la posición principal (${POSITION_NAME[p.position]}).`)) : null,
     rated ? h('figure', { class: 'rp-radar', style: { margin: 0 } }, h('div', { html: radarSVG(rv, `Radar de habilidades de ${p.name}`) }),
-      h('figcaption', {}, gap.top ? 'Amarillo: fases de hoy.' : `Amarillo: fases de hoy. Línea punteada: lo que pide el nivel ${gap.target}.`)) : null,
+      h('figcaption', {}, gap.top ? 'Amarillo: fases de hoy.' : `Amarillo: fases de hoy. Línea punteada: lo que pide el nivel ${gap.target}${wild ? ` jugando de ${posView(p, view).toLowerCase()}` : ''}.`)) : null,
     h('section', { class: 'panel stack' }, h('h3', {}, 'Cómo se lee el radar'),
       h('ul', { class: 'plain' },
         h('li', {}, 'Cada punta es una de las 8 habilidades: saque, recepción, colocación, remate, bloqueo, defensa, físico y juego.'),
         h('li', {}, 'Del centro hacia afuera van las 4 fases. Cerca del centro es fase 1 (iniciación) y la orilla es fase 4 (refinamiento).'),
         h('li', {}, you ? 'El relleno amarillo es dónde estás hoy, según la última evaluación de tu entrenador.' : 'El relleno amarillo es dónde está hoy, según tu última evaluación.'),
-        gap.top ? null : h('li', {}, `La línea punteada blanca es lo que pide el nivel ${gap.target}${adjText.length ? `, ajustado a ${you ? 'tu' : 'su'} posición` : ''}.`),
+        gap.top ? null : h('li', {}, `La línea punteada blanca es lo que pide el nivel ${gap.target}${view === 'todas' ? ', con lo más exigente de cada posición' : adjText.length ? `, ajustado a ${main ? (you ? 'tu' : 'su') : 'esa'} posición` : ''}.`),
         h('li', {}, 'Donde el amarillo no llega a la línea punteada, ahí está lo que falta. Donde la toca o la pasa, ya se cumple.'),
         h('li', {}, you ? 'Una figura grande y pareja es de un jugador completo. No es para compararte con otros: es para compararte contigo mismo de una evaluación a la siguiente.'
           : 'Una figura grande y pareja es de un jugador completo. No es para comparar jugadores entre sí: es para comparar a cada uno consigo mismo de una evaluación a la siguiente.')),
-      adjText.length ? note(`Como ${POSITION_NAME[p.position].toLowerCase()}: ${adjText.join('; ')}.`) : null),
+      adjText.length ? note(`Como ${POSITION_NAME[adjPos].toLowerCase()}: ${adjText.join('; ')}.`) : null),
     h('section', { class: 'stack' }, sectionTitle('Las 4 fases'),
       h('div', { class: 'rows' }, PHASES.map((ph) => h('div', { class: 'row' }, dots(ph.n), h('span', { class: 'row-main' }, h('strong', {}, `${ph.n}. ${ph.name}`), h('span', { class: 'row-sub' }, ph.desc)))))),
     rated && pending.length && !gap.top ? h('section', { class: 'panel stack rg-plan' }, h('h3', {}, you ? `Tu plan para llegar al nivel ${gap.target}` : `Su plan para el nivel ${gap.target}`),
       h('ol', { class: 'plain' }, pending.slice(0, 3).map((r) => h('li', {}, h('strong', {}, `${r.name}: `), `pasar de ${phaseName(r.have)} a ${phaseName(r.have + 1)}. ${r.s.phases[r.have] || ''}`))),
       h('p', { class: 'row-sub', style: { margin: 0 } }, you ? `Enfócate en una o dos a la vez. Cuando cumplas las ${gap.total}, pide el examen.` : `Conviene trabajar una o dos a la vez. Cuando cumpla las ${gap.total}, puede presentar el examen.`)) : null,
     h('section', { class: 'stack' }, sectionTitle('Habilidad por habilidad'),
-      rows.map((r) => skillCard(p, r, r.s, pending.slice(0, 2).some((x) => x.skill === r.skill), you))),
+      rows.map((r) => skillCard(p, r, r.s, pending.slice(0, 2).some((x) => x.skill === r.skill), you, view))),
     note(you ? 'Las fases las pone tu entrenador al observarte en los entrenamientos y partidos. Los consejos y la selección de ejercicios son propuesta de Remate; tu entrenador puede indicarte otros.'
       : 'Las fases salen de tus evaluaciones. Los consejos y la selección de ejercicios son propuesta de Remate, según la habilidad y el nivel del jugador.'));
   return { title: you ? 'Mi radar' : 'Radar explicado', sub: you ? 'Qué dice y cómo mejorar' : p.name, back, el };

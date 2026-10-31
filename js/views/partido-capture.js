@@ -1,6 +1,6 @@
 // Captura en vivo: marcador por set, alineación y rotación, acciones por jugador y zona del saque o del ataque.
 import { h, ic, toast, openSheet, confirmSheet, uid, fmtDate, shareText } from '../util.js';
-import { state, add, patch, players, playerById, ls, group } from '../store.js';
+import { state, add, patch, players, playerById, ls, group, teamName, teamOf } from '../store.js';
 import { ACTIONS, GROUPS, score, storedSets, countsFor, playersIn, setsToWin, replay, rotLabel, ZONE_ORDER, RIVAL_GRID, ZONE_ACTIONS } from '../match-calc.js';
 import { note, sectionTitle, field, options } from './ui.js';
 
@@ -204,14 +204,14 @@ const serveOrder = (lu) => (lu.serve === 'us' ? [1, 2, 3, 4, 5, 6] : [2, 3, 4, 5
 const numName = (p) => (p ? `${p.jersey != null ? `${p.jersey} ` : ''}${p.name}` : '—');
 function lineupText(m, i, lu) {
   const P = (id) => playerById(id);
-  return [`Alineación · ${group()?.name || 'Mi equipo'} vs ${m.rival} · Set ${i + 1}`,
+  return [`Alineación · ${teamName(teamOf(m))} vs ${m.rival} · Set ${i + 1}`,
     `Saca primero: ${lu.serve === 'us' ? 'nosotros' : m.rival}`,
     ...[1, 2, 3, 4, 5, 6].map((z) => `${ROMAN[z - 1]}: ${numName(P(lu.slots[z - 1]))}`),
     lu.libero ? `Líbero: ${numName(P(lu.libero))}` : null,
     `Orden de saque: ${serveOrder(lu).map((z) => P(lu.slots[z - 1])?.jersey ?? P(lu.slots[z - 1])?.name ?? '?').join(' → ')}`].filter(Boolean).join('\n');
 }
 function slip(m, i, lu, canEdit) {
-  const team = group()?.name || 'Mi equipo';
+  const team = teamName(teamOf(m));
   const head = h('div', { class: 'slip-head' }, h('strong', {}, `Set ${i + 1}`), h('span', {}, `${team} vs ${m.rival}`), h('span', {}, fmtDate(m.match_date, { day: 'numeric', month: 'short', year: 'numeric' })));
   if (!lu) {
     return h('section', { class: 'slip slip-blank' }, head,

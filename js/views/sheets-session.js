@@ -1,6 +1,6 @@
 // Hojas emergentes de sesiones y ejercicios: crear sesión, pasar lista, elegir ejercicio, ejercicio propio.
 import { h, ic, openSheet, confirmSheet, toast, todayStr, addDays, parseDate, DAYS, buildICS, download, copyText, plural } from '../util.js';
-import { add, patch, remove, group, settings, players, setAttendance, state, calReady, randomToken } from '../store.js';
+import { add, patch, remove, group, settings, players, setAttendance, state, calReady, randomToken, multiTeam, teamName, teamOf } from '../store.js';
 import { SKILLS, SKILL_BY_ID } from '../content/skills.js';
 import { TEMPLATES, TEMPLATE_BY_ID, planFromTemplate } from '../content/templates.js';
 import { allExercises, filterExercises, MATERIAL, KINDS, levelLabel } from '../content/exercises.js';
@@ -175,7 +175,7 @@ export function upcomingEvents(role, me, alarm = 60) {
   for (const m of d.matches) {
     if (m.match_date < from || m.match_date > to || m.status === 'terminado') continue;
     const t = tours.get(m.tournament_id);
-    ev.push({ uid: `m-${m.id}`, summary: `Partido contra ${m.rival}`, date: m.match_date, location: m.venue || t?.venue || '', desc: [t ? `Torneo: ${t.name}` : '', m.note || ''].filter(Boolean).join('\n') });
+    ev.push({ uid: `m-${m.id}`, summary: multiTeam() ? `${teamName(teamOf(m))} vs ${m.rival}` : `Partido contra ${m.rival}`, date: m.match_date, location: m.venue || t?.venue || '', desc: [t ? `Torneo: ${t.name}` : '', m.note || ''].filter(Boolean).join('\n') });
   }
   for (const t of d.tournaments) {
     if ((t.end_date || t.start_date) < from || t.start_date > to) continue;

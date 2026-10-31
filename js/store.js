@@ -39,12 +39,14 @@ export const state = {
   role: null,                        // 'coach' | 'player' | 'assistant'
   user: null, email: '', me: null,   // me = fila del jugador cuando entra con código
   viewAs: null,                      // id de jugador que el entrenador está previsualizando
+  self: false,                       // true si el entrenador entró a su propio perfil de jugador (no es solo vista previa)
   data: emptyData(), pending: 0, online: true, lastError: null,
   lab: true,                         // false si la base de datos aún no tiene las tablas de la fase 2
   casa: true,                        // false si aún no tiene las de la fase 3 (en casa y mejoras)
   team: true,                        // false si aún no tiene las de la fase 4 (ayudantes, convocatoria, pruebas, avisos)
   torneos: true,                     // false si aún no corre el SQL de la v3.3 (torneos y prueba de 10 m)
   cal: true,                         // false si aún no corre el SQL de la v3.4 (calendario del equipo)
+  equipos: true,                     // false si aún no corre el SQL de la v3.5 (equipos A y B, cuadro de eliminación)
 };
 
 // ---------- almacenamiento seguro ----------
@@ -155,6 +157,10 @@ const byName = (a, b) => a.name.localeCompare(b.name, 'es');
 export const isStaff = () => state.role === 'assistant' || (state.role === 'player' && !!state.me?.captain && !state.viewAs);
 export const players = () => (state.role === 'coach' ? state.data.players : state.data.roster).filter((p) => p.active !== false).sort(byName);
 export const getPlayer = (id) => find('players', id);
+// Perfil de jugador del propio entrenador (por si juega con ellos, por ejemplo en un equipo mixto).
+export const myPlayerId = () => (state.role === 'coach' ? settings().me_player || null : null);
+export const myPlayer = () => { const id = myPlayerId(); return id ? getPlayer(id) : null; };
+export const isMine = (p) => !!p && state.role === 'coach' && p.id === myPlayerId();
 export const playerById = (id) => find('players', id) || state.data.roster.find((p) => p.id === id) || null;
 export const getSession = (id) => find('sessions', id);
 export const sessions = () => [...state.data.sessions].sort((a, b) => `${a.session_date}${a.start_time || ''}`.localeCompare(`${b.session_date}${b.start_time || ''}`));
@@ -167,6 +173,12 @@ export const casaReady = () => state.mode !== 'cloud' || state.casa;
 export const teamReady = () => state.mode !== 'cloud' || state.team;
 export const torneosReady = () => state.mode !== 'cloud' || state.torneos;
 export const calReady = () => state.mode === 'cloud' && state.cal;   // la suscripción solo existe en la nube
+export const equiposReady = () => state.mode !== 'cloud' || state.equipos;
+// ---------- equipos del grupo (v3.5): settings.teams = [{ id, name, branch }] ----------
+export const teams = () => (settings().teams || []).filter((t) => t && t.id && t.name);
+export const multiTeam = () => equiposReady() && teams().length > 1;
+export const teamName = (id) => teams().find((t) => t.id === id)?.name || teams()[0]?.name || group()?.name || 'Mi equipo';
+export const teamOf = (row) => (multiTeam() ? (teams().some((t) => t.id === row?.team) ? row.team : teams()[0].id) : '');
 export const profileRow = () => state.data.coachProfile[0] || null;
 export const profile = () => profileRow()?.data || {};
 export function saveProfile(changes) {
@@ -285,7 +297,10 @@ export async function refresh() {
       if (state.role === 'player') next.matchLogs = await get('matchLogs');
       try { next.roster = await fetchRoster(); } catch (e) { if (!isMissingTable(e) && !/staff_roster/.test(e?.message || '')) throw e; next.roster = []; missing4 = true; }
     }
-    state.data = next; state.online = true; state.lab = !missing; state.casa = !missing3; state.team = !missing4; state.torneos = !missing5; state.cal = !missing6;
+    // v3.5: las columnas nuevas no se ven como tabla faltante; se prueba una vez si existen.
+    let missing8 = false;
+    if (!missing) { try { const c = await client(); const { error } = await c.from('matches').select('team').limit(1); if (error && (error.code === '42703' || /column|team/i.test(error.message || ''))) missing8 = true; } catch (e) { if (!isNetworkError(e)) missing8 = true; } }
+    state.data = next; state.online = true; state.lab = !missing; state.equipos = !missing8; state.casa = !missing3; state.team = !missing4; state.torneos = !missing5; state.cal = !missing6;
     saveCache(); emit();
     return true;
   } catch (e) {
@@ -321,7 +336,7 @@ export function clearLocal() {
   for (const k of ls.keys()) if (k.startsWith('remate.cache.') || k.startsWith('remate.outbox.')) ls.del(k);
   ls.del(MODE_KEY);
   outbox = [];
-  Object.assign(state, { ready: false, mode: null, role: null, user: null, email: '', me: null, viewAs: null, data: emptyData(), pending: 0, lastError: null, lab: true, casa: true, team: true });
+  Object.assign(state, { ready: false, mode: null, role: null, user: null, email: '', me: null, viewAs: null, self: false, data: emptyData(), pending: 0, lastError: null, lab: true, casa: true, team: true });
 }
 export const pendingCount = () => outbox.length;
 

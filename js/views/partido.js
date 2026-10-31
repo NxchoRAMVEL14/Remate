@@ -1,6 +1,6 @@
 // Un partido: captura en vivo y resumen (entrenador y ayudantes) o la vista del jugador.
 import { h, fmtDate } from '../util.js';
-import { state, labReady, isStaff } from '../store.js';
+import { state, labReady, isStaff, multiTeam, teamName, teamOf } from '../store.js';
 import { KINDS, result } from '../match-calc.js';
 import { empty } from './ui.js';
 import { matchSheet } from './partidos.js';
@@ -13,7 +13,7 @@ export default function partido(ctx) {
   if (!m) return { title: 'Partido', back: '#/partidos', el: h('div', { class: 'page' }, empty('No encontré ese partido', 'Puede que se haya borrado.', h('a', { class: 'btn', href: '#/partidos' }, 'Ver partidos'))) };
   const r = result(m);
   const tor = torneoById(m.tournament_id);
-  const sub = `${fmtDate(m.match_date, { weekday: 'short', day: 'numeric', month: 'short' })} · ${tor ? tor.name : KINDS[m.kind]}${m.status === 'terminado' ? ` · ${r.win ? 'Ganado' : 'Perdido'} ${r.text}` : ''}`;
+  const sub = `${multiTeam() ? `${teamName(teamOf(m))} · ` : ''}${fmtDate(m.match_date, { weekday: 'short', day: 'numeric', month: 'short' })} · ${tor ? tor.name : KINDS[m.kind]}${m.status === 'terminado' ? ` · ${r.win ? 'Ganado' : 'Perdido'} ${r.text}` : ''}`;
   const backTo = tor ? `#/torneo/${tor.id}` : '#/partidos';
   const coach = ctx.role === 'coach';
   const canEdit = (coach || (isStaff() && !ctx.readonly)) && labReady();

@@ -1,6 +1,6 @@
 // Ajustes: equipo, días de entrenamiento, apariencia, respaldo, privacidad y cuenta.
 import { h, ic, toast, confirmSheet, openSheet, download, copyText, shareText, fmtDate, newJoinCode, DAYS, DAYS_LONG, plural, THEMES, getTheme, setTheme } from '../util.js';
-import { state, group, settings, saveSettings, add, patch, remove, players, sessions, exportBackup, importBackup, refresh, pendingCount, teamReady } from '../store.js';
+import { state, group, settings, saveSettings, add, patch, remove, players, sessions, exportBackup, importBackup, refresh, pendingCount, teamReady, equiposReady, teams } from '../store.js';
 import { pushSettings } from './avisos.js';
 import { disablePush } from '../push.js';
 import { attendanceFor, doneSessions } from '../calc.js';
@@ -72,6 +72,29 @@ function captainsSheet() {
       for (const p of players()) { const want = sel.has(p.id); if (!!p.captain !== want) { patch('players', p.id, { captain: want }); n++; } }
       toast(n ? 'Capitanes guardados' : 'Sin cambios'); return true; } }] });
 }
+// ---------- Equipos del grupo (v3.5): por ejemplo «CETAC A» y «CETAC B» ----------
+const newTeamId = () => `t${Math.random().toString(36).slice(2, 7)}`;
+function teamsSection() {
+  const list = teams(), g = group();
+  const save = (next) => { saveSettings({ teams: next }); toast('Equipos guardados'); };
+  const ro = !equiposReady();
+  return h('section', { class: 'stack' }, sectionTitle('Equipos'),
+    ro ? note('Para separar en equipos, corre en Supabase el sql/instalar.sql de la versión 3.5 (SQL Editor → pega todo → Run). No borra nada.', 'bad') : null,
+    h('p', { style: { margin: 0 } }, list.length > 1
+      ? 'Cada jugador y cada partido pertenecen a uno de tus equipos. Lo eliges en la ficha del jugador y al crear el partido. Los que no tienen equipo quedan en el primero de la lista.'
+      : 'Si tu escuela juega con más de un equipo (por ejemplo A y B), sepáralos aquí. Mientras tengas uno solo, todo funciona igual que antes.'),
+    list.length ? h('div', { class: 'rows' }, list.map((t, i) => h('div', { class: 'row team-row' },
+      h('input', { type: 'text', maxlength: 40, value: t.name, 'aria-label': `Nombre del equipo ${i + 1}`, disabled: ro ? true : null,
+        onchange: (e) => { const v = e.target.value.trim(); if (v) save(list.map((x) => (x.id === t.id ? { ...x, name: v } : x))); } }),
+      h('select', { 'aria-label': 'Rama', disabled: ro ? true : null, onchange: (e) => save(list.map((x) => (x.id === t.id ? { ...x, branch: e.target.value } : x))) },
+        options([['X', 'Mixto'], ['F', 'Femenil'], ['M', 'Varonil']], t.branch || 'X')),
+      list.length > 1 && !ro ? h('button', { class: 'iconbtn', type: 'button', 'aria-label': `Quitar ${t.name}`, onclick: async () => {
+        if (!(await confirmSheet({ title: `¿Quitar ${t.name}?`, text: i === 0 ? 'Sus jugadores y partidos pasarán al siguiente equipo de la lista.' : `Sus jugadores y partidos pasarán a ${list[0].name}.`, ok: 'Quitar', danger: true }))) return;
+        save(list.filter((x) => x.id !== t.id)); } }, ic('trash-2', 16)) : null))) : null,
+    ro ? null : h('div', { class: 'cluster' },
+      list.length ? h('button', { class: 'btn', type: 'button', onclick: () => save([...list, { id: newTeamId(), name: `${g?.name || 'Equipo'} ${String.fromCharCode(65 + list.length)}`, branch: 'X' }]) }, ic('plus', 18), 'Agregar equipo')
+        : h('button', { class: 'btn', type: 'button', onclick: () => save([{ id: newTeamId(), name: `${g?.name || 'Equipo'} A`, branch: 'X' }, { id: newTeamId(), name: `${g?.name || 'Equipo'} B`, branch: 'X' }]) }, ic('users', 18), 'Separar en equipos A y B')));
+}
 function supportSection() {
   const staff = state.data.staff.slice().sort((a, b) => a.name.localeCompare(b.name, 'es'));
   const caps = players().filter((p) => p.captain);
@@ -134,6 +157,7 @@ function coach() {
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.warmup_prev !== false ? true : null, onchange: (e) => { saveSettings({ warmup_prev: e.target.checked }); toast(e.target.checked ? 'Calentamiento preventivo activado' : 'Calentamiento preventivo desactivado'); } }),
         h('span', {}, 'Empezar cada entrenamiento con el calentamiento preventivo (tobillo, rodilla y hombro). Se turnan las versiones A, B y C por semana.')),
       field('Pruebas físicas cada (semanas)', h('input', { type: 'number', min: 4, max: 26, inputmode: 'numeric', value: st.tests_every || 10, onchange: (e) => { saveSettings({ tests_every: Math.min(26, Math.max(4, Number(e.target.value) || 10)) }); toast('Guardado'); } }), 'Cada cuánto te recuerdo en Hoy medir salto, velocidad de 10 m y plancha. 8 a 13 semanas son 2 a 3 meses.')),
+    teamsSection(),
     supportSection(),
     h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField()),
     h('section', { class: 'stack' }, sectionTitle('Tus datos'),
@@ -161,6 +185,13 @@ function coach() {
 
 function jugador(ctx) {
   const me = ctx.me;
+  if (ctx.self) return { title: 'Ajustes', el: h('div', { class: 'page' },
+    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField()),
+    h('section', { class: 'stack' }, sectionTitle('Tu perfil de jugador'),
+      h('p', { style: { margin: 0 } }, `Estás usando Remate con tu ficha de jugador (${me.name}). Lo que registres aquí (En casa, retos, convocatorias y Teoría) cuenta como de ese jugador.`),
+      h('div', { class: 'cluster' }, h('button', { class: 'btn', type: 'button', onclick: () => import('./sheets-player.js').then((m) => m.playerFormSheet(me, { self: true })) }, ic('pencil', 18), 'Editar mis datos'),
+        h('button', { class: 'btn primary', type: 'button', onclick: () => import('./mas.js').then((m) => m.leaveSelf('#/ajustes')) }, ic('undo-2', 18), 'Volver a entrenador'))),
+    aboutSection()) };
   return { title: 'Ajustes', el: h('div', { class: 'page' },
     h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField()),
     ctx.readonly ? null : h('section', { class: 'stack' }, sectionTitle('Notificaciones'), pushSettings()),

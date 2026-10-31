@@ -68,11 +68,11 @@ export function makeDemoPhase2({ R, players, sessions, gid }) {
     const slots = ['demo-p1', 'demo-p3', 'demo-p4', 'demo-p2', 'demo-p6', 'demo-p7'];   // colocadora en 1, opuesto en 4, puntas en 2 y 5, centrales en 3 y 6
     const lineups = [{ slots, libero: 'demo-p5', serve: 'us' }, { slots, libero: 'demo-p5', serve: 'them' }, { slots, libero: 'demo-p5', serve: 'us' }];
     matches.push({ id: m.id, owner_id: own, group_id: gid, match_date: addDays(today, m.d), rival: m.rival, venue: m.venue, kind: m.kind, best_of: 3,
-      sets: storedSets(sc), status: 'terminado', note: '', lineups, video: {}, tournament_id: m.id === 'demo-m1' ? 'demo-t1' : null, created_at: iso(-m.d) });
+      sets: storedSets(sc), status: 'terminado', note: '', lineups, video: {}, tournament_id: m.id === 'demo-m1' ? 'demo-t1' : null, team: 'demo-ta', created_at: iso(-m.d) });
     matchLogs.push({ id: `${m.id}-log`, owner_id: own, match_id: m.id, log, created_at: iso(-m.d) });
     for (const pid of playersIn(log)) matchStats.push({ id: `${m.id}-${pid}`, owner_id: own, match_id: m.id, player_id: pid, counts: countsFor(log, pid), created_at: iso(-m.d) });
   }
-  matches.push({ id: 'demo-m3', owner_id: own, group_id: gid, match_date: addDays(today, 9), rival: 'Instituto Juárez', venue: 'Casa', kind: 'torneo', best_of: 3, sets: [], status: 'planeado', note: 'Llegar 45 minutos antes para calentar.', tournament_id: 'demo-t2',
+  matches.push({ id: 'demo-m3', owner_id: own, group_id: gid, match_date: addDays(today, 9), rival: 'Instituto Juárez', venue: 'Casa', kind: 'torneo', best_of: 3, sets: [], status: 'planeado', note: 'Llegar 45 minutos antes para calentar.', tournament_id: 'demo-t2', team: 'demo-ta',
     lineups: [{ slots: ['demo-p1', 'demo-p3', 'demo-p4', 'demo-p2', 'demo-p6', 'demo-p7'], libero: 'demo-p5', serve: 'them' }], created_at: iso(0) });
 
   // ---------- laboratorio de salto ----------
@@ -162,6 +162,18 @@ export function makeDemoPhase2({ R, players, sessions, gid }) {
       roster: ['demo-p1', 'demo-p2', 'demo-p3', 'demo-p4', 'demo-p5', 'demo-p6', 'demo-p8', 'demo-p11'], place: null, result: '', note: 'Uniforme azul. Llevar agua y comida para todo el día.', standings: [], created_at: iso(2) },
     { id: 'demo-t3', owner_id: own, group_id: gid, name: 'Liga Estatal Femenil', venue: 'Unidad deportiva', start_date: addDays(today, 23), end_date: addDays(today, 24), branch: 'F',
       roster: ['demo-p1', 'demo-p3', 'demo-p5', 'demo-p7', 'demo-p9', 'demo-p11'], place: null, result: '', note: '', standings: [], created_at: iso(1) },
+    // v3.5: eliminación directa con los dos equipos (A y B), como un cartel de torneo relámpago.
+    { id: 'demo-t4', owner_id: own, group_id: gid, name: 'Torneo Relámpago de Eliminación', venue: 'Gimnasio municipal', start_date: today, end_date: null, branch: 'X',
+      roster: ['demo-p1', 'demo-p2', 'demo-p3', 'demo-p4', 'demo-p5', 'demo-p6', 'demo-p7', 'demo-p8', 'demo-p9', 'demo-p10', 'demo-p11', 'demo-p12'], place: null, result: '', note: 'Partido 1 a las 10:30. Los demás, al terminar el anterior.', standings: [],
+      format: 'eliminacion', teams: ['demo-ta', 'demo-tb'], created_at: iso(0),
+      bracket: [
+        { id: 'P1', round: 1, time: '10:30', a: 'Colegio Arboleda', b: 'Prepa Demo B', winner: 'b', score: '2-1', match_id: null },
+        { id: 'P2', round: 1, time: '', a: 'Instituto Juárez B', b: 'Prepa Demo A', winner: null, score: '', match_id: null },
+        { id: 'P3', round: 1, time: '', a: 'Instituto Juárez A', b: 'Prepa Las Lomas B', winner: null, score: '', match_id: null },
+        { id: 'D1', round: 1, bye: true, a: 'Prepa Las Lomas A', b: null, winner: 'a', score: '', match_id: null },
+        { id: 'S1', round: 2, time: '', a: 'W:P1', b: 'W:P2', winner: null, score: '', match_id: null },
+        { id: 'S2', round: 2, time: '', a: 'W:P3', b: 'W:D1', winner: null, score: '', match_id: null },
+        { id: 'F', round: 3, time: '', a: 'W:S1', b: 'W:S2', winner: null, score: '', match_id: null }] },
   ];
   const tRsvps = [['demo-p1', 'voy'], ['demo-p2', 'voy'], ['demo-p3', 'duda'], ['demo-p5', 'voy'], ['demo-p8', 'no']]
     .map(([pid, status], i) => ({ id: `demo-trv-${i}`, owner_id: own, tournament_id: 'demo-t2', player_id: pid, status, note: '', updated_at: iso(1), created_at: iso(1) }));

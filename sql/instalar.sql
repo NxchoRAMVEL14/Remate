@@ -1,6 +1,7 @@
 -- Remate · instalación completa para Supabase (SQL Editor → pega todo → Run).
 -- Incluye: núcleo, laboratorio y partidos, En casa y mejoras, equipo de apoyo (ayudantes, convocatoria, pruebas, avisos),
--- torneos con su convocatoria y la prueba de 10 m (v3.3), y el calendario del equipo para el celular (v3.4).
+-- torneos con su convocatoria y la prueba de 10 m (v3.3), el calendario del equipo (v3.4)
+-- y varios equipos por grupo, torneos de eliminación directa y jugadores comodín (v3.5).
 -- Es seguro correrlo más de una vez: no borra datos.
 
 -- =====================================================================
@@ -174,7 +175,6 @@ language sql stable security definer set search_path = public as $$
   select owner_id from public.players where user_id = auth.uid() and active;
 $$;
 
-
 -- =====================================================================
 -- REMATE · Seguridad (RLS) y funciones de acceso
 -- Va después de 01_esquema.sql (si usas instalar.sql ya viene incluido).
@@ -346,7 +346,6 @@ grant select, insert, update, delete on
   public.groups, public.players, public.player_notes, public.sessions, public.attendance,
   public.ratings, public.level_exams, public.challenge_claims, public.custom_exercises
   to authenticated;
-
 
 -- =====================================================================
 -- REMATE · Fase 2: laboratorio del entrenador, partidos y estadística
@@ -526,7 +525,6 @@ grant select, insert, update, delete on
   public.jump_sessions, public.coach_logs, public.coach_assessments, public.decision_attempts
   to authenticated;
 
-
 -- =====================================================================
 -- REMATE · Fase 3: entrenamiento en casa y lista de mejoras del entrenador
 -- Va después de 01, 02 y 03 (si usas instalar.sql ya viene incluido).
@@ -604,7 +602,6 @@ create trigger home_logs_set_owner before insert on public.home_logs
 
 revoke all on all tables in schema public from anon;
 grant select, insert, update, delete on public.app_ideas, public.home_logs to authenticated;
-
 
 -- =====================================================================
 -- REMATE · Fase 4: equipo de apoyo, convocatorias, pruebas físicas, avisos y más
@@ -897,7 +894,6 @@ grant select, insert, update, delete on
   public.staff, public.match_rsvps, public.player_tests, public.notices, public.push_subscriptions
   to authenticated;
 
-
 -- =====================================================================
 -- REMATE · v3.3: torneos (con convocatoria) y prueba de velocidad de 10 m
 -- Va después de 01 a 05 (si usas instalar.sql ya viene incluido).
@@ -1026,7 +1022,6 @@ create policy tournament_rsvps_staff_read on public.tournament_rsvps for select 
 revoke all on public.tournaments, public.tournament_rsvps from anon;
 grant select, insert, update, delete on public.tournaments, public.tournament_rsvps to authenticated;
 
-
 -- =====================================================================
 -- REMATE · v3.4: calendario del equipo para el celular (suscripción)
 -- Va después de 01 a 06 (si usas instalar.sql ya viene incluido).
@@ -1064,3 +1059,21 @@ create policy calendar_feeds_member_read on public.calendar_feeds for select to 
 revoke all on public.calendar_feeds from anon;
 grant select, insert, update, delete on public.calendar_feeds to authenticated;
 
+-- =====================================================================
+-- REMATE · v3.5: varios equipos del mismo grupo (por ejemplo «CETAC A» y «CETAC B»), torneos de eliminación directa
+-- y jugadores comodín (que juegan bien varias posiciones)
+-- Va después de 01 a 07 (si usas instalar.sql ya viene incluido).
+-- Es seguro correrlo más de una vez. Solo agrega columnas: no crea tablas, no cambia permisos y no borra datos.
+--
+-- Los equipos se dan de alta en Ajustes (se guardan en la configuración del grupo). Aquí solo se guarda
+-- a qué equipo pertenece cada jugador y cada partido, las otras posiciones de cada jugador, y el formato y el cuadro de cada torneo.
+-- =====================================================================
+
+alter table public.players     add column if not exists team text not null default '' check (char_length(team) <= 40);
+alter table public.matches     add column if not exists team text not null default '' check (char_length(team) <= 40);
+alter table public.tournaments add column if not exists format text not null default 'tabla' check (format in ('tabla', 'eliminacion'));
+alter table public.tournaments add column if not exists bracket jsonb not null default '[]'::jsonb;   -- cuadro: [{ id, round, label, time, a, b, bye, winner, score, match_id }]
+alter table public.tournaments add column if not exists teams jsonb not null default '[]'::jsonb;     -- ids de tus equipos que juegan el torneo
+-- Jugadores comodín: otras posiciones que juega bien, además de la principal (lista de hasta 5).
+alter table public.players     add column if not exists positions jsonb not null default '[]'::jsonb
+  check (case when jsonb_typeof(positions) = 'array' then jsonb_array_length(positions) <= 5 else false end);

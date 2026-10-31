@@ -1,6 +1,6 @@
 // Teoría: lecciones para entender el voleibol (reglas, técnica, sistemas y táctica), con quiz, examen por módulo,
 // glosario y situaciones de partido. El avance se guarda en este celular; el examen aprobado se puede mandar como reto.
-import { h, ic, toast, shareText, todayStr, plural } from '../util.js';
+import { h, ic, toast, shareText, todayStr, plural, confirmSheet } from '../util.js';
 import { state, ls, add } from '../store.js';
 import { UNITS, UNIT_BY_ID, LESSONS, LESSON_BY_ID, lessonsOf, GLOSSARY, EXAM } from '../content/teoria.js';
 import { SCENARIOS, SCENARIO_BY_ID, CATS } from '../content/vision.js';
@@ -13,8 +13,12 @@ const pkey = () => `remate.teoria.${state.viewAs || state.me?.id || 'entrenador'
 export function progress() {
   let p = {};
   try { p = JSON.parse(ls.get(pkey()) || '{}') || {}; } catch { p = {}; }
-  return { read: p.read || {}, quiz: p.quiz || {}, exam: p.exam || {} };
+  return { read: p.read || {}, quiz: p.quiz || {}, exam: p.exam || {}, miss: p.miss || {}, repaso: p.repaso ?? null };
 }
+// Preguntas falladas: se guardan para el repaso de errores y salen de la lista cuando las contestas bien.
+const track = (ctx, key, right) => saveProgress(ctx, (p) => { p.miss ||= {}; if (right) delete p.miss[key]; else p.miss[key] = todayStr(); });
+const getQ = (key) => { const [lid, k] = String(key).split(':'); return LESSON_BY_ID[lid]?.quiz[Number(k)]; };
+const missKeys = (p = progress()) => Object.keys(p.miss).filter(getQ);
 function saveProgress(ctx, fn) {
   if (ctx.readonly) return;
   const p = progress(); fn(p); ls.set(pkey(), JSON.stringify(p));
@@ -53,7 +57,7 @@ function questionEl(q, st, key, onAnswer, n) {
     h('p', { class: 'qq' }, n ? h('span', { class: 'qn' }, `${n}. `) : null, q.q),
     h('div', { class: 'quiz-opts', role: 'group', 'aria-label': 'Opciones' }, st.order[key].map((i) => h('button', {
       type: 'button', class: `quiz-opt ${answered && i === q.a ? 'right' : ''} ${answered && i === chosen && !right ? 'wrong' : ''}`,
-      disabled: answered ? true : null, onclick: () => { st.ans[key] = i; onAnswer(); },
+      disabled: answered ? true : null, onclick: () => { st.ans[key] = i; onAnswer(key, i === q.a); },
     }, answered && i === q.a ? ic('check', 18) : answered && i === chosen ? ic('x', 18) : null, h('span', {}, q.opts[i])))),
     answered ? h('p', { class: 'quiz-why', role: 'status' }, h('strong', {}, right ? 'Correcto. ' : 'No es esa. '), q.why) : null);
 }
@@ -106,10 +110,20 @@ function home(ctx) {
     }),
     h('section', { class: 'stack' }, sectionTitle('Para practicar'),
       h('div', { class: 'rows' },
+        h('a', { class: 'row', href: '#/teoria/repaso' }, h('span', { class: 'lc-ic sm', 'aria-hidden': 'true' }, ic('list-checks', 18)),
+          h('span', { class: 'row-main' }, h('strong', {}, 'Repaso general'), h('span', { class: 'row-sub' }, `${REPASO} preguntas mezcladas de los ${UNITS.length} módulos para volver a estudiar todo.${p.repaso ? ` Tu mejor: ${p.repaso.best} de ${p.repaso.n}.` : ''}`)), ic('chevron-right', 18)),
+        missKeys(p).length ? h('a', { class: 'row', href: '#/teoria/errores' }, h('span', { class: 'lc-ic sm', 'aria-hidden': 'true' }, ic('target', 18)),
+          h('span', { class: 'row-main' }, h('strong', {}, 'Mis errores'), h('span', { class: 'row-sub' }, `${plural(missKeys(p).length, 'pregunta que fallaste', 'preguntas que fallaste')}. Contéstalas bien y salen de la lista.`)), ic('chevron-right', 18)) : null,
         h('a', { class: 'row', href: '#/teoria/situaciones' }, h('span', { class: 'lc-ic sm', 'aria-hidden': 'true' }, ic('brain', 18)),
           h('span', { class: 'row-main' }, h('strong', {}, 'Situaciones de partido'), h('span', { class: 'row-sub' }, `Ves una jugada en la cancha y eliges la mejor decisión. ${SCENARIOS.length} situaciones.`)), ic('chevron-right', 18)),
         h('a', { class: 'row', href: '#/teoria/glosario' }, h('span', { class: 'lc-ic sm', 'aria-hidden': 'true' }, ic('book-open', 18)),
           h('span', { class: 'row-main' }, h('strong', {}, 'Glosario'), h('span', { class: 'row-sub' }, `${GLOSSARY.length} palabras que vas a escuchar en la cancha.`)), ic('chevron-right', 18)))),
+    !ctx.readonly && (done || Object.keys(p.read).length || p.repaso || Object.keys(p.exam).length) ? h('section', { class: 'stack' }, sectionTitle('Volver a estudiar todo'),
+      h('p', { class: 'row-sub', style: { margin: 0 } }, 'Borra tu avance de lecciones, quizzes, exámenes y repasos en este celular para empezar de cero. Los retos que ya te aprobaron se quedan.'),
+      h('div', { class: 'cluster' }, h('button', { class: 'btn sm', type: 'button', onclick: async () => {
+        if (!(await confirmSheet({ title: 'Empezar de nuevo', text: 'Se borra tu avance de Teoría en este celular (lecciones leídas, quizzes, exámenes, repasos y errores). Los retos aprobados no se borran.', ok: 'Empezar de nuevo', danger: true }))) return;
+        ls.set(pkey(), '{}'); toast('Listo: tu avance de Teoría empieza de cero'); ctx.rerender();
+      } }, ic('rotate-cw', 16), 'Empezar de nuevo'))) : null,
     note('Las reglas siguen las Reglas Oficiales de Voleibol FIVB 2025-2028; tu liga puede tener ajustes. Las explicaciones técnicas y tácticas son propuesta de Remate. Las fuentes están en Ayuda.'));
   return { title: 'Teoría', back: coach ? '#/sesiones' : '#/entrenos', el };
 }
@@ -120,7 +134,8 @@ function lesson(ctx, l) {
   const ui = ctx.ui; ui.order ??= {}; ui.ans ??= {};
   const all = l.quiz.length, answered = l.quiz.filter((_, k) => ui.ans[k] !== undefined).length;
   const score = l.quiz.filter((q, k) => ui.ans[k] === q.a).length;
-  const onAnswer = () => {
+  const onAnswer = (k, right) => {
+    track(ctx, `${l.id}:${k}`, right);
     if (l.quiz.every((_, k) => ui.ans[k] !== undefined)) {
       const sc = l.quiz.filter((q, k) => ui.ans[k] === q.a).length;
       saveProgress(ctx, (p) => { p.quiz[l.id] = Math.max(p.quiz[l.id] ?? 0, sc); });
@@ -154,7 +169,6 @@ function exam(ctx, u) {
   const pool = lessonsOf(u.id).flatMap((l) => l.quiz.map((_, k) => `${l.id}:${k}`));
   const n = Math.min(EXAM.n, pool.length);
   ui.qs ??= shuffle(pool).slice(0, n); ui.i ??= 0; ui.order ??= {}; ui.ans ??= {};
-  const getQ = (key) => { const [lid, k] = key.split(':'); return LESSON_BY_ID[lid].quiz[Number(k)]; };
   const score = ui.qs.filter((key) => ui.ans[key] === getQ(key).a).length;
   const finished = !!ui.done && ui.qs.every((key) => ui.ans[key] !== undefined);
   const restart = () => { ui.qs = null; ui.i = 0; ui.order = {}; ui.ans = {}; ui.saved = false; ui.done = false; ctx.rerender(); };
@@ -164,7 +178,7 @@ function exam(ctx, u) {
     const key = ui.qs[ui.i], q = getQ(key), lid = key.split(':')[0];
     el.append(h('section', { class: 'band next stack' }, h('span', { class: 'when' }, `${u.name} · examen`), h('h2', {}, `Pregunta ${ui.i + 1} de ${n}`),
       h('div', { class: 'teo-bar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(n), 'aria-valuenow': String(ui.i) }, h('span', { style: { width: `${(ui.i / n) * 100}%` } }))),
-    questionEl(q, ui, key, () => ctx.rerender()),
+    questionEl(q, ui, key, (k, right) => { track(ctx, k, right); ctx.rerender(); }),
     ui.ans[key] !== undefined ? h('div', { class: 'cluster' },
       h('button', { class: 'btn primary', type: 'button', onclick: () => { if (ui.i + 1 < n) ui.i += 1; else ui.done = true; ctx.rerender(); } }, ui.i + 1 < n ? 'Siguiente pregunta' : 'Ver resultado', ic('chevron-right', 18)),
       h('a', { class: 'btn sm ghost', href: `#/teoria/${lid}` }, 'Repasar esa lección')) : null);
@@ -189,6 +203,51 @@ function exam(ctx, u) {
     h('span', { class: 'row-main' }, h('strong', {}, l.name), h('span', { class: 'row-sub' }, plural(misses.filter((x) => x === l.id).length, 'pregunta fallada', 'preguntas falladas'))), ic('chevron-right', 18))))) : null,
   h('div', { class: 'cluster' }, h('button', { class: 'btn', type: 'button', onclick: restart }, ic('refresh-cw', 18), 'Otro examen'), h('a', { class: 'btn ghost', href: '#/teoria' }, 'Volver a Teoría')));
   return { title: 'Examen', sub: u.name, back: '#/teoria', el };
+}
+
+// Repaso general: preguntas mezcladas de los 4 módulos (o solo las que has fallado) para volver a estudiar todo.
+const REPASO = 20;
+function repaso(ctx, onlyMiss) {
+  const ui = ctx.ui;
+  const pick = () => {
+    if (onlyMiss) return shuffle(missKeys()).slice(0, REPASO);
+    // Parejo: la misma cantidad de cada módulo y luego se revuelven.
+    const per = Math.ceil(REPASO / UNITS.length);
+    return shuffle(UNITS.flatMap((u) => shuffle(lessonsOf(u.id).flatMap((l) => l.quiz.map((_, k) => `${l.id}:${k}`))).slice(0, per))).slice(0, REPASO);
+  };
+  ui.qs ??= pick(); ui.i ??= 0; ui.order ??= {}; ui.ans ??= {};
+  const title = onlyMiss ? 'Mis errores' : 'Repaso general', back = '#/teoria';
+  if (!ui.qs.length) return { title, back, el: h('div', { class: 'page teoria' }, empty('No tienes preguntas falladas', 'Cuando falles una pregunta en un quiz, examen o repaso, aparece aquí para practicarla otra vez.', h('a', { class: 'btn', href: '#/teoria/repaso' }, 'Hacer el repaso general'))) };
+  const n = ui.qs.length;
+  const score = ui.qs.filter((key) => ui.ans[key] === getQ(key).a).length;
+  const finished = !!ui.done && ui.qs.every((key) => ui.ans[key] !== undefined);
+  const restart = () => { ui.qs = null; ui.i = 0; ui.order = {}; ui.ans = {}; ui.saved = false; ui.done = false; ctx.rerender(); };
+  if (finished && !ui.saved && !onlyMiss) { ui.saved = true; saveProgress(ctx, (p) => { p.repaso = { best: Math.max(p.repaso?.best ?? 0, score), n, last: score, date: todayStr() }; }); }
+  const el = h('div', { class: 'page teoria exam' });
+  if (!finished) {
+    const key = ui.qs[ui.i], q = getQ(key), lid = key.split(':')[0];
+    el.append(h('section', { class: 'band next stack' }, h('span', { class: 'when' }, `${title} · ${UNIT_BY_ID[LESSON_BY_ID[lid].unit].name}`), h('h2', {}, `Pregunta ${ui.i + 1} de ${n}`),
+      h('div', { class: 'teo-bar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(n), 'aria-valuenow': String(ui.i) }, h('span', { style: { width: `${(ui.i / n) * 100}%` } }))),
+    questionEl(q, ui, key, (k, right) => { track(ctx, k, right); ctx.rerender(); }),
+    ui.ans[key] !== undefined ? h('div', { class: 'cluster' },
+      h('button', { class: 'btn primary', type: 'button', onclick: () => { if (ui.i + 1 < n) ui.i += 1; else ui.done = true; ctx.rerender(); } }, ui.i + 1 < n ? 'Siguiente pregunta' : 'Ver resultado', ic('chevron-right', 18)),
+      h('a', { class: 'btn sm ghost', href: `#/teoria/${lid}` }, 'Leer esa lección')) : null);
+    return { title, back, el };
+  }
+  const misses = ui.qs.filter((key) => ui.ans[key] !== getQ(key).a).map((key) => key.split(':')[0]);
+  const review = [...new Set(misses)].map((id) => LESSON_BY_ID[id]);
+  const byUnit = UNITS.map((u) => { const qs = ui.qs.filter((key) => LESSON_BY_ID[key.split(':')[0]].unit === u.id); return [u, qs.filter((key) => ui.ans[key] === getQ(key).a).length, qs.length]; }).filter(([, , t]) => t);
+  const pct = score / n, left = missKeys().length;
+  el.append(h('section', { class: `band next stack ${pct >= 0.8 ? '' : 'teo-fail'}` }, h('span', { class: 'when' }, title),
+    h('h2', {}, `${score} de ${n}`), h('p', { style: { margin: 0 } }, pct === 1 ? '¡Perfecto! Tienes muy fresca la teoría.' : pct >= 0.8 ? 'Muy bien: dominas casi todo. Repasa las lecciones de abajo.' : 'Vas bien. Lee otra vez las lecciones de abajo y vuelve a intentarlo: las preguntas cambian.')),
+  byUnit.length > 1 ? h('section', { class: 'stack' }, sectionTitle('Por módulo'), h('div', { class: 'rows' }, byUnit.map(([u, ok, t]) => h('div', { class: 'row' },
+    h('span', { class: 'row-main' }, h('strong', {}, u.name), h('span', { class: 'row-sub' }, `${ok} de ${t}`)), h('span', { class: `chip ${ok === t ? 'ok' : ok / t >= 0.6 ? '' : 'warn'}` }, `${Math.round((ok / t) * 100)}%`))))) : null,
+  review.length ? h('section', { class: 'stack' }, sectionTitle('Para repasar'), h('div', { class: 'rows' }, review.map((l) => h('a', { class: 'row', href: `#/teoria/${l.id}` },
+    h('span', { class: 'row-main' }, h('strong', {}, l.name), h('span', { class: 'row-sub' }, plural(misses.filter((x) => x === l.id).length, 'pregunta fallada', 'preguntas falladas'))), ic('chevron-right', 18))))) : null,
+  h('div', { class: 'cluster' }, h('button', { class: 'btn', type: 'button', onclick: restart }, ic('refresh-cw', 18), onlyMiss ? 'Otra ronda de errores' : 'Otro repaso'),
+    !onlyMiss && left ? h('a', { class: 'btn', href: '#/teoria/errores' }, ic('target', 18), `Practicar mis errores (${left})`) : null,
+    h('a', { class: 'btn ghost', href: '#/teoria' }, 'Volver a Teoría')));
+  return { title, back, el };
 }
 
 function situaciones(ctx) {
@@ -235,6 +294,8 @@ export default function teoria(ctx) {
   if (!a) return home(ctx);
   if (a === 'glosario') return glosario(ctx);
   if (a === 'situaciones') return situaciones(ctx);
+  if (a === 'repaso') return repaso(ctx, false);
+  if (a === 'errores') return repaso(ctx, true);
   if (a === 'examen' && UNIT_BY_ID[b]) return exam(ctx, UNIT_BY_ID[b]);
   if (LESSON_BY_ID[a]) return lesson(ctx, LESSON_BY_ID[a]);
   return { title: 'Teoría', back: '#/teoria', el: h('div', { class: 'page' }, empty('No encontré esa lección', 'Puede que haya cambiado de nombre. Vuelve a la lista de Teoría.')) };

@@ -18,7 +18,7 @@ import partidos from './views/partidos.js';
 import partido from './views/partido.js';
 import lab from './views/lab.js';
 import reportes from './views/reportes.js';
-import mas from './views/mas.js';
+import mas, { selfSheet, enterSelf, leaveSelf } from './views/mas.js';
 import casa from './views/casa.js';
 import mejoras, { ideaSheet } from './views/mejoras.js';
 import asistir from './views/asistir.js';
@@ -31,7 +31,7 @@ import torneo from './views/torneos.js';
 import { alineacion } from './views/partido-capture.js';
 import rivales from './views/rivales.js';
 import ayuda, { novedades, unseenUpdate, firstRun, markSeen, updateBanner, SEEN_KEY } from './views/ayuda.js';
-import { casaReady, isStaff, ls } from './store.js';
+import { casaReady, isStaff, ls, myPlayer } from './store.js';
 
 const COACH = { hoy, jugadores, jugador, sesiones, sesion, ejercicios, ejercicio, ruta, ajustes, ayuda, partidos, partido, lab, reportes, mas, casa, mejoras, pruebas, temporada, avisos, radar, novedades, teoria, comparar, torneo, alineacion, rivales, rival: rivales };
 const PLAYER = { inicio, ruta, entrenos, partidos, partido, ejercicios, ejercicio, casa, pruebas, avisos, asistir, ajustes, ayuda, radar, novedades, teoria, torneo };
@@ -71,16 +71,21 @@ function errorView(e) {
 function render({ fresh = false } = {}) {
   if (!mounted || !state.ready) return;
   let { name, args } = parse();
-  if (name === 'ver' && state.role === 'coach' && getPlayer(args[0])) { state.viewAs = args[0]; location.replace('#/inicio'); return; }
+  if (name === 'ver' && state.role === 'coach' && getPlayer(args[0])) { state.viewAs = args[0]; state.self = false; location.replace('#/inicio'); return; }
+  // Mi perfil de jugador: el entrenador entra con su propia ficha (o la crea).
+  if (name === 'yo' && state.role === 'coach' && !state.viewAs) {
+    if (myPlayer()) { enterSelf(myPlayer().id, true); return; }
+    location.replace('#/mas'); setTimeout(selfSheet, 0); return;
+  }
   const role = state.viewAs ? 'player' : state.role;
   const table = TABLES[role] || PLAYER;
   if (!table[name] || (name === 'asistir' && role === 'player' && !isStaff())) { location.replace(HOME[role] || '#/inicio'); return; }
   const me = state.viewAs ? getPlayer(state.viewAs) : state.me;
-  if (state.viewAs && !me) { state.viewAs = null; location.replace('#/jugadores'); return; }
+  if (state.viewAs && !me) { state.viewAs = null; state.self = false; location.replace('#/jugadores'); return; }
   const key = [role, name, ...args].join('/');
   if (!uiState.has(key)) uiState.set(key, {});
   const y = fresh ? 0 : window.scrollY;
-  const ctx = { role, me, readonly: !!state.viewAs, args, ui: uiState.get(key), rerender: () => render() };
+  const ctx = { role, me, readonly: !!state.viewAs && !state.self, self: !!state.viewAs && state.self, args, ui: uiState.get(key), rerender: () => render() };
   let view;
   try { view = table[name](ctx); } catch (e) { view = errorView(e); }
   const nav = name === 'radar' ? (role === 'coach' ? 'jugadores' : 'inicio') : name === 'teoria' ? (role === 'coach' ? 'sesiones' : 'entrenos') : (PARENT[name] || name);
@@ -100,8 +105,10 @@ function render({ fresh = false } = {}) {
         h('a', { class: 'iconbtn', href: '#/ajustes', 'aria-label': 'Ajustes', title: 'Ajustes' }, ic('settings'))]);
   const navEl = h('nav', { class: 'nav', 'aria-label': 'Secciones' }, (NAV[role] || NAV.player).map(([id, label, icon, where]) =>
     h('a', { href: `#/${id}`, class: where ? `${where}-only` : null, 'aria-current': id === nav || (id === 'mas' && UNDER_MAS.has(nav)) ? 'page' : null }, ic(icon, 22), h('span', {}, label))));
-  const banner = state.viewAs ? h('div', { class: 'viewas', role: 'status' }, h('span', {}, `Vista previa: así lo ve ${me.name}`),
-    h('button', { class: 'btn sm', type: 'button', onclick: () => { const id = state.viewAs; state.viewAs = null; location.hash = `#/jugador/${id}`; } }, 'Salir')) : null;
+  const banner = state.viewAs && state.self ? h('div', { class: 'viewas self', role: 'status' }, h('span', {}, `Estás en tu perfil de jugador: ${me.name}`),
+    h('button', { class: 'btn sm', type: 'button', onclick: () => leaveSelf('#/hoy') }, 'Volver a entrenador'))
+    : state.viewAs ? h('div', { class: 'viewas', role: 'status' }, h('span', {}, `Vista previa: así lo ve ${me.name}`),
+      h('button', { class: 'btn sm', type: 'button', onclick: () => { const id = state.viewAs; state.viewAs = null; location.hash = `#/jugador/${id}`; } }, 'Salir')) : null;
   // Aviso de una sola vez cuando el celular abre una versión nueva de Remate.
   const upd = !state.viewAs && name !== 'novedades' && unseenUpdate() ? updateBanner(() => render()) : null;
   const main = h('main', { class: 'main', id: 'main', tabindex: '-1', 'aria-labelledby': 'page-title' }, banner, upd, view.el);

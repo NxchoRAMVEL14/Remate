@@ -1,14 +1,13 @@
 // Tarjeta del jugador: número grande, nivel, radar de habilidades, tres cifras y su avance en pruebas físicas. Es lo más vistoso de la app.
 // También vive aquí el bloque de insignias (antes js/views/insignias.js).
 import { h, ic, initials, fmtDate } from '../util.js';
-import { state, settings } from '../store.js';
+import { state, settings, multiTeam, teamName, teamOf } from '../store.js';
 import { badgesFor } from '../badges.js';
 import { PTESTS, testTrend } from '../content/pruebas.js';
-import { sectionTitle } from './ui.js';
-import { radarValues, attendanceFor, xpFor, levelGap } from '../calc.js';
+import { sectionTitle, radarSVG, radarViewPicker, posView } from './ui.js';
+import { radarValues, attendanceFor, xpFor, levelGap, positionsOf, isWildcard } from '../calc.js';
 import { POSITION_NAME, BRANCHES, HANDS } from '../content/skills.js';
 import { LEVELS } from '../content/levels.js';
-import { radarSVG } from '../radar.js';
 
 export function playerStats(p) {
   const d = state.data;
@@ -23,20 +22,34 @@ function radarButton(p, rated) {
     h('span', {}, coach ? 'Ver la explicación que recibe' : rated ? '¿Qué dice mi radar?' : '¿Cómo funciona el radar?'));
 }
 
+// Con qué posición se ve el radar de un comodín (se recuerda mientras la app está abierta).
+export const RADAR_VIEW = new Map();
+function radarBlock(p, gap) {
+  const box = h('div', {});
+  const draw = (view) => {
+    const rv = radarValues(p, state.data.ratings, view), g = levelGap(p, state.data.ratings, view);
+    const who = isWildcard(p) ? ` jugando de ${posView(p, view).replace('todas sus posiciones', 'todas sus posiciones (lo más exigente)')}` : '';
+    box.replaceChildren(h('div', { html: radarSVG(rv, `Radar de habilidades de ${p.name}`) }),
+      g.top ? h('p', { class: 'legend' }, 'Relleno amarillo: sus fases de hoy. Está en el nivel más alto.')
+        : h('p', { class: 'legend' }, `Relleno amarillo: sus fases de hoy. Línea punteada: lo que pide el nivel ${gap.target}${who}.`));
+  };
+  draw(RADAR_VIEW.get(p.id));
+  return h('div', {}, isWildcard(p) ? radarViewPicker(p, RADAR_VIEW.get(p.id), (v) => { RADAR_VIEW.set(p.id, v); draw(v); }) : null, box);
+}
+
 export function playerCard(p, stats = playerStats(p)) {
   const { att, xp, gap } = stats;
   const rv = radarValues(p, state.data.ratings);
   const rated = rv.values.some((v) => v > 0);
-  const meta = [POSITION_NAME[p.position] !== 'Sin definir' ? POSITION_NAME[p.position] : null, p.branch ? BRANCHES[p.branch] : null,
-    p.hand ? `Mano ${HANDS[p.hand].toLowerCase()}` : null, p.height_cm ? `${p.height_cm} cm` : null].filter(Boolean);
+  const extra = positionsOf(p).slice(1).map((x) => POSITION_NAME[x]);
+  const meta = [multiTeam() ? teamName(teamOf(p)) : null, POSITION_NAME[p.position] !== 'Sin definir' ? POSITION_NAME[p.position] : null, extra.length ? `Comodín: también ${extra.join(', ')}` : null,
+    p.branch ? BRANCHES[p.branch] : null, p.hand ? `Mano ${HANDS[p.hand].toLowerCase()}` : null, p.height_cm ? `${p.height_cm} cm` : null].filter(Boolean);
   return h('section', { class: 'card-player', 'aria-label': `Tarjeta de ${p.name}` },
     h('div', { class: 'big', 'aria-hidden': 'true' }, p.jersey != null ? String(p.jersey) : initials(p.name)[0]),
     h('h2', {}, p.name),
     h('div', { class: 'meta' }, h('span', { class: 'chip ball' }, `Nivel ${p.level}, ${LEVELS[p.level - 1].name}`), meta.map((m) => h('span', { class: 'chip' }, m))),
     rated
-      ? h('div', {}, h('div', { html: radarSVG(rv, `Radar de habilidades de ${p.name}`) }),
-        gap.top ? h('p', { class: 'legend' }, 'Relleno amarillo: sus fases de hoy. Está en el nivel más alto.')
-          : h('p', { class: 'legend' }, `Relleno amarillo: sus fases de hoy. Línea punteada: lo que pide el nivel ${gap.target}.`))
+      ? radarBlock(p, gap)
       : h('p', { class: 'legend', style: { margin: '18px 0 14px', fontSize: '1rem' } }, 'Todavía no hay evaluación. En cuanto se evalúen sus habilidades aparece su radar.'),
     radarButton(p, rated),
     h('div', { class: 'stats' },

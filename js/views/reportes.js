@@ -1,12 +1,11 @@
 // Reportes imprimibles: uno por jugador (para la familia o la escuela) y uno del grupo.
 import { h, ic, toast, fmtDate, todayStr, plural } from '../util.js';
 import { state, players, getPlayer, group, settings, profile, saveProfile, labReady } from '../store.js';
-import { currentRatings, levelGap, radarValues, attendanceFor, xpFor, levelCounts } from '../calc.js';
+import { currentRatings, levelGap, radarValues, attendanceFor, xpFor, levelCounts, positionsOf } from '../calc.js';
 import { SKILLS, PHASES, POSITION_NAME, BRANCHES } from '../content/skills.js';
 import { LEVELS } from '../content/levels.js';
-import { radarSVG } from '../radar.js';
 import { metrics, addCounts, result, fmtEff } from '../match-calc.js';
-import { sectionTitle, note, empty, dots, playerRow } from './ui.js';
+import { sectionTitle, note, empty, dots, playerRow, radarSVG } from './ui.js';
 import { PTESTS, testTrend } from '../content/pruebas.js';
 import { badgesFor } from '../badges.js';
 
@@ -49,7 +48,7 @@ function playerReport(id) {
   comment.addEventListener('input', () => { printed.textContent = comment.value; });
   comment.addEventListener('change', () => { if (!labReady()) return; saveProfile({ reportNotes: { ...(profile().reportNotes || {}), [p.id]: comment.value.trim() } }); toast('Comentario guardado', 1200); });
   const next = gap.top ? [] : gap.rows.filter((r) => !r.na && !r.ok);
-  const meta = [POSITION_NAME[p.position], p.branch ? BRANCHES[p.branch] : null, p.jersey != null ? `Número ${p.jersey}` : null].filter(Boolean).join(' · ');
+  const meta = [POSITION_NAME[p.position], positionsOf(p).length > 1 ? `también ${positionsOf(p).slice(1).map((x) => POSITION_NAME[x].toLowerCase()).join(', ')}` : null, p.branch ? BRANCHES[p.branch] : null, p.jersey != null ? `Número ${p.jersey}` : null].filter(Boolean).join(' · ');
 
   const el = h('div', { class: 'page report' },
     h('div', { class: 'cluster no-print' }, printBtn(), h('a', { class: 'btn', href: `#/jugador/${p.id}` }, 'Ver ficha')),

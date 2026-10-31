@@ -1,6 +1,6 @@
 // Ficha de un jugador (vista del entrenador): tarjeta, acciones y cuatro pestañas.
 import { h, ic, toast, fmtDate, plural, confirmSheet } from '../util.js';
-import { state, getPlayer, settings, remove, resolveClaim, patch, teamReady } from '../store.js';
+import { state, getPlayer, settings, remove, resolveClaim, patch, teamReady, isMine } from '../store.js';
 import { testsPanel } from './pruebas.js';
 import { homePlanSheet, planOf } from './casa.js';
 import { refName } from '../content/casa.js';
@@ -30,7 +30,7 @@ export default function jugador(ctx) {
       h('button', { class: 'btn sm', type: 'button', onclick: () => codeSheet(p) }, ic('lock', 16), p.user_id ? 'Código de acceso' : 'Código (sin usar)'),
       h('button', { class: 'btn sm', type: 'button', onclick: () => noteSheet(p) }, ic('pencil', 16), 'Nota'),
       h('button', { class: 'btn sm', type: 'button', onclick: () => playerFormSheet(p) }, ic('settings', 16), 'Editar datos'),
-      h('a', { class: 'btn sm', href: `#/ver/${p.id}` }, ic('eye', 16), 'Ver como jugador'),
+      isMine(p) ? h('a', { class: 'btn sm ball', href: '#/yo' }, ic('user-check', 16), 'Entrar a mi perfil') : h('a', { class: 'btn sm', href: `#/ver/${p.id}` }, ic('eye', 16), 'Ver como jugador'),
       h('a', { class: 'btn sm', href: `#/comparar/${p.id}` }, ic('arrow-left-right', 16), 'Antes y después'),
       h('button', { class: 'btn sm', type: 'button', disabled: teamReady() ? null : true, onclick: () => homePlanSheet(p) }, ic('house', 16), planOf(p).items.length ? 'Tarea de casa' : 'Dejar tarea de casa'),
       h('label', { class: 'check captain', title: 'El capitán puede pasar lista y capturar partidos desde su celular' },

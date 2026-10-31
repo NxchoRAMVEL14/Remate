@@ -25,11 +25,12 @@ export function makeDemoData() {
   const today = todayStr();
   const gid = 'demo-group';
   const groups = [{ id: gid, owner_id: 'demo', name: 'Prepa demo · Voleibol', created_at: iso(Date.now() - 90 * 864e5),
-    settings: { days: [2, 4], start: '16:00', minutes: 90, late_per_absence: 3, season: 'Ago 2026 a Ene 2027' } }];
+    settings: { days: [2, 4], start: '16:00', minutes: 90, late_per_absence: 3, season: 'Ago 2026 a Ene 2027',
+      teams: [{ id: 'demo-ta', name: 'Prepa Demo A', branch: 'X' }, { id: 'demo-tb', name: 'Prepa Demo B', branch: 'X' }] } }];
 
   const players = ROSTER.map(([name, branch, position, hand, height_cm, jersey, level], i) => ({
     id: `demo-p${i + 1}`, owner_id: 'demo', group_id: gid, user_id: null, name, branch, position, hand, height_cm, jersey, level,
-    join_code: newJoinCode(), active: true, consent_at: iso(Date.now() - 80 * 864e5), joined_at: null, created_at: iso(Date.now() - 85 * 864e5),
+    join_code: newJoinCode(), active: true, team: i < 7 ? 'demo-ta' : 'demo-tb', positions: name === 'Leo A.' ? ['punta', 'opuesto'] : [], consent_at: iso(Date.now() - 80 * 864e5), joined_at: null, created_at: iso(Date.now() - 85 * 864e5),
   }));
 
   // evaluaciones: una hace ~50 días y otra reciente

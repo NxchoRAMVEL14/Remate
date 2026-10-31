@@ -491,3 +491,43 @@ button.sc-zone { cursor: pointer; }
 .sc-facts .panel { display: grid; gap: 2px; }
 .sc-plan { border-left: 6px solid var(--ball); }
 .warmup-tip { border-left: 6px solid var(--ok); }
+.team-row input[type=text] { flex: 1; min-width: 0; } .team-row select { width: auto; flex: none; }
+
+/* v3.5: cuadro de eliminación directa */
+.bracket { display: grid; gap: 14px; }
+@media (min-width: 900px) { .bracket { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); align-items: center; } }
+.br-round { display: grid; gap: 10px; align-content: start; }
+.br-round h3 { margin: 0; font-size: 1rem; text-transform: uppercase; letter-spacing: .06em; color: var(--court); }
+.br-game { background: var(--surface); border-radius: var(--r-l); padding: 10px; display: grid; gap: 4px; border: 2px solid var(--line); }
+.br-game.bye { border-style: dashed; }
+.br-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.br-head .btn { margin-left: auto; }
+.br-team { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); border: 2px solid transparent; font: inherit; font-weight: 700; color: var(--ink); text-align: left; width: 100%; }
+button.br-team { cursor: pointer; }
+.br-team .br-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.br-team.win { border-color: var(--ok); background: var(--ok-bg); }
+.br-team.lose { opacity: .55; }
+.br-team.mine .br-name { color: var(--court); }
+.br-vs { font-size: .72rem; font-weight: 800; color: var(--ink-2); text-align: center; text-transform: uppercase; }
+.br-champ { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--r-l); background: var(--ball); color: var(--ball-on); font-size: 1.05rem; }
+.br-champ.mine { box-shadow: 0 0 0 3px var(--court) inset; }
+.br-edit { display: grid; gap: 8px; }
+.br-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px; align-items: center; }
+.br-row .vs { font-weight: 800; color: var(--ink-2); font-size: .8rem; }
+.br-row input { min-width: 0; }
+.br-time { display: flex; align-items: center; gap: 8px; font-size: .85rem; font-weight: 700; color: var(--ink-2); }
+.br-time input { width: auto; }
+.st-mine { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: .9rem; }
+.st-mine select { width: auto; }
+/* v3.5 leer de una imagen */
+.imp-img { display: block; max-width: 100%; max-height: 220px; margin: 0 auto; border-radius: 10px; border: 1px solid var(--line); object-fit: contain; background: var(--surface-2); }
+.imp-bar { background: var(--line); }
+.imp details summary { cursor: pointer; font-weight: 700; color: var(--ink-2); }
+.imp textarea { width: 100%; font: inherit; }
+.viewas.self { background: var(--court); color: var(--court-on); }
+.viewas.self .btn { background: var(--court-on); color: var(--court); border-color: var(--court-on); }
+/* v3.5 comodín: elegir con qué posición se ve el radar */
+.rv-pick { margin: 6px 0 2px; }
+.card-player .rv-pick { background: rgba(255,255,255,.12); }
+.card-player .rv-pick button { color: #fff; padding: 6px 12px; min-height: 36px; }
+.card-player .rv-pick button[aria-pressed="true"] { background: var(--ball); color: var(--ball-on); }

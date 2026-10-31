@@ -1,28 +1,38 @@
 // Hojas emergentes del entrenador sobre un jugador: datos, evaluación, examen, código y notas.
 import { h, ic, openSheet, confirmSheet, toast, copyText, shareText, newJoinCode, todayStr, fmtDate } from '../util.js';
-import { add, patch, remove, group, rate, recordExam, state } from '../store.js';
+import { add, patch, remove, group, rate, recordExam, state, multiTeam, teams, teamOf, equiposReady } from '../store.js';
 import { SKILLS, PHASES, POSITIONS, BRANCHES, HANDS, POSITION_NAME } from '../content/skills.js';
 import { LEVELS, required } from '../content/levels.js';
 import { currentRatings, levelGap, nextLevelN } from '../calc.js';
 import { field, options, note } from './ui.js';
 
 // ---------- alta y edición ----------
-export function playerFormSheet(p = null) {
-  const name = h('input', { type: 'text', maxlength: 40, required: true, value: p?.name || '', autocomplete: 'off' });
+// self: el perfil de jugador del propio entrenador (adulto: no pide autorización ni genera código).
+export function playerFormSheet(p = null, { self = false, name: suggested = '', onSaved } = {}) {
+  const name = h('input', { type: 'text', maxlength: 40, required: true, value: p?.name || suggested, autocomplete: 'off' });
   const branch = h('select', {}, options([['', 'Sin definir'], ...Object.entries(BRANCHES)], p?.branch || ''));
   const pos = h('select', {}, options(POSITIONS.map((x) => [x.id, x.name]), p?.position || 'sin_definir'));
   const hand = h('select', {}, options([['', 'Sin definir'], ...Object.entries(HANDS)], p?.hand || ''));
   const height = h('input', { type: 'number', min: 120, max: 230, inputmode: 'numeric', value: p?.height_cm ?? '' });
   const jersey = h('input', { type: 'number', min: 0, max: 99, inputmode: 'numeric', value: p?.jersey ?? '' });
   const consent = h('input', { type: 'checkbox', checked: p?.consent_at ? true : null });
+  const team = multiTeam() ? h('select', {}, options(teams().map((t) => [t.id, t.name]), p ? teamOf(p) : teams()[0].id)) : null;
+  // Comodín: otras posiciones que juega bien (además de la principal). Necesita el SQL de la v3.5.
+  const extra = new Set(Array.isArray(p?.positions) ? p.positions : []);
+  const extraBox = equiposReady() ? h('div', { class: 'cluster pos-extra' }) : null;
+  const drawExtra = () => extraBox?.replaceChildren(...POSITIONS.filter((x) => x.id !== 'sin_definir' && x.id !== pos.value).map((x) =>
+    h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: extra.has(x.id) ? true : null, onchange: (e) => { if (e.target.checked) extra.add(x.id); else extra.delete(x.id); } }), h('span', {}, x.name))));
+  pos.addEventListener('change', drawExtra); drawExtra();
   const num = (el) => (el.value === '' ? null : Number(el.value));
   return openSheet({
-    title: p ? 'Editar jugador' : 'Nuevo jugador',
+    title: self ? 'Mi perfil de jugador' : p ? 'Editar jugador' : 'Nuevo jugador',
     body: h('div', { class: 'stack' },
-      field('Nombre o apodo', name, 'Solo nombre o apodo. No pidas teléfono, domicilio ni fotos.'),
+      self ? note('Es tu ficha para jugar con ellos (por ejemplo en un equipo mixto): sales en la lista, en la alineación y en la captura de partidos, y tienes tu tarjeta, radar, Teoría y retos.') : null,
+      field('Nombre o apodo', name, self ? 'Así te verán en la lista y en la alineación.' : 'Solo nombre o apodo. No pidas teléfono, domicilio ni fotos.'),
       h('div', { class: 'grid' }, field('Rama', branch), field('Posición', pos), field('Mano de ataque', hand)),
-      h('div', { class: 'grid' }, field('Estatura (cm)', height), field('Número de playera', jersey)),
-      h('label', { class: 'check' }, consent, 'Ya tengo la autorización de su madre, padre o tutor')),
+      extraBox ? field('También juega bien de (comodín)', extraBox, 'Opcional. Su radar se puede ver con cada posición; el nivel y el examen se deciden con la principal.') : null,
+      h('div', { class: 'grid' }, field('Estatura (cm)', height), field('Número de playera', jersey), team ? field('Equipo', team) : null),
+      self ? null : h('label', { class: 'check' }, consent, 'Ya tengo la autorización de su madre, padre o tutor')),
     actions: [{ label: 'Cancelar' }, { label: 'Guardar', kind: 'primary', onClick: () => {
       const n = name.value.trim();
       if (n.length < 1) { name.focus(); toast('Escribe un nombre o apodo'); return false; }
@@ -30,8 +40,11 @@ export function playerFormSheet(p = null) {
       if (h_ != null && (h_ < 120 || h_ > 230)) { toast('La estatura debe estar entre 120 y 230 cm'); return false; }
       if (j != null && (j < 0 || j > 99)) { toast('El número va de 0 a 99'); return false; }
       const data = { name: n, branch: branch.value || null, position: pos.value, hand: hand.value || null, height_cm: h_, jersey: j,
-        consent_at: consent.checked ? (p?.consent_at || new Date().toISOString()) : null };
-      if (p) { patch('players', p.id, data); toast('Guardado'); }
+        consent_at: self || consent.checked ? (p?.consent_at || new Date().toISOString()) : null };
+      if (team) data.team = team.value;
+      if (extraBox) data.positions = POSITIONS.map((x) => x.id).filter((id) => extra.has(id) && id !== pos.value && id !== 'sin_definir');
+      if (p) { patch('players', p.id, data); toast('Guardado'); onSaved?.(p); }
+      else if (self) { const np = add('players', { ...data, group_id: group()?.id, level: 1 }); toast('Listo: ya tienes tu perfil de jugador'); onSaved?.(np); }
       else { const np = add('players', { ...data, group_id: group()?.id, level: 1 }); toast('Jugador agregado'); setTimeout(() => codeSheet(np), 200); }
     } }],
   });
