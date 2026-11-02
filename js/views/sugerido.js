@@ -1,7 +1,7 @@
 // Entreno sugerido después de un partido (v3.8): un borrador de entrenamiento con ejercicios para lo que más falló.
 // Son reglas simples sobre la estadística capturada (propuesta de Remate, no un estudio): tú lo revisas y lo ajustas.
 import { h, ic, toast, openSheet, confirmSheet, todayStr, addDays, parseDate, fmtDate } from '../util.js';
-import { state, add, patch, players, settings, inTeam, teamOf, group } from '../store.js';
+import { state, add, patch, players, settings, inTeam, teamOf, group, teamName } from '../store.js';
 import { metrics, addCounts, countsFor, playersIn, replay, phaseStats, byRotation, rotLabel, rivalStats, fmtEff, rotate } from '../match-calc.js';
 import { currentRatings, positionsOf } from '../calc.js';
 import { POSITION_NAME } from '../content/skills.js';
@@ -67,7 +67,7 @@ export function nextTrainingDay(from = todayStr()) {
 
 export function buildPlan(m, dx, date) {
   const minutes = Math.max(45, Number(settings().minutes) || 90);
-  const team = matchRoster(m).filter((p) => p.active !== false);
+  const team = matchRoster(m, { strict: true }).filter((p) => p.active !== false);
   const level = Math.max(1, Math.min(6, median(team.map((p) => Number(p.level) || 1))));
   const used = new Set(), plan = [];
   plan.push({ ex: settings().warmup_prev !== false ? warmupFor(date) : 'fi-01', min: 10, note: '' });
@@ -160,8 +160,17 @@ function roleScore(p, role, cur, st) {
 
 export function suggestLineup(m) {
   const team = teamOf(m), no = new Set(state.data.rsvps.filter((r) => r.match_id === m.id && r.status === 'no').map((r) => r.player_id));
-  const cand = matchRoster(m).filter((p) => p.active !== false && !no.has(p.id));
-  if (cand.length < 6) return { error: `Hacen falta al menos 6 jugadores disponibles${no.size ? ' (sin contar a quienes dijeron que no van)' : ''}.` };
+  // v3.9.2: primero solo los de este equipo (equipo principal y rama). Si no alcanzan 6, se suman
+  // quienes en su ficha dicen que «también juegan» en este equipo. Nunca jugadores de otro equipo:
+  // esos se agregan a mano con «Mostrar también a los de otros equipos o rama».
+  const ok = (p) => p.active !== false && !no.has(p.id);
+  let cand = matchRoster(m, { strict: true }).filter(ok), extra = [];
+  if (cand.length < 6) {
+    const ids = new Set(cand.map((p) => p.id));
+    extra = matchRoster(m).filter((p) => ok(p) && !ids.has(p.id) && inTeam(p, team));
+    cand = [...cand, ...extra];
+  }
+  if (cand.length < 6) return { error: `Hacen falta al menos 6 jugadores de ${teamName(team) || 'este equipo'}${no.size ? ' (sin contar a quienes dijeron que no van)' : ''}. Revisa en su ficha que estén en este equipo y con su rama, o ponlos a mano.` };
   const stats = new Map(cand.map((p) => [p.id, metrics(addCounts(...state.data.matchStats.filter((x) => x.player_id === p.id).map((x) => x.counts || {})))]));
   const ratings = state.data.ratings || [];
   const useLibero = cand.length >= 7 && cand.some((p) => positionsOf(p).includes('libero'));
@@ -201,5 +210,7 @@ export function suggestLineup(m) {
   const line = (p, role) => { const cur = currentRatings(p.id, ratings), ks = Object.keys(ROLE_W[role]).filter((k) => cur[k] != null);
     return `${p.name} de ${POSITION_NAME[role].toLowerCase()}${ks.length ? ` (${ks.map((k) => `${SKILL_NAME(k).toLowerCase()} ${cur[k]}/4`).join(', ')})` : ' (sin evaluación: se usó su nivel)'}`; };
   const notes = [line(by(0), 'colocador'), line(oh1, 'punta'), line(oh2, 'punta'), line(mb1, 'central'), line(mb2, 'central'), line(by(5), 'opuesto'), lib ? line(lib, 'libero') : null].filter(Boolean);
-  return { slots: lineup, libero: lib?.id || null, notes, why, rated: cand.filter((p) => ratings.some((r) => r.player_id === p.id)).length, total: cand.length };
+  const usedExtra = extra.filter((p) => lineup.includes(p.id) || lib?.id === p.id);
+  if (usedExtra.length) notes.push(`Como no alcanzaban los de ${teamName(team)}, se usó a ${usedExtra.map((p) => p.name).join(', ')}, ${usedExtra.length > 1 ? 'que en su ficha también juegan' : 'que en su ficha también juega'} en este equipo.`);
+  return { slots: lineup, libero: lib?.id || null, notes, why, team: teamName(team), rated: cand.filter((p) => ratings.some((r) => r.player_id === p.id)).length, total: cand.length };
 }

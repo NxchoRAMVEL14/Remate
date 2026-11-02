@@ -20,14 +20,18 @@ export function matchBranch(m) {
   const tm = teams().find((x) => x.id === teamOf(m));
   return tm?.branch && tm.branch !== 'X' ? tm.branch : 'X';
 }
-export function matchRoster(m, { all = false } = {}) {
+// strict: sin agregar a quien ya jugó (para sugerir la alineación solo con los del equipo).
+export function matchRoster(m, { all = false, strict = false } = {}) {
   const ps = players().slice().sort((a, b) => (a.jersey ?? 999) - (b.jersey ?? 999) || a.name.localeCompare(b.name, 'es'));
   if (all || !m) return ps;
-  const used = new Set([...playersIn(getLog(m)?.log || []), ...(m.lineups || []).flatMap((l) => (l ? [...(l.slots || []), l.libero] : []))].filter(Boolean));
-  const t = m.tournament_id ? state.data.tournaments.find((x) => x.id === m.tournament_id) : null;
-  if (t && (t.roster || []).length) { const r = new Set(t.roster); return ps.filter((p) => used.has(p.id) || r.has(p.id)); }
+  const used = strict ? new Set() : new Set([...playersIn(getLog(m)?.log || []), ...(m.lineups || []).flatMap((l) => (l ? [...(l.slots || []), l.libero] : []))].filter(Boolean));
   const tf = teamOf(m), b = matchBranch(m);
-  return ps.filter((p) => used.has(p.id) || (inTeam(p, tf) && (b === 'X' || !p.branch || p.branch === b)));
+  // strict: solo su equipo PRINCIPAL (no quienes «también juegan» aquí).
+  const mine = (p) => (strict && tf ? teamOf(p) === tf : inTeam(p, tf)) && (b === 'X' || !p.branch || p.branch === b);
+  // v3.9.2: en un torneo con convocados de varios equipos, solo los convocados de ESTE equipo y rama.
+  const t = m.tournament_id ? state.data.tournaments.find((x) => x.id === m.tournament_id) : null;
+  if (t && (t.roster || []).length) { const r = new Set(t.roster); const conv = ps.filter((p) => r.has(p.id) && mine(p)); if (conv.length) return ps.filter((p) => used.has(p.id) || (r.has(p.id) && mine(p))); }
+  return ps.filter((p) => used.has(p.id) || mine(p));
 }
 const hiddenCount = (m) => players().length - matchRoster(m).length;
 const pjersey = (p) => (p ? (p.jersey != null ? String(p.jersey) : p.name.slice(0, 1).toUpperCase()) : '?');
@@ -272,7 +276,7 @@ export function lineupSheet(m, setIdx) {
     if (r.error) { sugBox.replaceChildren(note(r.error, 'warn')); return; }
     r.slots.forEach((id, i) => { zone[i + 1].value = id; });
     libero.value = r.libero || '';
-    sugBox.replaceChildren(note('Listo: Remate llenó las zonas. Revisa y cambia lo que quieras antes de guardar.', 'ok'), h('details', { class: 'panel' }, h('summary', {}, h('strong', {}, 'Por qué esta alineación')),
+    sugBox.replaceChildren(note(`Listo: Remate llenó las zonas solo con jugadores de ${r.team || 'este equipo'}. Revisa y cambia lo que quieras antes de guardar; para meter a alguien de otro equipo o rama, activa «Mostrar también a los de otros equipos o rama».`, 'ok'), h('details', { class: 'panel' }, h('summary', {}, h('strong', {}, 'Por qué esta alineación')),
       h('ul', { class: 'plain', style: { marginTop: '6px' } }, r.notes.map((x) => h('li', {}, x)), h('li', {}, r.why)),
       r.rated < r.total ? note(`${r.total - r.rated} de ${r.total} no tienen evaluación en el radar: para ellos se usó su nivel. Entre más evalúes, mejor la propuesta.`, 'warn') : null,
       h('p', { class: 'row-sub', style: { margin: '6px 0 0' } }, 'Es una propuesta con reglas simples (sistema 5-1). Cámbiala con los menús de cada zona antes de guardar.')));
