@@ -1,42 +1,32 @@
 // Arranque de Remate: entrada, rutas, encabezado, navegación y re-dibujo cuando cambian los datos.
-import { h, ic, $, applyTheme } from './util.js';
+import { h, ic, $, applyTheme, iosBrowser, INSTALL_STEPS, openSheet } from './util.js';
 import { state, onChange, getPlayer, pendingCount } from './store.js';
 import { boot } from './auth.js';
 import { renderGate } from './views/gate.js';
-import hoy from './views/hoy.js';
-import jugadores from './views/jugadores.js';
-import jugador from './views/jugador.js';
-import sesiones from './views/sesiones.js';
-import sesion from './views/sesion.js';
-import ejercicios from './views/ejercicios.js';
-import ejercicio from './views/ejercicio.js';
-import ruta from './views/ruta.js';
-import ajustes from './views/ajustes.js';
-import inicio from './views/inicio.js';
-import entrenos from './views/entrenos.js';
-import partidos, { partido } from './views/partidos.js';
-import lab from './views/lab.js';
-import reportes from './views/reportes.js';
-import mas, { selfSheet, enterSelf, leaveSelf } from './views/mas.js';
-import casa from './views/casa.js';
-import mejoras, { ideaSheet } from './views/mejoras.js';
-import asistir, { listaQr, llegue } from './views/asistir.js';
-import pruebas from './views/pruebas.js';
-import temporada from './views/temporada.js';
-import avisos from './views/avisos.js';
-import radar, { comparar } from './views/radar-guia.js';
-import teoria from './views/teoria.js';
-import torneo from './views/torneos.js';
-import { alineacion } from './views/partido-capture.js';
-import rivales from './views/rivales.js';
-import gym from './views/gym.js';
-import medir from './views/medir.js';
-import ayuda, { novedades, unseenUpdate, firstRun, markSeen, updateBanner, SEEN_KEY } from './views/ayuda.js';
+import { selfSheet, enterSelf, leaveSelf } from './views/mas.js';
+import { unseenUpdate, firstRun, markSeen, updateBanner, SEEN_KEY } from './views/ayuda.js';
 import { casaReady, isStaff, ls, myPlayer } from './store.js';
 
-const COACH = { hoy, jugadores, jugador, sesiones, sesion, ejercicios, ejercicio, ruta, ajustes, ayuda, partidos, partido, lab, reportes, mas, casa, mejoras, pruebas, temporada, avisos, radar, novedades, teoria, comparar, torneo, alineacion, rivales, rival: rivales, gym, medir, 'lista-qr': listaQr, llegue };
-const PLAYER = { inicio, ruta, entrenos, partidos, partido, ejercicios, ejercicio, casa, pruebas, avisos, asistir, ajustes, ayuda, radar, novedades, teoria, torneo, gym, medir, llegue };
-const ASSISTANT = { asistir, partidos, partido, avisos, ejercicios, ejercicio, ajustes, ayuda, novedades, torneo, alineacion };
+// v3.8: cada pantalla se carga al abrirla; después, en segundo plano, se cargan todas (así quedan guardadas para usar sin internet).
+// [archivo en js/views, función que exporta]
+const R = (file, pick = 'default') => ({ file, pick });
+const ROUTES = { hoy: R('hoy'), jugadores: R('jugadores'), jugador: R('jugador'), sesiones: R('sesiones'), sesion: R('sesion'), ejercicios: R('ejercicios'), ejercicio: R('ejercicio'),
+  ruta: R('ruta'), ajustes: R('ajustes'), ayuda: R('ayuda'), novedades: R('ayuda', 'novedades'), partidos: R('partidos'), partido: R('partidos', 'partido'), lab: R('lab'), reportes: R('reportes'),
+  mas: R('mas'), casa: R('casa'), mejoras: R('mejoras'), pruebas: R('pruebas'), temporada: R('temporada'), avisos: R('avisos'), radar: R('radar-guia'), comparar: R('radar-guia', 'comparar'),
+  teoria: R('teoria'), torneo: R('torneos'), alineacion: R('partido-capture', 'alineacion'), rivales: R('rivales'), rival: R('rivales'), gym: R('gym'), medir: R('medir'),
+  'lista-qr': R('asistir', 'listaQr'), llegue: R('asistir', 'llegue'), asistir: R('asistir'), inicio: R('inicio'), entrenos: R('entrenos') };
+const COACH = new Set(['hoy', 'jugadores', 'jugador', 'sesiones', 'sesion', 'ejercicios', 'ejercicio', 'ruta', 'ajustes', 'ayuda', 'partidos', 'partido', 'lab', 'reportes', 'mas', 'casa', 'mejoras', 'pruebas', 'temporada', 'avisos', 'radar', 'novedades', 'teoria', 'comparar', 'torneo', 'alineacion', 'rivales', 'rival', 'gym', 'medir', 'lista-qr', 'llegue']);
+const PLAYER = new Set(['inicio', 'ruta', 'entrenos', 'partidos', 'partido', 'ejercicios', 'ejercicio', 'casa', 'pruebas', 'avisos', 'asistir', 'ajustes', 'ayuda', 'radar', 'novedades', 'teoria', 'torneo', 'gym', 'medir', 'llegue', 'lista-qr']);
+const ASSISTANT = new Set(['asistir', 'partidos', 'partido', 'avisos', 'ejercicios', 'ejercicio', 'ajustes', 'ayuda', 'novedades', 'torneo', 'alineacion', 'lista-qr']);
+const MODS = new Map();
+const loadView = (file) => (MODS.has(file) ? Promise.resolve(MODS.get(file)) : import(`./views/${file}.js`).then((m) => { MODS.set(file, m); return m; }));
+let prefetched = false;
+function prefetchAll() {
+  if (prefetched) return; prefetched = true;
+  const files = [...new Set(Object.values(ROUTES).map((r) => r.file))];
+  const next = () => { const f = files.shift(); if (!f) return; loadView(f).catch(() => {}).finally(() => setTimeout(next, 30)); };
+  (window.requestIdleCallback || ((fn) => setTimeout(fn, 1200)))(next, { timeout: 2500 });
+}
 const TABLES = { coach: COACH, player: PLAYER, assistant: ASSISTANT };
 const HOME = { coach: '#/hoy', player: '#/inicio', assistant: '#/asistir' };
 // [ruta, texto, ícono, dónde se ve]: 'wide' solo en pantalla grande (barra lateral), 'narrow' solo en celular.
@@ -80,7 +70,20 @@ function render({ fresh = false } = {}) {
   }
   const role = state.viewAs ? 'player' : state.role;
   const table = TABLES[role] || PLAYER;
-  if (!table[name] || (name === 'asistir' && role === 'player' && !isStaff())) { location.replace(HOME[role] || '#/inicio'); return; }
+  if (!table.has(name) || (name === 'asistir' && role === 'player' && !isStaff())) { location.replace(HOME[role] || '#/inicio'); return; }
+  const route = ROUTES[name], mod = MODS.get(route.file);
+  if (!mod) {
+    // Mientras llega el archivo de esa pantalla, se queda la actual (casi siempre tarda unos milisegundos).
+    document.body.classList.add('view-loading');
+    loadView(route.file).then(() => { document.body.classList.remove('view-loading'); render({ fresh }); }, (e) => {
+      document.body.classList.remove('view-loading');
+      root.replaceChildren(h('div', { class: 'app' }, h('main', { class: 'main', id: 'main' }, h('div', { class: 'page' },
+        h('div', { class: 'note warn' }, navigator.onLine === false ? 'Esta pantalla todavía no se guardó en tu celular y no hay internet. Conéctate y vuelve a intentar.' : 'No se pudo abrir esta pantalla. Puede que haya una versión nueva de Remate: recarga.'),
+        h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', onclick: () => location.reload() }, 'Recargar'), h('a', { class: 'btn', href: HOME[role] || '#/inicio' }, 'Ir al inicio'))))));
+      console.error(e);
+    });
+    return;
+  }
   const me = state.viewAs ? getPlayer(state.viewAs) : state.me;
   if (state.viewAs && !me) { state.viewAs = null; state.self = false; location.replace('#/jugadores'); return; }
   const key = [role, name, ...args].join('/');
@@ -88,7 +91,7 @@ function render({ fresh = false } = {}) {
   const y = fresh ? 0 : window.scrollY;
   const ctx = { role, me, readonly: !!state.viewAs && !state.self, self: !!state.viewAs && state.self, args, ui: uiState.get(key), rerender: () => render() };
   let view;
-  try { view = table[name](ctx); } catch (e) { view = errorView(e); }
+  try { view = mod[route.pick](ctx); } catch (e) { view = errorView(e); }
   const nav = name === 'radar' ? (role === 'coach' ? 'jugadores' : 'inicio') : name === 'teoria' ? (role === 'coach' ? 'sesiones' : 'entrenos') : name === 'gym' ? (role === 'coach' ? 'gym' : 'ejercicios') : name === 'medir' ? (role === 'coach' ? 'lab' : 'inicio') : (PARENT[name] || name);
 
   const sync = state.mode === 'demo' ? h('span', { class: 'sync' }, 'Demo')
@@ -101,7 +104,7 @@ function render({ fresh = false } = {}) {
     (view.actions || []).map((a) => (a.href ? h('a', { class: 'iconbtn', href: a.href, 'aria-label': a.label, title: a.label }, ic(a.icon)) : h('button', { class: 'iconbtn', type: 'button', 'aria-label': a.label, title: a.label, onclick: a.onClick }, ic(a.icon)))),
     // Entrenador: un foco para anotar una mejora de la app desde cualquier pantalla (Ayuda y Ajustes viven en Más y en la barra lateral).
     role === 'coach' ? h('button', { class: 'iconbtn', type: 'button', 'aria-label': 'Anotar una mejora para la app', title: 'Anotar una mejora para la app',
-      onclick: () => (casaReady() ? ideaSheet(null, { area: IDEA_AREA[name] || 'otra' }) : (location.hash = '#/mejoras')) }, ic('lightbulb'))
+      onclick: () => (casaReady() ? loadView('mejoras').then((m) => m.ideaSheet(null, { area: IDEA_AREA[name] || 'otra' })) : (location.hash = '#/mejoras')) }, ic('lightbulb'))
       : [h('a', { class: 'iconbtn', href: '#/ayuda', 'aria-label': 'Ayuda', title: 'Ayuda' }, ic('circle-help')),
         h('a', { class: 'iconbtn', href: '#/ajustes', 'aria-label': 'Ajustes', title: 'Ajustes' }, ic('settings'))]);
   const navEl = h('nav', { class: 'nav', 'aria-label': 'Secciones' }, (NAV[role] || NAV.player).map(([id, label, icon, where]) =>
@@ -112,10 +115,28 @@ function render({ fresh = false } = {}) {
       h('button', { class: 'btn sm', type: 'button', onclick: () => { const id = state.viewAs; state.viewAs = null; location.hash = `#/jugador/${id}`; } }, 'Salir')) : null;
   // Aviso de una sola vez cuando el celular abre una versión nueva de Remate.
   const upd = !state.viewAs && name !== 'novedades' && unseenUpdate() ? updateBanner(() => render()) : null;
-  const main = h('main', { class: 'main', id: 'main', tabindex: '-1', 'aria-labelledby': 'page-title' }, banner, upd, view.el);
+  const main = h('main', { class: 'main', id: 'main', tabindex: '-1', 'aria-labelledby': 'page-title' }, banner, upd, safariBanner(), view.el);
   root.replaceChildren(h('div', { class: 'app' }, header, navEl, main));
   document.title = `${view.title} · Remate`;
   if (fresh) { window.scrollTo(0, 0); main.focus({ preventScroll: true }); } else window.scrollTo(0, y);
+  prefetchAll();
+}
+
+// iPhone en Safari (o abierto desde WhatsApp): aquí la sesión se guarda aparte de la app instalada.
+let safariHidden = false;
+export function installSheet() {
+  openSheet({ title: 'Instala Remate en tu iPhone', body: h('div', { class: 'stack' },
+    h('p', { style: { margin: 0 } }, 'En iPhone, Safari y Remate instalado guardan tu sesión por separado. Si entras a veces por Safari (por ejemplo desde un enlace de WhatsApp), te vuelve a pedir el código.'),
+    h('ol', { class: 'plain' }, INSTALL_STEPS.map((x) => h('li', {}, x))),
+    h('p', { class: 'row-sub', style: { margin: 0 } }, 'Puedes tener Remate abierto en hasta 3 lugares (por ejemplo la app instalada, Safari y una tablet) sin que se cierre en los otros.')),
+  actions: [{ label: 'Entendido', kind: 'primary' }] });
+}
+function safariBanner() {
+  if (safariHidden || state.mode !== 'cloud' || !iosBrowser()) return null;
+  return h('div', { class: 'note warn safari-note', role: 'status' },
+    h('span', {}, h('strong', {}, 'Estás en Safari, no en la app. '), 'Para que no te vuelva a pedir el código, abre Remate desde su ícono en tu pantalla de inicio.'),
+    h('div', { class: 'cluster' }, h('button', { class: 'btn sm', type: 'button', onclick: installSheet }, 'Cómo instalarla'),
+      h('button', { class: 'btn ghost sm', type: 'button', onclick: () => { safariHidden = true; render(); } }, 'Ahora no')));
 }
 
 function schedule() { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; render(); }); }
@@ -138,6 +159,7 @@ addEventListener('hashchange', () => render({ fresh: true }));
 
 (async function start() {
   applyTheme();
+  try { navigator.storage?.persist?.().catch(() => {}); } catch { /* el navegador decide */ }   // que el celular no borre la sesión
   root.replaceChildren(h('div', { class: 'boot', role: 'status' }, h('img', { class: 'hero-icon', src: 'icons/icon-192.png', alt: '', width: 150, height: 150 }), h('p', {}, 'Cargando Remate…')));
   let where = 'gate';
   try { where = await boot(); } catch (e) { console.error(e); }

@@ -26,7 +26,7 @@ export const KEYS = Object.keys(TABLES);
 const FETCH = {
   coach: KEYS,
   player: ['groups', 'players', 'sessions', 'attendance', 'ratings', 'exams', 'claims', 'customEx', 'matches', 'matchStats', 'homeLogs', 'rsvps', 'playerTests', 'notices', 'tournaments', 'tRsvps', 'calFeeds', 'gymLogs'],
-  assistant: ['staff', 'groups', 'sessions', 'attendance', 'matches', 'matchLogs', 'matchStats', 'rsvps', 'notices', 'tournaments', 'tRsvps', 'calFeeds'],
+  assistant: ['staff', 'groups', 'sessions', 'attendance', 'matches', 'matchLogs', 'matchStats', 'rsvps', 'notices', 'tournaments', 'tRsvps', 'calFeeds', 'checkins'],
 };
 // Lo que solo ve el entrenador (el jugador ni lo pide) y lo que llegó con la fase 2 (puede faltar si aún no corren el SQL nuevo).
 const COACH_ONLY = new Set(['notes', 'matchLogs', 'coachProfile', 'jumpTests', 'jumpSessions', 'coachLogs', 'coachAssess', 'decisions', 'ideas', 'checkins']);
@@ -325,13 +325,13 @@ export async function refresh() {
     if (state.role === 'player') state.me = next.players.find((p) => p.user_id === state.user.id) || next.players[0] || null;
     // Ayudantes: la lista del equipo (sin códigos) y, si es capitán, el registro de los partidos.
     if (state.role === 'assistant' || (state.role === 'player' && state.me?.captain)) {
-      if (state.role === 'player') next.matchLogs = await get('matchLogs');
+      if (state.role === 'player') { next.matchLogs = await get('matchLogs'); next.checkins = await get('checkins'); }   // v3.8: el capitán puede abrir la lista con QR
       try { next.roster = await fetchRoster(); } catch (e) { if (!isMissingTable(e) && !/staff_roster/.test(e?.message || '')) throw e; next.roster = []; missing4 = true; }
     }
     // v3.5: las columnas nuevas no se ven como tabla faltante; se prueba una vez si existen.
     let missing8 = false;
     if (!missing) { try { const c = await client(); const { error } = await c.from('matches').select('team').limit(1); if (error && (error.code === '42703' || /column|team/i.test(error.message || ''))) missing8 = true; } catch (e) { if (!isNetworkError(e)) missing8 = true; } }
-    state.data = next; state.online = true; state.lab = !missing; state.equipos = !missing8; state.casa = !missing3; state.team = !missing4; state.torneos = !missing5; state.cal = !missing6; state.gym = !missing7; if (state.role === 'coach') state.sql37 = !missing9;
+    state.data = next; state.online = true; state.lab = !missing; state.equipos = !missing8; state.casa = !missing3; state.team = !missing4; state.torneos = !missing5; state.cal = !missing6; state.gym = !missing7; if (state.role !== 'player') state.sql37 = !missing9;
     saveCache(); emit();
     return true;
   } catch (e) {
@@ -360,7 +360,8 @@ export function beginCloud({ user, role }) {
   try { outbox = JSON.parse(ls.get(outKey()) || '[]'); } catch { outbox = []; }
   state.pending = outbox.length;
   try { const c = JSON.parse(ls.get(cacheKey()) || 'null'); if (c) state.data = { ...emptyData(), ...c }; } catch { /* sin caché */ }
-  if (role === 'player') state.me = state.data.players.find((p) => p.user_id === user.id) || null;
+  // v3.8: con varios celulares, la fila del jugador guarda solo el último; los demás también la ven (es la única que ven).
+  if (role === 'player') state.me = state.data.players.find((p) => p.user_id === user.id) || state.data.players[0] || null;
   state.ready = true; emit();
 }
 export function clearLocal() {

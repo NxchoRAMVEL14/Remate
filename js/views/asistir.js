@@ -19,7 +19,8 @@ export default function asistir(ctx) {
   const n = players().length;
   const sessRow = (s) => h('div', { class: 'row' },
     h('span', { class: 'row-main' }, h('strong', {}, s.title || 'Entrenamiento'), h('span', { class: 'row-sub' }, `${sessionWhen(s)} · ${marks(s) ? `lista de ${marks(s)} de ${n}` : 'sin lista'}`)),
-    h('button', { class: `btn sm ${marks(s) ? '' : 'primary'}`, type: 'button', onclick: () => attendanceSheet(s) }, ic('clipboard-check', 16), marks(s) ? 'Corregir' : 'Pasar lista'));
+    h('div', { class: 'cluster' }, h('button', { class: `btn sm ${marks(s) ? '' : 'primary'}`, type: 'button', onclick: () => attendanceSheet(s) }, ic('clipboard-check', 16), marks(s) ? 'Corregir' : 'Pasar lista'),
+      s.session_date === t && canOpenQr() ? h('a', { class: 'btn sm ball', href: `#/lista-qr/${s.id}` }, ic('qr-code', 16), 'Lista con QR') : null));
   const who = state.role === 'assistant' ? 'asistente' : 'capitán';
   const el = h('div', { class: 'page' },
     !teamReady() ? note('Tu entrenador todavía no termina de activar esta función. Pídele que actualice Remate.', 'warn') : null,
@@ -74,6 +75,13 @@ const hm = (iso) => new Date(iso).toTimeString().slice(0, 5);
 export const checkinOf = (sid) => state.data.checkins.find((c) => c.session_id === sid) || null;
 export const checkinOpen = (ck) => !!(ck?.open_until && new Date(ck.open_until) > new Date());
 // Tolerancia (Ajustes): minutos después de la hora de inicio en que todavía cuenta como presente.
+// Quién abre la lista con QR: el entrenador siempre; asistentes y capitanes si el entrenador lo permite en Ajustes.
+export const qrHelpers = () => settings().qr_helpers || 'no';
+export function canOpenQr() {
+  if (state.role === 'coach') return !state.viewAs;
+  if (state.role === 'assistant') return ['asistente', 'todos'].includes(qrHelpers());
+  return isStaff() && qrHelpers() === 'todos';
+}
 export const lateMinutes = () => { const v = Number(settings().checkin_late); return Number.isFinite(v) && v >= 0 ? v : 10; };
 
 async function drawQr(box, text) {
@@ -153,14 +161,14 @@ function openChecklist(s, hours) {
   const row = { session_id: s.id, secret: newSecret(), open_until: new Date(until).toISOString(), late_after: lateAfter(s) };
   const ck = checkinOf(s.id);
   if (ck) patch('checkins', ck.id, row); else add('checkins', row);
-  if (!s.published) patch('sessions', s.id, { published: true });   // que tus jugadores lo vean en Inicio
+  if (!s.published && state.role === 'coach') patch('sessions', s.id, { published: true });   // que tus jugadores lo vean en Inicio
 }
 
 export function listaQr(ctx) {
   const s = state.data.sessions.find((x) => x.id === ctx.args[0]);
-  if (ctx.role !== 'coach') return { title: 'Lista con QR', back: '#/inicio', el: h('div', { class: 'page' }, note('La lista con QR la abre el entrenador. Tú marca tu llegada en Inicio.')) };
-  if (!s) return { title: 'Lista con QR', back: '#/sesiones', el: h('div', { class: 'page' }, empty('No encontré ese entrenamiento', null)) };
-  const back = `#/sesion/${s.id}`, sub = `${s.title || 'Entrenamiento'} · ${sessionWhen(s)}`;
+  if (!canOpenQr()) return { title: 'Lista con QR', back: isStaff() ? '#/asistir' : '#/inicio', el: h('div', { class: 'page' }, note(isStaff() ? 'Tu entrenador todavía no deja que los ayudantes abran la lista con QR (Ajustes → Entrenamientos).' : 'La lista con QR la abre el entrenador. Tú marca tu llegada en Inicio.')) };
+  if (!s) return { title: 'Lista con QR', back: ctx.role === 'coach' ? '#/sesiones' : '#/asistir', el: h('div', { class: 'page' }, empty('No encontré ese entrenamiento', null)) };
+  const back = ctx.role === 'coach' ? `#/sesion/${s.id}` : '#/asistir', sub = `${s.title || 'Entrenamiento'} · ${sessionWhen(s)}`;
   if (!sql37Ready()) { stopQr(); return { title: 'Lista con QR', sub, back, el: h('div', { class: 'page' }, note('Para usar la lista con QR, corre en Supabase el bloque «v3.7» del archivo sql/instalar.sql (SQL Editor > pega > Run). Mientras tanto puedes pasar lista como siempre.', 'bad'),
     h('button', { class: 'btn primary', type: 'button', onclick: () => attendanceSheet(s) }, ic('clipboard-check', 18), 'Pasar lista')) }; }
   if (s.session_date > todayStr()) { stopQr(); return { title: 'Lista con QR', sub, back, el: h('div', { class: 'page' }, note(`La lista con QR se abre el día del entrenamiento (${fmtDate(s.session_date, { weekday: 'long', day: 'numeric', month: 'long' })}). Así nadie lo deja como hecho antes de tiempo.`, 'warn')) }; }
@@ -190,7 +198,8 @@ export function listaQr(ctx) {
     patch('checkins', ck.id, { open_until: new Date().toISOString() });
     toast(withFaltas ? `Lista cerrada: ${plural(missing.length, 'falta', 'faltas')}` : 'Lista cerrada');
   };
-  const demoArrive = () => { const p = missing[0]; if (!p) return; setAttendance(s.id, p.id, new Date() > new Date(ck.late_after || 0) ? 'retardo' : 'presente'); if (s.status === 'planeada') patch('sessions', s.id, { status: 'hecha', published: true }); toast(`Llegó ${p.name}`); };
+  const markDone = () => { if (ctx.role === 'coach' && s.status === 'planeada') patch('sessions', s.id, { status: 'hecha', published: true }); };   // con ayudantes, la base de datos lo marca sola
+  const demoArrive = () => { const p = missing[0]; if (!p) return; setAttendance(s.id, p.id, new Date() > new Date(ck.late_after || 0) ? 'retardo' : 'presente'); markDone(); toast(`Llegó ${p.name}`); };
   const el = h('div', { class: 'page lista-qr' },
     qrPanel(s, ck),
     h('div', { class: 'cluster' },
@@ -200,7 +209,7 @@ export function listaQr(ctx) {
     state.mode === 'demo' ? h('div', { class: 'note stack' }, h('span', {}, 'En el demo nadie escanea. Toca para ver cómo llegan:'), h('button', { class: 'btn sm', type: 'button', disabled: missing.length ? null : true, onclick: demoArrive }, ic('user-check', 16), 'Simular una llegada')) : null,
     h('p', { class: 'row-sub', style: { margin: 0 } }, `Abierta hasta las ${hm(ck.open_until)}. Retardo después de las ${hm(ck.late_after)}.`),
     h('section', { class: 'stack' }, sectionTitle(`Faltan (${missing.length})`),
-      missing.length ? h('div', { class: 'rows' }, missing.map((p) => row(p, h('button', { class: 'btn sm', type: 'button', onclick: () => { setAttendance(s.id, p.id, 'presente'); if (s.status === 'planeada') patch('sessions', s.id, { status: 'hecha', published: true }); } }, 'Presente'))))
+      missing.length ? h('div', { class: 'rows' }, missing.map((p) => row(p, h('button', { class: 'btn sm', type: 'button', onclick: () => { setAttendance(s.id, p.id, 'presente'); markDone(); } }, 'Presente'))))
         : h('p', { class: 'row-sub', style: { margin: 0 } }, '¡Ya están todos!')),
     h('section', { class: 'stack' }, sectionTitle(`Llegaron (${here.length})`),
       here.length ? h('div', { class: 'rows' }, here.map((p) => row(p, h('span', { class: `chip ${mark(p.id).status === 'retardo' ? 'warn' : 'ok'}` }, mark(p.id).status === 'retardo' ? 'Retardo' : 'Presente')))) : h('p', { class: 'row-sub', style: { margin: 0 } }, 'Todavía nadie.')),

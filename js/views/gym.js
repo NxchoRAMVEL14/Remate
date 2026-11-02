@@ -4,7 +4,7 @@
 import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr, addDays, plural, DAYS, DAYS_LONG, nextWeekday, weeklyRule } from '../util.js';
 import { state, add, remove, patch, players, settings, gymReady, ls, multiTeam, teamOf, inTeam } from '../store.js';
 import { weekStart, num } from '../lab-calc.js';
-import { GYM, GYM_BY_ID, GROUPS, NEED, EQUIP, EXP, TIER, PHASE, MINUTES, GOALS, buildRoutine, normSpec, isSpec, maxDays, weekPlan,
+import { GYM, GYM_BY_ID, GROUPS, NEED, EQUIP, EXP, TIER, PHASE, MINUTES, GOALS, buildRoutine, normSpec, isSpec, maxDays, heavyMax, weekPlan,
   nextStep, blockWeek, topReps, lowReps, available, groupOf, gymName, WARMUP, COOLDOWN, READ, RULES, ARRIVE, GYM_SOURCES } from '../content/gym.js';
 import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
 import { lineChart } from './chart.js';
@@ -91,7 +91,7 @@ function exItem(ex, { rx = null, last, n } = {}) {
 
 function dayCard(day, { pid, canLog }) {
   return h('section', { class: 'panel stack gx-day' },
-    h('div', { class: 'split' }, h('h3', {}, `Día ${day.key}: ${day.name}`), h('span', { class: 'chip ball' }, `≈ ${day.min} min`)),
+    h('div', { class: 'split' }, h('h3', {}, `Día ${day.key}: ${day.name}`), h('span', { class: 'cluster' }, day.light ? h('span', { class: 'chip info' }, 'Ligero') : h('span', { class: 'chip warn' }, 'Pesado'), h('span', { class: 'chip ball' }, `≈ ${day.min} min`))),
     h('p', { class: 'row-sub', style: { margin: 0 } }, `${day.focus}. ${plural(day.items.length, 'ejercicio', 'ejercicios')}.`),
     h('details', { class: 'gx-sub' }, h('summary', {}, h('strong', {}, 'Calentamiento, 10 min')), h('ol', { class: 'plain' }, WARMUP.map((x) => h('li', {}, x)))),
     h('div', { class: 'rows' }, day.items.map((rx, i) => exItem(GYM_BY_ID[rx.ex], { rx, last: pid ? lastFor(pid, rx.ex) : undefined, n: i + 1 }))),
@@ -118,8 +118,10 @@ function gameNote(me) {
 function weekChips(r) {
   const train = settings().days || [];
   const plan = weekPlan(r.n, train);
+  const busy = new Set([...train, ...plan.map((x) => x.wd)]);
   return h('div', { class: 'stack' },
-    h('div', { class: 'cluster' }, plan.map((x, i) => h('span', { class: `chip ${x.after ? 'warn' : 'info'}` }, `${DAYS[x.wd]}: día ${r.days[i]?.key || ''}${x.after ? ', después del entreno' : ''}`))),
+    busy.size >= 7 ? note(`Con ${plural(train.length, 'entreno', 'entrenos')} y ${plural(r.n, 'día', 'días')} de gym no te queda ningún día sin nada. Deja al menos uno completo de descanso a la semana.`, 'warn') : null,
+    h('div', { class: 'cluster' }, plan.map((x, i) => h('span', { class: `chip ${x.after ? 'warn' : 'info'}` }, `${DAYS[x.wd]}: día ${r.days[i]?.key || ''}${r.days[i]?.light ? ' (ligero)' : ''}${x.after ? ', después del entreno' : ''}`))),
     h('p', { class: 'row-sub', style: { margin: 0 } }, train.length ? `Propuesta según tus días de entreno (${train.map((d) => DAYS_LONG[d]).join(' y ')}). Muévelos si te conviene, pero deja al menos un día entre dos días de pierna.` : 'Muévelos si te conviene, pero deja al menos un día entre dos días de pierna.'));
 }
 
@@ -129,6 +131,14 @@ function routineBlock(r, { pid, canLog, me }) {
     me !== undefined ? gameNote(me) : null,
     h('section', { class: 'stack' }, sectionTitle('Tu semana'), weekChips(r)),
     r.days.map((d) => dayCard(d, { pid, canLog })));
+}
+
+// Cuántos de los días elegidos son pesados y cuántos ligeros (v3.8: tú eliges de 1 a 6).
+function dayHint(s) {
+  if (s.days === 1) return 'Un día: cuerpo completo.';
+  const hv = Math.min(s.days, heavyMax(s));
+  const lt = s.days - hv;
+  return `${hv ? plural(hv, 'día pesado', 'días pesados') : 'Ningún día pesado'}${lt ? ` y ${plural(lt, 'ligero', 'ligeros')}` : ''}. ${s.goal === 'regreso' ? 'Al volver de una pausa todos son ligeros.' : `En ${PHASE[s.phase].name.toLowerCase()}, máximo ${plural(heavyMax(s), 'día pesado', 'días pesados')} (pierna y saltos); los demás son tren de arriba, tronco y prevención.`}`;
 }
 
 // Formulario para armar la rutina. Se vuelve a dibujar solo; onChange recibe la rutina nueva.
@@ -145,7 +155,7 @@ export function specForm(spec, onChange) {
         h('div', { class: 'choices gx-goals' }, Object.entries(GOALS).map(([k, g]) => h('button', { type: 'button', class: `choice${s.goal === k ? ' on' : ''}`, 'aria-pressed': s.goal === k ? 'true' : 'false',
           onclick: () => { s.goal = k; paint(); onChange?.(s); } }, ic(g.icon, 22), h('span', { class: 'row-main' }, h('strong', {}, g.name), h('span', { class: 'row-sub' }, g.desc)))))),
       segOf('phase', Object.entries(PHASE).map(([k, p]) => [k, p.name]), '¿En qué momento estás?', PHASE[s.phase].desc),
-      segOf('days', [1, 2, 3, 4].map((n) => [n, String(n)]), 'Días de gym por semana', s.days > cap ? `En ${s.phase === 'torneo' ? 'semana de partido' : s.goal === 'regreso' ? 'regreso' : 'temporada'} Remate usa ${plural(cap, 'día', 'días')} como máximo.` : null),
+      segOf('days', Array.from({ length: cap }, (_, i) => [i + 1, String(i + 1)]), 'Días de gym por semana', dayHint(s)),
       segOf('minutes', MINUTES.map((m) => [m, `${m} min`]), 'Tiempo por sesión'),
       segOf('exp', Object.entries(EXP).map(([k, e]) => [k, e.name]), 'Tu experiencia en el gym', EXP[s.exp].desc),
       segOf('equip', Object.entries(EQUIP).map(([k, e]) => [k, e.name]), '¿Qué hay en tu gym?', EQUIP[s.equip].desc));

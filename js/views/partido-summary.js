@@ -4,6 +4,7 @@ import { state, add, patch, remove, players, playerById, isStaff, inTeam, teamOf
 import { countsFor, playersIn, metrics, teamSummary, addCounts, fmtEff, result, replay, phaseStats, byRotation, rotLabel, RIVAL_GRID, ZONE_ORDER, zoneCounts, rivalStats, OPP_KINDS } from '../match-calc.js';
 import { note, empty, sectionTitle, field, options } from './ui.js';
 import { getLog, nameOf } from './partido-capture.js';
+import { sugeridoButton } from './sugerido.js';
 import { coachLogSheet } from './lab-coaching.js';
 import { torneoById } from './torneos.js';
 import { calButton, matchEvent } from './sheets-session.js';
@@ -159,6 +160,7 @@ export function summaryView(m, ctx, { canEdit, coach }) {
       (m.sets || []).length ? h('div', { class: 'cluster' }, m.sets.map((s, i) => h('span', { class: `chip ${s.us > s.them ? 'ok' : s.them > s.us ? 'bad' : ''}` }, `Set ${i + 1}: ${s.us}-${s.them}`))) : h('p', { style: { margin: 0 } }, 'Todavía no hay puntos.'),
       m.venue ? h('span', { class: 'row-sub' }, m.venue) : null, m.note ? h('p', { style: { margin: 0 } }, m.note) : null,
       h('div', { class: 'cluster' }, coach ? h('a', { class: 'btn sm', href: `#/rival/${rivalKey(m.rival)}` }, ic('eye', 16), `Scouting de ${m.rival}`) : null,
+        coach && m.status === 'terminado' && rows.length ? sugeridoButton(m) : null,
         m.status !== 'terminado' && m.match_date >= todayStr() ? calButton({ name: 'partido', events: [matchEvent(m)] }) : null)),
     torneoById(m.tournament_id) && !state.data.rsvps.some((x) => x.match_id === m.id) ? tourRsvpNote(m)
       : upcoming || state.data.rsvps.some((x) => x.match_id === m.id) ? rsvpSection(m) : null,

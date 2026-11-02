@@ -7,6 +7,7 @@ import { attendanceFor, doneSessions } from '../calc.js';
 import { leave, restartDemo } from '../auth.js';
 import { sectionTitle, note, field, options } from './ui.js';
 import { aboutSection } from './ayuda.js';
+import { client, isNetworkError } from '../cloud.js';
 
 function attendanceCsv() {
   const done = doneSessions(sessions()), list = players(), st = settings();
@@ -156,6 +157,24 @@ function coach() {
       field('Retardos que cuentan como 1 falta', late, 'Pon 0 para que los retardos nunca se conviertan en faltas. Las faltas justificadas no restan.'),
       field('Lista con QR: tolerancia (minutos)', h('input', { type: 'number', min: 0, max: 60, inputmode: 'numeric', value: st.checkin_late ?? 10, onchange: (e) => { saveSettings({ checkin_late: Math.min(60, Math.max(0, Math.round(Number(e.target.value)) || 0)) }); toast('Guardado'); } }),
         'Quien escanea el QR después de la hora de inicio más estos minutos queda con retardo.'),
+      field('¿Quién puede abrir la lista con QR?', h('select', { onchange: async (e) => {
+        const v = e.target.value, prev = settings().qr_helpers || 'no';
+        // Para los ayudantes hace falta el SQL de la 3.8: se revisa antes de guardar.
+        if (v !== 'no' && state.mode === 'cloud') {
+          try {
+            const c = await client();
+            const { error } = await c.rpc('can_open_qr', { p_session: '00000000-0000-0000-0000-000000000000' });
+            if (error) throw error;
+          } catch (err) {
+            e.target.value = prev;
+            toast(isNetworkError(err) ? 'Sin internet. Conéctate y vuelve a intentarlo.' : 'Primero corre en Supabase el bloque «v3.8» de sql/instalar.sql.');
+            return;
+          }
+        }
+        saveSettings({ qr_helpers: v }); toast('Guardado');
+      } },
+        options([['no', 'Solo yo'], ['asistente', 'Yo y mis asistentes adultos'], ['todos', 'Yo, mis asistentes y los capitanes']], st.qr_helpers || 'no')),
+        'Un capitán es alumno: con el QR en su celular podría pasarle el código a alguien que no llegó. Necesita el SQL de la versión 3.8.'),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.warmup_prev !== false ? true : null, onchange: (e) => { saveSettings({ warmup_prev: e.target.checked }); toast(e.target.checked ? 'Calentamiento preventivo activado' : 'Calentamiento preventivo desactivado'); } }),
         h('span', {}, 'Empezar cada entrenamiento con el calentamiento preventivo (tobillo, rodilla y hombro). Se turnan las versiones A, B y C por semana.')),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.gym_players !== false ? true : null, onchange: (e) => { saveSettings({ gym_players: e.target.checked }); toast(e.target.checked ? 'Tus jugadores ya ven Gym' : 'Gym oculto para tus jugadores'); } }),

@@ -1,5 +1,5 @@
 // Pantalla de entrada: jugador (código), entrenador (correo) o demo.
-import { h } from '../util.js';
+import { h, iosBrowser, INSTALL_STEPS } from '../util.js';
 import { cloudConfigured } from '../cloud.js';
 import { coachSignIn, coachSignUp, playerJoin, startDemo, assistantJoin } from '../auth.js';
 import { note } from './ui.js';
@@ -46,6 +46,9 @@ export function renderGate(onDone) {
           h('span', { class: 'hint' }, 'Te lo da tu entrenador. Son 6 letras y números.')), msg, go);
       form.addEventListener('submit', busy(go, () => playerJoin(code.value)));
       box.append(form);
+      if (iosBrowser()) box.append(h('details', { class: 'note warn' }, h('summary', {}, h('strong', {}, '¿Ya tienes Remate en tu pantalla de inicio? Ábrelo desde el ícono.')),
+        h('p', { style: { margin: '6px 0' } }, 'En iPhone, Safari y la app instalada guardan tu sesión por separado. Para instalarla:'),
+        h('ol', { class: 'plain' }, INSTALL_STEPS.map((x) => h('li', {}, x)))));
     } else if (tab === 'assistant') {
       const email = h('input', { type: 'email', id: 'em', autocomplete: 'email', required: true });
       const pass = h('input', { type: 'password', id: 'pw', autocomplete: signup ? 'new-password' : 'current-password', required: true, minlength: 6 });

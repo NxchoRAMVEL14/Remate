@@ -587,6 +587,38 @@ export const GOALS = {
       D('Aterrizaje y una pierna', 'Con poco peso', [['aterrizaje', 'prev', 1], ['unipodal', 'acc', 1], ['jalon', 'acc', 2], ['isquios', 'acc', 2], ['tronco', 'core', 3]])] },
 };
 
+// Días ligeros (v3.8): sin pierna pesada ni saltos. Completan la semana cuando eliges más días que los pesados que te tocan.
+export const LIGHT_DAYS = [
+  D('Hombro, espalda y tronco', 'Tren de arriba, sin cargar piernas', [['jalon', 'main', 1], ['empuje', 'acc', 1], ['hombro', 'prev', 1], ['lanzamiento', 'pow', 2], ['tronco', 'core', 2], ['tronco', 'core', 3]]),
+  D('Prevención y movilidad', 'Tobillo, rodilla, cadera y hombro, suave', [['hombro', 'prev', 1], ['pantorrilla', 'prev', 1], ['aductor', 'prev', 2], ['id:g-sent-espanola', 'prev', 2], ['tronco', 'core', 2], ['hombro', 'prev', 3]]),
+  D('Brazo de remate y saque', 'Hombro fuerte y rotación', [['lanzamiento', 'pow', 1], ['hombro', 'prev', 1], ['jalon', 'acc', 1], ['hombro', 'prev', 2], ['tronco', 'core', 2]]),
+  D('Tronco y equilibrio', 'Tronco firme y tobillos', [['tronco', 'core', 1], ['tronco', 'core', 1], ['pantorrilla', 'prev', 2], ['hombro', 'prev', 2], ['empuje', 'acc', 3]]),
+  D('Recuperación activa', 'Suave: tronco, hombro y tobillos', [['tronco', 'core', 1], ['hombro', 'prev', 1], ['aductor', 'prev', 2], ['pantorrilla', 'prev', 2], ['jalon', 'acc', 3]]),
+];
+// Un día es «pesado» si trae saltos o fuerza principal de pierna.
+const LEG_POW = new Set(['salto', 'lateral', 'aterrizaje']), LEG_MAIN = new Set(['rodilla', 'cadera', 'unipodal']);
+export const isHeavyDay = (bp) => bp.slots.some(([pat, role]) => (LEG_POW.has(pat) && role === 'pow') || (LEG_MAIN.has(pat) && role === 'main'));
+// Máximo de días pesados por semana: pretemporada 3, temporada 2, semana de partido 1; al volver de una pausa no hay pesados.
+export const heavyMax = (spec) => (spec.goal === 'regreso' ? 0 : spec.phase === 'torneo' ? 1 : spec.phase === 'temp' ? 2 : 3);
+// Los días de la semana: primero los del objetivo (los pesados hasta su tope), luego ligeros, alternados para no juntar pierna.
+export function weekBlueprints(spec) {
+  const g = GOALS[spec.goal], n = spec.days, cap = heavyMax(spec);
+  if (n === 1) return [g.full];
+  const own = g.week.slice(0, Math.min(n, g.week.length));
+  const heavy = [], light = [];
+  for (const bp of own) { if (isHeavyDay(bp)) { if (heavy.length < cap) heavy.push(bp); } else light.push(bp); }
+  for (const bp of [...g.week.slice(own.length), ...LIGHT_DAYS]) {
+    if (heavy.length + light.length >= n) break;
+    if (isHeavyDay(bp)) { if (heavy.length < cap) heavy.push(bp); } else if (!light.includes(bp)) light.push(bp);
+  }
+  const out = [];
+  while (out.length < n && (heavy.length || light.length)) {
+    if (heavy.length) out.push(heavy.shift());
+    if (out.length < n && light.length) out.push(light.shift());
+  }
+  return out;
+}
+
 // ---------- dosis ----------
 // [series, repeticiones, te sobran, descanso en segundos] por papel y experiencia.
 const DOSE = {
@@ -640,37 +672,41 @@ export function normSpec(s) {
   if (!EXP[o.exp]) o.exp = DEFAULT_SPEC.exp;
   if (!EQUIP[o.equip]) o.equip = DEFAULT_SPEC.equip;
   if (!PHASE[o.phase]) o.phase = DEFAULT_SPEC.phase;
-  o.days = Math.min(4, Math.max(1, Math.round(Number(o.days) || 2)));
+  o.days = Math.min(MAX_DAYS, Math.max(1, Math.round(Number(o.days) || 2)));
   o.minutes = MINUTES.includes(Number(o.minutes)) ? Number(o.minutes) : 60;
   return o;
 }
 export const isSpec = (s) => !!(s && typeof s === 'object' && GOALS[s.goal]);
-export const maxDays = (spec) => (spec.phase === 'torneo' ? 1 : spec.phase === 'temp' || spec.goal === 'regreso' ? 3 : 4);
-export const LETTERS = ['A', 'B', 'C', 'D'];
+// v3.8: los días de gym son tuyos (1 a 6). Lo que se limita son los días pesados (heavyMax); los demás son ligeros.
+export const MAX_DAYS = 6;
+export const maxDays = () => MAX_DAYS;
+export const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
 
+const plural2 = (n, a, b) => `${n} ${n === 1 ? a : b}`;
 export function buildRoutine(raw) {
   const spec = normSpec(raw);
   const g = GOALS[spec.goal];
   const exp = spec.goal === 'regreso' ? 'nuevo' : spec.exp;
   const tierMax = spec.goal === 'regreso' ? 1 : EXP[spec.exp].tier;
-  const n = Math.min(spec.days, maxDays(spec));
-  const blueprints = n === 1 ? [g.full] : g.week.slice(0, n);
+  const blueprints = weekBlueprints(spec), n = blueprints.length;
   const patUse = {};
-  const pickEx = (pat, used) => {
+  // En un día ligero no se cambia un lanzamiento por un salto (el respaldo del patrón) para no cargar piernas.
+  const pickEx = (pat, used, light = false) => {
     for (let p = pat, guard = 0; p && guard < 5; p = FALLBACK[p], guard++) {
+      if (light && p !== pat && (LEG_POW.has(p) || LEG_MAIN.has(p))) break;
       const list = (ORDER[p] || []).map((id) => GYM_BY_ID[id]).filter((e) => e && available(e, spec.equip) && e.tier <= tierMax && !used.has(e.id));
       if (list.length) { const k = patUse[p] || 0; patUse[p] = k + 1; return list[k % list.length]; }
     }
     return null;
   };
   const days = blueprints.map((bp, i) => {
-    const used = new Set();
+    const used = new Set(), light = !isHeavyDay(bp);
     let slots = bp.slots.map(([pat, role, p]) => ({ pat, role, p }));
     if (spec.phase === 'torneo') slots = slots.filter((s) => s.role !== 'pow' && s.pat !== 'aterrizaje' && s.p <= 2);
     if (spec.minutes <= 45) slots = slots.filter((s) => s.p <= 2);
     let items = [];
     for (const s of slots) {
-      const ex = s.pat.startsWith('id:') ? GYM_BY_ID[s.pat.slice(3)] : pickEx(s.pat, used);
+      const ex = s.pat.startsWith('id:') ? GYM_BY_ID[s.pat.slice(3)] : pickEx(s.pat, used, light);
       if (!ex || used.has(ex.id) || !available(ex, spec.equip) || ex.tier > tierMax) continue;
       used.add(ex.id);
       items.push({ ...prescribe(ex, s.role, exp, spec.phase), p: s.p });
@@ -685,11 +721,14 @@ export function buildRoutine(raw) {
       big.sets -= 1;
     }
     items = items.map(({ p, ...rx }) => rx);
-    return { key: LETTERS[i], name: bp.name, focus: bp.focus, items, min: dayMinutes(items) };
+    return { key: LETTERS[i], name: bp.name, focus: bp.focus, items, min: dayMinutes(items), light };
   });
   const notes = [];
-  if (spec.days > n) notes.push(spec.phase === 'torneo' ? 'En semana de partido basta una sesión corta.' : `Para ${spec.phase === 'temp' ? 'temporada' : 'este objetivo'} Remate te deja ${n} días como máximo: con el voleibol, más días de gym te harían llegar cansado.`);
-  if (spec.phase === 'temp' && n === 3) notes.push('En temporada, 2 días suelen bastar. Si llegas cansado a los entrenos, quita el día C.');
+  const heavyN = days.filter((d) => !d.light).length, lightN = n - heavyN;
+  if (lightN && n > 1) notes.push(`${plural2(heavyN, 'día pesado', 'días pesados')} (pierna y saltos) y ${plural2(lightN, 'día ligero', 'días ligeros')} (tren de arriba, tronco y prevención). ${spec.goal === 'regreso' ? 'Al volver de una pausa todos son ligeros.' : `En ${PHASE[spec.phase].name.toLowerCase()} Remate pone como máximo ${plural2(heavyMax(spec), 'día pesado', 'días pesados')}: con el voleibol ya saltas mucho.`}`);
+  if (n >= 5) notes.push('Con 5 o 6 días: deja al menos un día completo sin gym ni entreno a la semana, duerme 8 horas o más y, si llegas cansado a los entrenos, quita primero un día ligero.');
+  if (n >= 5 && exp === 'nuevo') notes.push('Si apenas empiezas en el gym, 2 o 3 días bastan las primeras semanas: la técnica se aprende mejor descansado.');
+  if (spec.phase === 'temp' && heavyN === 2 && n <= 3) notes.push('En temporada, 2 días suelen bastar. Si llegas cansado a los entrenos, quita un día.');
   if (exp === 'nuevo') notes.push('Las primeras 2 semanas: aprende la técnica con poco peso. Pide al instructor del gym que te vea en los ejercicios nuevos.');
   if (spec.goal === 'regreso') notes.push('Si vienes de una lesión, solo con el alta de tu médico o fisioterapeuta. Haz esta rutina 2 o 3 semanas y luego arma una con tu objetivo.');
   if (spec.phase === 'torneo') notes.push('Semana de partido: haz la sesión 3 días o más antes del partido. Nada de pierna pesada ni saltos en las 48 horas antes.');

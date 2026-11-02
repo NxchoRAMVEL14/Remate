@@ -8,6 +8,32 @@ export const PRIORITY = { alta: 'Alta', media: 'Media', baja: 'Baja' };
 export const STATUS = { idea: 'Idea', lista: 'Lista para pedir', hecha: 'Hecha', descartada: 'Descartada' };
 
 export const SUGGESTED = [
+  // v3.8
+  { title: 'Que el código no se pida otra vez en iPhone', since: '3.8.0', area: 'ajustes', priority: 'alta',
+    body: 'Que al poner el código ya no lo vuelva a pedir, aunque abran Remate desde Safari, desde un enlace de WhatsApp o en otro celular.' },
+  { title: 'Gym de 1 a 6 días', since: '3.8.0', area: 'gym', priority: 'alta',
+    body: 'Elegir más días de gym (hasta 6) sin cargar las piernas todos los días: días pesados y ligeros intercalados.' },
+  { title: 'Entreno sugerido después del partido', since: '3.8.0', area: 'partidos', priority: 'alta',
+    body: 'Que con la estadística del partido Remate proponga el siguiente entrenamiento con ejercicios para lo que más falló.' },
+  { title: 'El capitán o el asistente abren la lista con QR', since: '3.8.0', area: 'entrenos', priority: 'media',
+    body: 'Que el capitán o el asistente puedan mostrar el QR de llegada si yo llego tarde o no puedo.' },
+  { title: 'Despegue y aterrizaje automáticos en Medir con video', since: '3.8.0', area: 'laboratorio', priority: 'media',
+    body: 'Que Remate encuentre solo el despegue y el aterrizaje en el video, y yo nada más confirme.' },
+  { title: 'App más rápida', since: '3.8.0', area: 'otra', priority: 'media',
+    body: 'Que la app abra más rápido cargando cada pantalla solo cuando se usa.' },
+  { title: 'Alineación sugerida', since: '3.8.0', area: 'partidos', priority: 'media',
+    body: 'Que Remate proponga la alineación del set (5-1) con el radar, las posiciones y la estadística, y la rotación con la que conviene empezar.' },
+  { title: 'Reto del equipo', since: '3.8.0', area: 'ruta', priority: 'baja',
+    body: 'Una meta semanal de todos (asistencia, minutos en casa o sesiones de gym) que los jugadores ven en su Inicio.' },
+  // Para la 3.9 (todavía no están)
+  { title: 'Recordatorios automáticos al celular', area: 'entrenos', priority: 'alta',
+    body: 'Que Remate mande solo el aviso del entreno o del partido unas horas antes, sin que yo lo mande a mano.' },
+  { title: 'Capturar el partido con dos celulares', area: 'partidos', priority: 'media',
+    body: 'Que un ayudante capture la recepción y otro el ataque al mismo tiempo, y se junte en un solo partido.' },
+  { title: 'Carga semanal (esfuerzo de la sesión)', area: 'jugadores', priority: 'media',
+    body: 'Que cada jugador diga qué tan pesado sintió el entreno (1 a 10) y Remate sume la carga de la semana para avisar si se pasa.' },
+  { title: 'Video de técnica para revisar', area: 'jugadores', priority: 'baja',
+    body: 'Que el jugador suba un video corto de su técnica y yo lo vea con comentarios; privado hasta que yo lo borre.' },
   { title: 'Calendario para todo', since: '3.7.0', area: 'entrenos', priority: 'alta',
     body: 'Guardar en el calendario todo: entrenamientos, gym, el programa del laboratorio, partidos y torneos, para tener disciplina y que nada se olvide.' },
   { title: 'Pruebas de salto sin apps de paga', since: '3.7.0', area: 'laboratorio', priority: 'alta',

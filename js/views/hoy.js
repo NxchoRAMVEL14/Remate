@@ -1,5 +1,6 @@
 // "Hoy": lo próximo que viene y lo que necesita tu atención.
 import { h, ic, plural, toast, todayStr, fmtDate, sum } from '../util.js';
+import { retoCard, syncReto } from './reto.js';
 import { state, players, sessions, pendingClaims, getPlayer, settings, resolveClaim, teamReady, torneosReady } from '../store.js';
 import { levelGap, attendanceFor, nextSession, planMinutes, focusOf, levelCounts, hasRatings, doneSessions } from '../calc.js';
 import { SKILL_BY_ID } from '../content/skills.js';
@@ -86,6 +87,9 @@ export default function hoy() {
     kpi(list.length, plural(list.length, 'jugador', 'jugadores').replace(/^\d+ /, '')),
     kpi(avg == null ? '—' : `${avg}%`, 'asistencia del grupo'),
     kpi(done.length, done.length === 1 ? 'entreno hecho' : 'entrenos hechos')));
+  // ---- reto del equipo (v3.8) ----
+  syncReto();
+  el.append(retoCard({ coach: true }));
 
   // ---- por resolver ----
   const claims = pendingClaims();

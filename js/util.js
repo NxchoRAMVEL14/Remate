@@ -153,6 +153,12 @@ const THEME_KEY = 'remate.theme';
 const themeGet = () => { try { return localStorage.getItem(THEME_KEY); } catch { return null; } };
 export const THEMES = { auto: 'Automático (como tu celular)', light: 'Claro', dark: 'Oscuro' };
 export const getTheme = () => (THEMES[themeGet()] ? themeGet() : 'auto');
+// iPhone: Safari y Remate instalado guardan la sesión por separado; los enlaces de WhatsApp abren Safari.
+export const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+export const isStandalone = () => !!(window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true);
+export const iosBrowser = () => isIOS() && !isStandalone();
+export const INSTALL_STEPS = ['En Safari, toca el botón Compartir (el cuadro con la flecha hacia arriba).', 'Elige «Agregar a inicio» y luego «Agregar».', 'Abre Remate desde ese ícono y escribe tu código una sola vez. De ahí en adelante entra siempre por el ícono.'];
+
 export function applyTheme() {
   const t = getTheme(), root = document.documentElement;
   if (t === 'auto') root.removeAttribute('data-theme'); else root.dataset.theme = t;

@@ -12,6 +12,7 @@ import { gymVisible, gymLine, coachPlanOf } from './gym.js';
 import { unseenBanner } from './avisos.js';
 import { calButton, sessionEvent } from './sheets-session.js';
 import { isStaff } from '../store.js';
+import { retoCard } from './reto.js';
 import { PTESTS, testTrend } from '../content/gym.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
@@ -45,6 +46,10 @@ export default function inicio(ctx) {
   } else {
     el.append(note('Tu entrenador todavía no publica el siguiente entrenamiento. Cuando lo haga, lo verás aquí.'));
   }
+
+  // reto del equipo (v3.8)
+  const rc = retoCard();
+  if (rc) el.append(rc);
 
   // camino al siguiente nivel
   if (gap.top) {

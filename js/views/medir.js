@@ -83,7 +83,7 @@ function bench(role) {
   async function load(file) {
     if (!file) return;
     if (st.url) URL.revokeObjectURL(st.url);
-    st.url = URL.createObjectURL(file); st.name = file.name || 'video'; st.marks = {}; st.frame = 0;
+    st.url = URL.createObjectURL(file); st.name = file.name || 'video'; st.marks = {}; st.frame = 0; AU.msg = null; AU.curve = null; AU.pick = false;
     stage.classList.add('has');
     video.src = st.url;
     await new Promise((r) => { video.onloadedmetadata = r; video.onerror = r; });
@@ -91,7 +91,7 @@ function bench(role) {
     frameTxt.textContent = 'Revisando el video…';
     const auto = await detectFps(video);
     st.fpsAuto = auto; st.fps = auto || 30; video.playbackRate = 1;
-    drawFpsSel(); setFps(st.fps);
+    drawFpsSel(); setFps(st.fps); drawAuto();
     if (!auto) toast('No pude detectar los cuadros por segundo. Revisa que «Cuadros por segundo del archivo» sea correcto.');
   }
   fileCam.addEventListener('change', () => { load(fileCam.files[0]); fileCam.value = ''; });
@@ -99,10 +99,11 @@ function bench(role) {
   scrub.addEventListener('input', () => seek(Number(scrub.value)));
   speedSel.addEventListener('change', () => { st.speed = Number(speedSel.value) || 1; drawResult(); });
   fpsSel.addEventListener('change', () => setFps(Number(fpsSel.value) || 30));
-  kindSel.addEventListener('change', () => { st.kind = kindSel.value; st.marks = {}; st.tries = []; drawAll(); });
+  kindSel.addEventListener('change', () => { st.kind = kindSel.value; st.marks = {}; st.tries = []; AU.msg = null; AU.curve = null; drawAll(); });
   // Zoom: toca el video para acercar ese punto (por ejemplo, los pies).
   stage.addEventListener('click', (e) => {
     if (!st.url || e.target !== video) return;
+    if (AU.pick) { pickFeet(e); return; }
     const r = video.getBoundingClientRect();
     st.ox = Math.round(((e.clientX - r.left) / r.width) * 100); st.oy = Math.round(((e.clientY - r.top) / r.height) * 100);
     st.zoom = st.zoom >= 3 ? 1 : st.zoom + 1; applyZoom();
@@ -114,6 +115,113 @@ function bench(role) {
   const playSlow = () => { if (!st.url) return; if (!video.paused) { video.pause(); seek(Math.floor(video.currentTime / dtTimeline())); return; } video.playbackRate = 0.25; video.play().catch(() => {}); tick(); };
   const tick = () => { if (video.paused) return; st.frame = Math.min(st.maxFrame, Math.floor(video.currentTime / dtTimeline())); showFrame(); requestAnimationFrame(tick); };
   video.addEventListener('pause', () => { if (st.url) { st.frame = Math.min(st.maxFrame, Math.floor(video.currentTime / dtTimeline())); showFrame(); } });
+
+
+  // ----- detección automática del despegue y el aterrizaje (beta, v3.8) -----
+  // Tocas los pies en un cuadro en que está parado; Remate compara esa franja del piso cuadro por cuadro:
+  // cuando los pies se van, la franja cambia; cuando vuelven, se parece otra vez. Tú confirmas las marcas.
+  const AU = { pick: false, busy: false, roi: null, msg: null, curve: null };
+  const AUTO_KINDS = new Set(['cmj', 'cmj_arms', 'sj', 'block', 'drop']);
+  const autoBox = h('div', { class: 'stack' });
+  const RW = 64, RH = 20;
+  const cv = document.createElement('canvas'); cv.width = RW; cv.height = RH;
+  const cx = cv.getContext('2d', { willReadFrequently: true });
+  const seekTo = (f) => new Promise((res) => {
+    const t = Math.min((video.duration || 0) - 0.0005, (f + 0.5) * dtTimeline());
+    let to = null;
+    const done = () => { clearTimeout(to); video.removeEventListener('seeked', done); res(); };
+    to = setTimeout(done, 2000); video.addEventListener('seeked', done); video.currentTime = t;
+  });
+  // La franja de los pies en gris, sin el brillo promedio (por si la cámara ajusta la exposición).
+  const grab = async (f) => {
+    await seekTo(f);
+    const r = AU.roi; cx.drawImage(video, r.x, r.y, r.w, r.h, 0, 0, RW, RH);
+    const d = cx.getImageData(0, 0, RW, RH).data, g = new Float32Array(RW * RH);
+    let m = 0; for (let i = 0; i < g.length; i++) { g[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]; m += g[i]; }
+    m /= g.length; for (let i = 0; i < g.length; i++) g[i] -= m;
+    return g;
+  };
+  const diff = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]); return s / a.length; };
+  // De un toque en la pantalla a un punto del video (con zoom y bandas negras incluidas).
+  const tapToVideo = (e) => {
+    const r = video.getBoundingClientRect(), vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh || !r.width) return null;
+    const ew = video.offsetWidth, eh = video.offsetHeight, k = Math.min(ew / vw, eh / vh);
+    const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
+    const x = (fx * ew - (ew - vw * k) / 2) / k, y = (fy * eh - (eh - vh * k) / 2) / k;
+    return x >= 0 && y >= 0 && x <= vw && y <= vh ? { x, y, vw, vh } : null;
+  };
+  function pickFeet(e) {
+    const p = tapToVideo(e);
+    if (!p) { toast('Toca sobre el video, en los pies.'); return; }
+    const w = Math.max(32, p.vw * 0.24), hgt = Math.max(12, p.vh * 0.06);
+    const x = Math.max(0, Math.min(p.vw - w, p.x - w / 2)), y = Math.max(0, Math.min(p.vh - hgt, p.y - hgt * 0.75));
+    AU.roi = { x, y, w: Math.min(w, p.vw), h: Math.min(hgt, p.vh) }; AU.pick = false; stage.classList.remove('picking');
+    detect(st.frame);
+  }
+  async function detect(ref) {
+    AU.busy = true; AU.msg = 'Buscando el salto… 0%'; AU.curve = null; drawAuto();
+    const fr = st.fps * st.speed;                     // cuadros por segundo real
+    const k = Math.max(1, Math.round(fr * 0.03));     // muestras cada ~30 ms reales
+    const drop = G().type === 'drop';               // en profundidad se elige un cuadro del final: hay que mirar más atrás
+    const a = Math.max(0, ref - Math.round(fr * (drop ? 3.5 : 2))), b = Math.min(st.maxFrame, ref + Math.round(fr * (drop ? 1.5 : 2.5)));
+    const F = []; for (let f = a; f <= b; f += k) F.push(f);
+    try {
+      const g0 = await grab(ref), raw = [];
+      for (let i = 0; i < F.length; i++) {
+        raw.push(diff(await grab(F[i]), g0));
+        if (i % 8 === 0) { AU.msg = `Buscando el salto… ${Math.round((i / F.length) * 100)}%`; drawAuto(); }
+      }
+      const sm = raw.map((_, i) => { const w = [raw[i - 1], raw[i], raw[i + 1]].filter((x) => x != null).sort((x, y) => x - y); return w[Math.floor(w.length / 2)]; });
+      const sorted = sm.slice().sort((x, y) => x - y), lo = sorted[Math.floor(sorted.length * 0.2)], hi = sorted[sorted.length - 1];
+      const fail = (m) => { AU.msg = m; AU.busy = false; seek(ref); drawAuto(); };
+      if (hi - lo < 6) return fail('No vi un cambio claro en los pies. Revisa que el celular esté fijo, que haya buena luz y que hayas tocado justo los pies. Si no, márcalo a mano.');
+      const thr = lo + 0.4 * (hi - lo), floor = sm.map((x) => x < thr);
+      AU.curve = { sm, thr, hi };
+      // Tramos en el aire con piso antes y después, de una duración creíble para un salto.
+      const gaps = [];
+      for (let i = 1; i < floor.length; i++) {
+        if (floor[i - 1] && !floor[i]) { let j = i; while (j < floor.length && !floor[j]) j++; if (j < floor.length) { const dur = (F[j] - F[i]) / fr; if (dur >= 0.12 && dur <= 1.2) gaps.push({ s: i, e: j }); } i = j; }
+      }
+      if (!gaps.length) return fail('No encontré un despegue y un aterrizaje claros cerca de ese cuadro. Prueba con otro cuadro en que esté parado, o márcalo a mano.');
+      const ri = F.findIndex((f) => f >= ref);
+      const gap = gaps.reduce((x, y) => (Math.min(Math.abs(y.s - ri), Math.abs(y.e - ri)) < Math.min(Math.abs(x.s - ri), Math.abs(x.e - ri)) ? y : x));
+      // Afina cuadro por cuadro entre la última muestra en un estado y la primera en el otro.
+      const refine = async (from, to, wantAir) => { for (let f = from + 1; f < to; f++) { const v = diff(await grab(f), g0); if (wantAir ? v >= thr : v < thr) return f; } return to; };
+      AU.msg = 'Afinando cuadro por cuadro…'; drawAuto();
+      const marks = { off: await refine(F[gap.s - 1], F[gap.s], true), land: await refine(F[gap.e - 1], F[gap.e], false) };
+      if (G().type === 'drop') {
+        let i = gap.s - 1; while (i > 0 && floor[i - 1]) i--;
+        if (i > 0) marks.touch = await refine(F[i - 1], F[i], false);
+      }
+      st.marks = marks; AU.busy = false;
+      AU.msg = `Propuesta: despegue en el cuadro ${marks.off} y aterrizaje en el ${marks.land}${marks.touch != null ? `, contacto en el ${marks.touch}` : G().type === 'drop' ? '. No encontré el contacto: márcalo a mano' : ''}. Revisa cada una con «Ir» y las flechas antes de guardar el intento.`;
+      seek(marks.off); drawMarks(); drawResult(); drawAuto();
+    } catch (err) {
+      AU.busy = false; AU.msg = 'No pude leer los cuadros de este video en este celular. Márcalo a mano.'; drawAuto();
+    }
+  }
+  function drawAuto() {
+    if (G().type === 'time') { fill(autoBox); return; }
+    if (!AUTO_KINDS.has(st.kind)) { fill(autoBox, h('p', { class: 'row-sub', style: { margin: 0 } }, 'La detección automática es para saltos en el lugar. Con carrera los pies caen en otro sitio: márcalo a mano.')); return; }
+    const curve = AU.curve ? (() => {
+      const c = h('canvas', { class: 'md-curve', width: 300, height: 56, 'aria-hidden': 'true' }), g = c.getContext('2d'), { sm, thr, hi } = AU.curve;
+      const X = (i) => (i / Math.max(1, sm.length - 1)) * 300, Y = (v) => 52 - (v / (hi || 1)) * 48;
+      const css = getComputedStyle(document.documentElement), col = (v, d) => css.getPropertyValue(v).trim() || d;
+      g.strokeStyle = col('--ink-2', '#667'); g.setLineDash([4, 3]); g.beginPath(); g.moveTo(0, Y(thr)); g.lineTo(300, Y(thr)); g.stroke(); g.setLineDash([]);
+      g.strokeStyle = col('--link', '#1f6feb'); g.lineWidth = 2; g.beginPath(); sm.forEach((v, i) => (i ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v)))); g.stroke();
+      return h('figure', { class: 'md-fig' }, c, h('figcaption', { class: 'row-sub' }, 'Cuánto cambia la zona de los pies. Arriba de la línea punteada = en el aire.'));
+    })() : null;
+    fill(autoBox,
+      h('div', { class: 'cluster' },
+        AU.pick ? h('button', { type: 'button', class: 'btn sm', onclick: () => { AU.pick = false; stage.classList.remove('picking'); drawAuto(); } }, 'Cancelar')
+          : h('button', { type: 'button', class: 'btn sm', disabled: !st.url || AU.busy ? true : null, onclick: () => {
+            AU.pick = true; AU.msg = null; AU.curve = null; stage.classList.add('picking'); drawAuto(); stage.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          } }, ic('sparkles', 16), AU.busy ? 'Buscando…' : 'Detectar solo (beta)')),
+      AU.pick ? note(G().type === 'drop' ? 'Pon un cuadro del final, ya parado en el piso después del rebote, y toca sus pies en el video.' : 'Pon un cuadro en que esté parado con los dos pies en el piso (antes o después del salto) y toca sus pies en el video.') : null,
+      AU.msg ? note(AU.msg, AU.busy ? '' : st.marks.off != null ? 'ok' : 'warn') : null,
+      curve);
+  }
 
   // ----- marcas y resultado -----
   const calc = () => {
@@ -240,7 +348,7 @@ function bench(role) {
       h('ol', { class: 'plain', style: { marginTop: '8px' } }, g.how.map((x) => h('li', {}, x))),
       h('p', { class: 'row-sub', style: { margin: '6px 0 0' } }, 'Errores comunes: ', g.errors.join(' '))));
   }
-  function drawAll() { kindSel.value = st.kind; drawHow(); drawMarks(); drawResult(); drawTries(); }
+  function drawAll() { kindSel.value = st.kind; drawHow(); drawAuto(); drawMarks(); drawResult(); drawTries(); }
 
   const el = h('div', { class: 'stack medir' },
     field('¿Qué vas a medir?', kindSel), howBox,
@@ -259,7 +367,7 @@ function bench(role) {
       h('button', { type: 'button', class: 'btn', onclick: () => step(10), 'aria-label': '10 cuadros adelante' }, '+10')),
     h('div', { class: 'grid' }, field('Velocidad del video', speedSel, 'Si grabaste en cámara lenta y así se ve, elige cuántas veces más lento.'),
       field('Cuadros por segundo del archivo', fpsSel, 'Remate lo detecta solo. Cámbialo solo si sabes que es otro.')),
-    sectionTitle('Marca los cuadros'), marksBox, result, triesBox, saveBox);
+    sectionTitle('Marca los cuadros'), autoBox, marksBox, result, triesBox, saveBox);
   drawFpsSel(); drawAll();
   const setKind = (k) => { if (!TEST_GUIDE[k] || k === st.kind) return; st.kind = k; st.marks = {}; st.tries = []; drawAll(); };
   return { el, st, video, setKind };

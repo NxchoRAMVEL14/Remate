@@ -6,7 +6,7 @@ import { sectionTitle, note, empty, field, options } from './ui.js';
 
 const LINKS = [['', 'Sin enlace'], ['#/inicio', 'Inicio'], ['#/entrenos', 'Entrenamientos'], ['#/partidos', 'Partidos'], ['#/casa', 'En casa'], ['#/ruta', 'Ruta y retos']];
 const appLink = (hash = '') => `${location.origin}${location.pathname}${hash}`;
-export const waLink = (title, body, hash) => `https://wa.me/?text=${encodeURIComponent(`*${title}*${body ? `\n${body}` : ''}\n\nRemate: ${appLink(hash)}`)}`;
+export const waLink = (title, body, hash) => `https://wa.me/?text=${encodeURIComponent(`*${title}*${body ? `\n${body}` : ''}\n\nRemate: ${appLink(hash)}\n(Si tienes Remate en tu pantalla de inicio, mejor ábrelo desde el ícono.)`)}`;
 
 export function noticeSheet(prefill = {}) {
   const title = h('input', { type: 'text', maxlength: 80, value: prefill.title || '', placeholder: 'Por ejemplo: Mañana entrenamos a las 5' });
