@@ -4,7 +4,8 @@
 -- varios equipos por grupo, torneos de eliminación directa y jugadores comodín (v3.5)
 -- Gym con rutinas y registro de cargas, más jugadores en varios equipos (v3.6)
 -- la lista de asistencia con QR más el método «Video en Remate» del laboratorio (v3.7)
--- y hasta 3 celulares por jugador más la lista con QR abierta por ayudantes (v3.8).
+-- hasta 3 celulares por jugador más la lista con QR abierta por ayudantes (v3.8)
+-- y carga semanal, videos de técnica, captura con dos celulares y recordatorios automáticos (v3.9).
 -- Es seguro correrlo más de una vez: no borra datos.
 
 -- =====================================================================
@@ -1450,3 +1451,171 @@ drop trigger if exists session_checkins_set_owner on public.session_checkins;
 create trigger session_checkins_set_owner before insert or update on public.session_checkins
   for each row execute function public.session_checkins_set_owner();
 
+
+-- =====================================================================
+-- REMATE · v3.9: carga semanal (esfuerzo de cada entreno), videos de técnica,
+-- captura con dos celulares y control de recordatorios automáticos.
+-- Seguro de correr más de una vez.
+-- =====================================================================
+
+-- ---------- Carga semanal: el esfuerzo (0 a 10) que cada jugador da a cada entreno ----------
+create table if not exists public.session_rpe (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,   -- siempre el entrenador
+  player_id uuid not null references public.players(id) on delete cascade,
+  session_id uuid not null references public.sessions(id) on delete cascade,
+  rpe smallint not null check (rpe between 0 and 10),
+  minutes smallint check (minutes between 0 and 400),
+  note text not null default '' check (char_length(note) <= 200),
+  created_at timestamptz not null default now(),
+  unique (player_id, session_id)
+);
+create index if not exists session_rpe_player_idx on public.session_rpe (player_id);
+alter table public.session_rpe enable row level security;
+
+drop policy if exists session_rpe_coach on public.session_rpe;
+create policy session_rpe_coach on public.session_rpe for all to authenticated
+  using (owner_id = auth.uid() and public.is_coach())
+  with check (owner_id = auth.uid() and public.is_coach());
+
+-- Jugador: ve y contesta lo suyo, solo de entrenos de su grupo de los últimos 4 días.
+drop policy if exists session_rpe_player_read on public.session_rpe;
+create policy session_rpe_player_read on public.session_rpe for select to authenticated
+  using (player_id in (select public.my_player_ids()));
+create or replace function public.can_rate_session(p_player uuid, p_session uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.sessions s join public.players p on p.group_id = s.group_id
+                  where p.id = p_player and s.id = p_session and s.status <> 'cancelada'
+                    and s.session_date between current_date - 4 and current_date);
+$$;
+drop policy if exists session_rpe_player_insert on public.session_rpe;
+create policy session_rpe_player_insert on public.session_rpe for insert to authenticated
+  with check (player_id in (select public.my_player_ids()) and public.can_rate_session(player_id, session_id));
+drop policy if exists session_rpe_player_update on public.session_rpe;
+create policy session_rpe_player_update on public.session_rpe for update to authenticated
+  using (player_id in (select public.my_player_ids()) and created_at > now() - interval '4 days')
+  with check (player_id in (select public.my_player_ids()));
+
+create or replace function public.session_rpe_set_owner() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  select owner_id into new.owner_id from public.players where id = new.player_id;
+  if new.owner_id is null then raise exception 'Jugador no encontrado'; end if;
+  return new;
+end $$;
+drop trigger if exists session_rpe_set_owner on public.session_rpe;
+create trigger session_rpe_set_owner before insert on public.session_rpe
+  for each row execute function public.session_rpe_set_owner();
+revoke all on public.session_rpe from anon;
+grant select, insert, update, delete on public.session_rpe to authenticated;
+
+-- ---------- Videos de técnica: la ruta del video y los comentarios del entrenador ----------
+create table if not exists public.tech_videos (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,   -- siempre el entrenador
+  player_id uuid not null references public.players(id) on delete cascade,
+  path text not null check (char_length(path) between 10 and 200),
+  skill text not null default '' check (char_length(skill) <= 20),
+  note text not null default '' check (char_length(note) <= 200),
+  comments jsonb not null default '[]'::jsonb
+    check (case when jsonb_typeof(comments) = 'array' then jsonb_array_length(comments) <= 40 and octet_length(comments::text) <= 12000 else false end),
+  size_bytes bigint not null default 0 check (size_bytes between 0 and 52428800),
+  seconds numeric(6,1) check (seconds between 0 and 600),
+  seen_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists tech_videos_player_idx on public.tech_videos (player_id, created_at desc);
+alter table public.tech_videos enable row level security;
+
+drop policy if exists tech_videos_coach on public.tech_videos;
+create policy tech_videos_coach on public.tech_videos for all to authenticated
+  using (owner_id = auth.uid() and public.is_coach())
+  with check (owner_id = auth.uid() and public.is_coach());
+-- Jugador: ve sus videos y manda nuevos (máximo 10 guardados). No los cambia ni los borra: eso es del entrenador.
+drop policy if exists tech_videos_player_read on public.tech_videos;
+create policy tech_videos_player_read on public.tech_videos for select to authenticated
+  using (player_id in (select public.my_player_ids()));
+drop policy if exists tech_videos_player_insert on public.tech_videos;
+create policy tech_videos_player_insert on public.tech_videos for insert to authenticated
+  with check (player_id in (select public.my_player_ids()) and seen_at is null and comments = '[]'::jsonb
+              and split_part(path, '/', 2) = player_id::text);
+
+create or replace function public.tech_videos_set_owner() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  select owner_id into new.owner_id from public.players where id = new.player_id;
+  if new.owner_id is null then raise exception 'Jugador no encontrado'; end if;
+  if split_part(new.path, '/', 1) <> new.owner_id::text then raise exception 'bad_path' using errcode = '22023'; end if;
+  select count(*) into n from public.tech_videos where player_id = new.player_id;
+  if n >= 10 then raise exception 'too_many_videos' using errcode = '23514'; end if;
+  return new;
+end $$;
+drop trigger if exists tech_videos_set_owner on public.tech_videos;
+create trigger tech_videos_set_owner before insert on public.tech_videos
+  for each row execute function public.tech_videos_set_owner();
+revoke all on public.tech_videos from anon;
+grant select, insert, update, delete on public.tech_videos to authenticated;
+
+-- Carpeta privada «tecnica» en Storage: ruta = <entrenador>/<jugador>/<archivo>. Máximo 45 MB, solo videos.
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'storage' and table_name = 'buckets') then
+    insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+      values ('tecnica', 'tecnica', false, 47185920, array['video/mp4', 'video/quicktime', 'video/webm', 'video/3gpp', 'video/x-m4v'])
+      on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+    drop policy if exists tecnica_read on storage.objects;
+    create policy tecnica_read on storage.objects for select to authenticated
+      using (bucket_id = 'tecnica' and ((storage.foldername(name))[1] = auth.uid()::text
+             or (storage.foldername(name))[2] in (select id::text from public.my_player_ids() id)));
+    drop policy if exists tecnica_upload on storage.objects;
+    create policy tecnica_upload on storage.objects for insert to authenticated
+      with check (bucket_id = 'tecnica' and (storage.foldername(name))[2] in (select id::text from public.my_player_ids() id)
+                  and (storage.foldername(name))[1] = (select p.owner_id::text from public.players p where p.id::text = (storage.foldername(name))[2]));
+    drop policy if exists tecnica_delete on storage.objects;
+    create policy tecnica_delete on storage.objects for delete to authenticated
+      using (bucket_id = 'tecnica' and (storage.foldername(name))[1] = auth.uid()::text);
+  end if;
+end $$;
+
+-- ---------- Captura con dos celulares: junta las jugadas de los dos sin perder ninguna ----------
+create or replace function public.match_log_merge(p_match uuid, p_add jsonb default '[]'::jsonb, p_remove text[] default '{}')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  m record; cur jsonb; ids text[]; merged jsonb;
+begin
+  select id, owner_id, group_id into m from public.matches where id = p_match;
+  if m.id is null then raise exception 'match_not_found' using errcode = 'P0002'; end if;
+  if not (m.owner_id = auth.uid() or m.group_id in (select public.my_staff_group_ids())) then
+    raise exception 'not_allowed' using errcode = '42501';
+  end if;
+  if jsonb_typeof(coalesce(p_add, '[]'::jsonb)) <> 'array' or jsonb_array_length(coalesce(p_add, '[]'::jsonb)) > 200 then
+    raise exception 'bad_events' using errcode = '22023';
+  end if;
+  insert into public.match_logs (owner_id, match_id, log) values (m.owner_id, p_match, '[]'::jsonb) on conflict (match_id) do nothing;
+  select log into cur from public.match_logs where match_id = p_match for update;
+  select coalesce(array_agg(e->>'id'), '{}') into ids from jsonb_array_elements(cur) e;
+  select coalesce(jsonb_agg(z.e order by (z.e->>'t')::bigint nulls first, z.o), '[]'::jsonb) into merged from (
+    select x.e, x.o from jsonb_array_elements(cur) with ordinality x(e, o) where not ((x.e->>'id') = any(coalesce(p_remove, '{}')))
+    union all
+    select y.e, 1000000 + y.o from jsonb_array_elements(coalesce(p_add, '[]'::jsonb)) with ordinality y(e, o)
+     where not ((y.e->>'id') = any(ids)) and not ((y.e->>'id') = any(coalesce(p_remove, '{}')))
+  ) z;
+  if octet_length(merged::text) > 400000 then raise exception 'log_too_big' using errcode = '54000'; end if;
+  update public.match_logs set log = merged where match_id = p_match;
+  return merged;
+end $$;
+revoke all on function public.match_log_merge(uuid, jsonb, text[]) from public, anon;
+grant execute on function public.match_log_merge(uuid, jsonb, text[]) to authenticated;
+
+-- ---------- Recordatorios automáticos: qué ya se mandó (lo usa la función «recordatorios») ----------
+create table if not exists public.reminders_sent (
+  kind text not null check (kind in ('sesion', 'partido')),
+  ref_id uuid not null,
+  sent_at timestamptz not null default now(),
+  sent int not null default 0,
+  primary key (kind, ref_id)
+);
+alter table public.reminders_sent enable row level security;
+revoke all on public.reminders_sent from anon, authenticated;
