@@ -708,7 +708,8 @@ button.br-team { cursor: pointer; }
 /* v3.9: videos de técnica */
 .tv-video { display: block; width: 100%; max-height: 52vh; background: #000; border-radius: var(--r-m); }
 /* v3.9.1: marcador en grande */
-.bigscore { position: fixed; inset: 0; z-index: 70; background: var(--court-deep); color: #fff; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px;
+.bigscore-wrap { position: fixed; inset: 0; z-index: 70; background: var(--court-deep); overflow: hidden; }
+.bigscore { position: absolute; inset: 0; background: var(--court-deep); color: #fff; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px;
   padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
 .bs-top { display: flex; justify-content: space-between; align-items: center; font-family: var(--font-display); font-weight: 800; font-size: clamp(1.2rem, 4vw, 2rem); }
 .bs-top small { font-family: var(--font-body); font-weight: 400; font-size: .7em; opacity: .8; }
@@ -727,4 +728,17 @@ button.br-team { cursor: pointer; }
 .bs-foot .btn { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.35); color: #fff; }
 .bs-foot .btn.ball { background: var(--ball); border-color: var(--ball); color: var(--ball-on); }
 .bs-hint { width: 100%; text-align: center; font-size: .85rem; opacity: .75; }
+.bs-tools { display: inline-flex; gap: 4px; align-items: center; }
+/* v3.9.3: «Girar» acuesta el marcador aunque el celular tenga el giro bloqueado (solo si la pantalla sigue de pie). */
+@media (orientation: portrait) {
+  .bigscore.rot90, .bigscore.rot270 { inset: auto; top: 0; left: 0; width: 100vh; height: 100vw; width: 100dvh; transform-origin: top left; gap: 6px; }
+  .bigscore.rot90 { transform: rotate(90deg) translateY(-100%); }
+  .bigscore.rot270 { transform: rotate(-90deg) translateX(-100%); }
+  .bigscore.rot90 .bs-sides, .bigscore.rot270 .bs-sides { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
+  .bigscore.rot90 .bs-pts, .bigscore.rot270 .bs-pts { font-size: clamp(4rem, min(30vh, 46vw), 30rem); }
+  .bigscore.rot90 .bs-top, .bigscore.rot270 .bs-top { font-size: clamp(1.1rem, 3.4vh, 1.8rem); }
+  .bigscore.rot90 .bs-name, .bigscore.rot270 .bs-name { font-size: clamp(1rem, 3.6vh, 1.6rem); }
+  .bigscore.rot90 .bs-sets, .bigscore.rot270 .bs-sets { font-size: clamp(.9rem, 3vh, 1.4rem); }
+  .bigscore.rot90 .bs-hint, .bigscore.rot270 .bs-hint { width: auto; }
+}
 @media (orientation: landscape) { .bs-sides { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; } .bs-pts { font-size: clamp(4rem, min(30vw, 46vh), 30rem); } .bs-hint { width: auto; } .bigscore { gap: 6px; } }

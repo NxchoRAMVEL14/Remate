@@ -321,9 +321,16 @@ export function bigScore(m) {
   const getM = () => state.data.matches.find((x) => x.id === m.id) || m;
   const ours = teamName(teamOf(m)) || group()?.name || 'Nosotros';
   let swapped = false, wake = null;
+  // v3.9.3: la app está fija en vertical (manifest). Al abrir el marcador se intenta liberar el giro;
+  // si el celular no lo permite (iPhone, giro bloqueado), el botón «Girar» acuesta el marcador a mano.
+  const ROTS = ['', 'rot90', 'rot270'];
+  let rot = (() => { try { return ROTS.includes(localStorage.getItem('remate.bsRot')) ? localStorage.getItem('remate.bsRot') : ''; } catch { return ''; } })();
+  const setRot = (r) => { if (rot) board.classList.remove(rot); rot = r; if (rot) board.classList.add(rot); try { localStorage.setItem('remate.bsRot', rot); } catch { /* sin almacenamiento */ } };
   const returnTo = document.activeElement, root = document.getElementById('root');
   const top = h('div', { class: 'bs-top' }), sides = h('div', { class: 'bs-sides' }), foot = h('div', { class: 'bs-foot' });
-  const ov = h('div', { class: 'bigscore', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Marcador en grande' }, top, sides, foot);
+  // El giro va en un hijo: al elemento en pantalla completa el navegador le quita cualquier transform.
+  const board = h('div', { class: 'bigscore' }, top, sides, foot);
+  const ov = h('div', { class: 'bigscore-wrap', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Marcador en grande' }, board);
   const tap = (k) => {
     const mm = getM();
     if (duoRole(mm) === 'ayudante') { toast('El marcador lo lleva el otro celular'); return; }
@@ -342,7 +349,9 @@ export function bigScore(m) {
       h('span', { class: 'bs-sets' }, `Sets ${sc.won[k]}`));
     top.replaceChildren(
       h('span', {}, sc.over ? 'Partido decidido' : `Set ${sc.idx + 1} · a ${sc.target}`, sc.sets.length > 1 ? h('small', {}, `  ${sc.sets.slice(0, -1).map((x) => `${x.us}-${x.them}`).join('  ')}`) : null),
-      h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Cerrar marcador grande', onclick: close }, ic('x', 28)));
+      h('span', { class: 'bs-tools' },
+        h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Girar el marcador', title: 'Girar', onclick: () => setRot(ROTS[(ROTS.indexOf(rot) + 1) % ROTS.length]) }, ic('rotate-cw', 26)),
+        h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Cerrar marcador grande', onclick: close }, ic('x', 28))));
     sides.replaceChildren(...(swapped ? [side('them'), side('us')] : [side('us'), side('them')]));
     foot.replaceChildren(...[
       h('button', { type: 'button', class: 'btn', onclick: () => undo(getM()) }, ic('undo-2', 18), 'Deshacer'),
@@ -357,12 +366,14 @@ export function bigScore(m) {
   function close() {
     off(); document.removeEventListener('visibilitychange', onVis); document.removeEventListener('keydown', onKey);
     try { wake?.release(); } catch { /* nada */ }
+    try { screen.orientation?.unlock?.(); } catch { /* nada */ }
     try { if (document.fullscreenElement) document.exitFullscreen?.(); } catch { /* nada */ }
     ov.remove(); if (root) root.inert = false; try { returnTo?.focus(); } catch { /* nada */ }
   }
   document.addEventListener('visibilitychange', onVis); document.addEventListener('keydown', onKey);
-  paint(); document.body.append(ov); if (root) root.inert = true; keepAwake();
-  try { ov.requestFullscreen?.().catch(() => {}); } catch { /* el celular no deja pantalla completa: se ve igual */ }
+  paint(); if (rot) board.classList.add(rot); document.body.append(ov); if (root) root.inert = true; keepAwake();
+  const freeRotation = () => { try { screen.orientation?.lock?.('any').catch(() => {}); } catch { /* no se puede liberar el giro */ } };
+  try { const fs = ov.requestFullscreen?.(); if (fs?.then) fs.then(freeRotation, freeRotation); else freeRotation(); } catch { freeRotation(); /* el celular no deja pantalla completa */ }
 }
 
 // ---------- Pantalla de captura ----------
