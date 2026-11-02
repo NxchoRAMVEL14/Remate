@@ -1,12 +1,35 @@
 // Captura en vivo: marcador por set, alineación y rotación, acciones por jugador y zona del saque o del ataque.
 import { h, ic, toast, openSheet, confirmSheet, uid, fmtDate, shareText, rivalKey } from '../util.js';
-import { state, add, patch, players, playerById, ls, group, teamName, teamOf, inTeam, profile } from '../store.js';
+import { state, add, patch, players, playerById, ls, group, teamName, teamOf, inTeam, profile, teams, applyRemote, sql39Ready, onChange } from '../store.js';
+import { client, isNetworkError, friendly } from '../cloud.js';
 import { ACTIONS, GROUPS, score, storedSets, countsFor, playersIn, setsToWin, replay, rotLabel, ZONE_ORDER, RIVAL_GRID, ZONE_ACTIONS, rivalLabel } from '../match-calc.js';
 import { note, sectionTitle, field, options } from './ui.js';
 import { suggestLineup } from './sugerido.js';
 
 export const getLog = (m) => state.data.matchLogs.find((l) => l.match_id === m.id) || null;
 export const nameOf = (id) => playerById(id)?.name || 'Jugador';
+// v3.8.1: quiénes salen en un partido. Si el torneo tiene convocados, ellos; si no, los del equipo del partido
+// y de su rama (la del torneo o la del equipo). En mixto, todos los del equipo. Quien ya jugó en el partido siempre sale.
+export function matchBranch(m) {
+  const t = m?.tournament_id ? state.data.tournaments.find((x) => x.id === m.tournament_id) : null;
+  if (t?.branch && t.branch !== 'X') return t.branch;
+  // Torneo marcado como mixto por omisión pero con «varonil» o «femenil» en el nombre.
+  const nm = (t?.name || '').toLowerCase();
+  if (t && !/mixt/.test(nm)) { if (/varonil/.test(nm)) return 'M'; if (/femenil/.test(nm)) return 'F'; }
+  if (t) return 'X';
+  const tm = teams().find((x) => x.id === teamOf(m));
+  return tm?.branch && tm.branch !== 'X' ? tm.branch : 'X';
+}
+export function matchRoster(m, { all = false } = {}) {
+  const ps = players().slice().sort((a, b) => (a.jersey ?? 999) - (b.jersey ?? 999) || a.name.localeCompare(b.name, 'es'));
+  if (all || !m) return ps;
+  const used = new Set([...playersIn(getLog(m)?.log || []), ...(m.lineups || []).flatMap((l) => (l ? [...(l.slots || []), l.libero] : []))].filter(Boolean));
+  const t = m.tournament_id ? state.data.tournaments.find((x) => x.id === m.tournament_id) : null;
+  if (t && (t.roster || []).length) { const r = new Set(t.roster); return ps.filter((p) => used.has(p.id) || r.has(p.id)); }
+  const tf = teamOf(m), b = matchBranch(m);
+  return ps.filter((p) => used.has(p.id) || (inTeam(p, tf) && (b === 'X' || !p.branch || p.branch === b)));
+}
+const hiddenCount = (m) => players().length - matchRoster(m).length;
 const pjersey = (p) => (p ? (p.jersey != null ? String(p.jersey) : p.name.slice(0, 1).toUpperCase()) : '?');
 
 // Preferencias de captura de este celular (marcador automático y zonas).
@@ -14,10 +37,85 @@ const PREF = 'remate.captura';
 export const capPrefs = () => { try { return { auto: true, zones: false, rival: true, ...JSON.parse(ls.get(PREF) || '{}') }; } catch { return { auto: true, zones: false, rival: true }; } };
 const setPref = (k, v) => ls.set(PREF, JSON.stringify({ ...capPrefs(), [k]: v }));
 
+// ---------- v3.9: captura con dos celulares ----------
+// Un celular es el Marcador (lleva los puntos) y el otro el Ayudante (anota acciones sin mover el marcador).
+// Cada jugada lleva hora (t) y celular (by); la base de datos las junta con match_log_merge sin perder ninguna.
+const DUO_KEY = 'remate.duo';
+const DEV = (() => { try { let d = ls.get('remate.dev'); if (!d) { d = uid().slice(0, 6); ls.set('remate.dev', d); } return d; } catch { return 'dev'; } })();
+const duoAll = () => { try { return JSON.parse(ls.get(DUO_KEY) || '{}'); } catch { return {}; } };
+export const duoRole = (m) => (state.mode === 'cloud' && m ? duoAll()[m.id] || null : null);
+const setDuo = (m, role) => { const all = duoAll(); if (role) all[m.id] = role; else delete all[m.id]; ls.set(DUO_KEY, JSON.stringify(all)); };
+const DUO = { pend: new Map(), timer: null, busy: false, last: 0, err: '' };   // pend: id de partido → { add, remove }
+const pendOf = (id) => { if (!DUO.pend.has(id)) { let p = { add: [], remove: [] }; try { p = JSON.parse(ls.get(`remate.duo.p.${id}`) || 'null') || p; } catch { /* nada */ } DUO.pend.set(id, p); } return DUO.pend.get(id); };
+const savePend = (id) => ls.set(`remate.duo.p.${id}`, JSON.stringify(pendOf(id)));
+function withPending(id, log) {
+  const p = pendOf(id), ids = new Set(log.map((e) => e.id)), rm = new Set(p.remove);
+  return [...log.filter((e) => !rm.has(e.id)), ...p.add.filter((e) => !ids.has(e.id))].sort((a, b) => (a.t ?? 0) - (b.t ?? 0));
+}
+// Recalcula marcador y estadística con el registro junto (solo el Marcador escribe el marcador).
+function afterMerge(m, log) {
+  if (duoRole(m) === 'marcador') {
+    const sets = storedSets(score(log, m.best_of));
+    if (JSON.stringify(sets) !== JSON.stringify(m.sets || [])) patch('matches', m.id, { sets });
+  }
+  for (const pid of playersIn(log)) {
+    const counts = countsFor(log, pid), st = state.data.matchStats.find((x) => x.match_id === m.id && x.player_id === pid);
+    if (st) { if (JSON.stringify(st.counts) !== JSON.stringify(counts)) patch('matchStats', st.id, { counts }); }
+    else if (Object.keys(counts).length && duoRole(m) === 'marcador') add('matchStats', { match_id: m.id, player_id: pid, counts });
+  }
+}
+export async function duoSync(m) {
+  if (!duoRole(m) || DUO.busy) return;
+  DUO.busy = true;
+  const p = pendOf(m.id), sendAdd = [...p.add], sendRm = [...p.remove];
+  try {
+    const c = await client();
+    const { data, error } = await c.rpc('match_log_merge', { p_match: m.id, p_add: sendAdd, p_remove: sendRm });
+    if (error) throw error;
+    p.add = p.add.filter((e) => !sendAdd.includes(e)); p.remove = p.remove.filter((x) => !sendRm.includes(x)); savePend(m.id);
+    const log = withPending(m.id, Array.isArray(data) ? data : []);
+    const row = getLog(m), before = JSON.stringify(row?.log || []);
+    DUO.last = Date.now(); DUO.err = '';
+    if (JSON.stringify(log) !== before) { applyRemote('matchLogs', { ...(row || { id: uid(), match_id: m.id }), log }, (r) => r.match_id === m.id); afterMerge(m, log); }
+  } catch (e) {
+    DUO.err = isNetworkError(e) ? 'Sin internet: se junta al volver la conexión.' : /match_log_merge|schema cache|PGRST202/.test(e?.message || e?.code || '') ? 'Falta el SQL de la versión 3.9.' : /not_allowed/.test(e?.message || '') ? 'Este celular no tiene permiso de capturar este partido.' : friendly(e);
+  } finally { DUO.busy = false; }
+}
+function duoLoop(m) {
+  clearInterval(DUO.timer);
+  if (!duoRole(m)) return;
+  DUO.timer = setInterval(() => {
+    if (!duoRole(m) || !document.querySelector(`.capture[data-match="${m.id}"]`)) { clearInterval(DUO.timer); DUO.timer = null; return; }
+    duoSync(m);
+  }, 4000);
+}
+function duoSheet(m, ctx) {
+  const cur = duoRole(m);
+  openSheet({ title: 'Capturar con dos celulares', body: h('div', { class: 'stack' },
+    h('p', { style: { margin: 0 } }, 'Dos personas capturan el mismo partido al mismo tiempo y todo se junta en un solo registro.'),
+    h('ul', { class: 'plain' },
+      h('li', {}, h('strong', {}, 'Marcador: '), 'lleva los puntos y los sets (con el marcador automático o con +1), cierra sets y termina el partido. Lo normal: saque, recepción y lo del rival.'),
+      h('li', {}, h('strong', {}, 'Ayudante: '), 'anota acciones de jugadores sin mover el marcador. Lo normal: ataque, bloqueo y defensa.')),
+    note('Los dos celulares deben activarlo en este partido y tener internet. Se juntan cada 4 segundos. Deshacer solo quita lo que capturó ese celular.'),
+    state.mode !== 'cloud' ? note('En el modo demo no hay nube: esto solo funciona con tu equipo real.', 'warn') : !sql39Ready() ? note('Falta correr el SQL de la versión 3.9.', 'warn') : null),
+  actions: [cur ? { label: 'Apagar', onClick: () => { setDuo(m, null); toast('Captura en un solo celular'); ctx.rerender(); } } : { label: 'Cancelar' },
+    { label: 'Ayudante', kind: cur === 'ayudante' ? 'primary' : '', onClick: () => { if (state.mode !== 'cloud') { toast('Solo con tu equipo en la nube'); return false; } setDuo(m, 'ayudante'); toast('Este celular es el Ayudante'); duoSync(m); ctx.rerender(); } },
+    { label: 'Marcador', kind: cur === 'marcador' || !cur ? 'primary' : '', onClick: () => { if (state.mode !== 'cloud') { toast('Solo con tu equipo en la nube'); return false; } setDuo(m, 'marcador'); toast('Este celular es el Marcador'); duoSync(m); ctx.rerender(); } }] });
+}
+
 // Guarda el registro, el marcador del partido y la estadística de los jugadores tocados.
 export function commit(m, log, touched = []) {
-  const row = getLog(m);
-  if (row) patch('matchLogs', row.id, { log }); else add('matchLogs', { match_id: m.id, log });
+  const row = getLog(m), prev = row?.log || [];
+  const prevIds = new Set(prev.map((e) => e.id)), now = Date.now();
+  for (const e of log) if (!prevIds.has(e.id) && e.t == null) { e.t = now; e.by = DEV; }
+  if (duoRole(m)) {
+    const nextIds = new Set(log.map((e) => e.id)), p = pendOf(m.id);
+    p.add.push(...log.filter((e) => !prevIds.has(e.id)));
+    for (const e of prev) if (!nextIds.has(e.id)) { if (p.add.some((x) => x.id === e.id)) p.add = p.add.filter((x) => x.id !== e.id); else p.remove.push(e.id); }
+    savePend(m.id);
+    applyRemote('matchLogs', { ...(row || { id: uid(), match_id: m.id }), log }, (r) => r.match_id === m.id);
+    setTimeout(() => duoSync(m), 150);
+  } else if (row) patch('matchLogs', row.id, { log }); else add('matchLogs', { match_id: m.id, log });
   const sc = score(log, m.best_of);
   patch('matches', m.id, { sets: storedSets(sc), ...(m.status === 'planeado' ? { status: 'en_juego' } : {}) });
   for (const pid of touched.filter(Boolean)) {
@@ -30,8 +128,10 @@ function logEvent(m, a, pid, extra = {}) {
   const log = [...(getLog(m)?.log || [])];
   const sc = score(log, m.best_of);
   if (sc.over) { toast('El partido ya tiene ganador. Termínalo o deshaz la última acción.'); return; }
+  const helper = duoRole(m) === 'ayudante';
+  if (helper && (a === 'pt_us' || a === 'pt_them')) { toast('El marcador lo lleva el otro celular'); return; }
   const pt = a === 'pt_us' ? 'us' : a === 'pt_them' ? 'them' : capPrefs().auto ? ACTIONS[a]?.pt || null : null;
-  log.push({ id: uid().slice(0, 8), set: sc.idx, p: pid || null, a, pt, ...extra });
+  log.push({ id: uid().slice(0, 8), set: sc.idx, p: pid || null, a, pt, ...extra, ...(helper ? { pt: null } : {}) });
   commit(m, log, [pid]);
   if (pid && ACTIONS[a]) toast(`${nameOf(pid)}: ${GROUPS[ACTIONS[a].g].toLowerCase()}, ${ACTIONS[a].label.toLowerCase()}${extra.z ? `, zona ${extra.z}` : ''}`, 1400);
   else if (/^opp_/.test(a)) toast(`${m.rival}: ${rivalLabel({ a, ...extra }).toLowerCase()}${log[log.length - 1].pt ? (log[log.length - 1].pt === 'us' ? ' (+1 nuestro)' : ' (+1 rival)') : ''}`, 1400);
@@ -119,7 +219,10 @@ function act(m, a, pid) {
 
 function undo(m) {
   const log = [...(getLog(m)?.log || [])];
-  const e = log.pop(); if (!e) return;
+  // Con dos celulares, cada uno deshace solo lo suyo.
+  const i = duoRole(m) ? log.map((x) => x.by).lastIndexOf(DEV) : log.length - 1;
+  if (i < 0) { toast('No hay nada tuyo que deshacer'); return; }
+  const [e] = log.splice(i, 1); if (!e) return;
   commit(m, log, [e.p, e.out]);
   toast(`Deshecho: ${e.a === 'set_end' ? 'cierre de set' : e.a === 'sub' ? 'cambio' : /^opp_/.test(e.a) ? rivalLabel(e).toLowerCase() : `${e.p ? `${nameOf(e.p)}, ` : ''}${ACTIONS[e.a]?.label.toLowerCase() || e.a}`}`, 1600);
 }
@@ -144,13 +247,18 @@ async function finish(m, ctx) {
 // ---------- Alineación ----------
 export function lineupSheet(m, setIdx) {
   // Con varios equipos, primero los que juegan en el equipo de este partido.
-  const list = players().slice().sort((a, b) => Number(inTeam(b, teamOf(m))) - Number(inTeam(a, teamOf(m))) || (a.jersey ?? 999) - (b.jersey ?? 999));
+  let list = matchRoster(m);
   const lus = m.lineups || [];
   const prev = lus[setIdx] || (setIdx > 0 && lus[setIdx - 1] ? { ...lus[setIdx - 1], serve: lus[setIdx - 1].serve === 'us' ? 'them' : 'us' } : null);
   const opts = (sel) => options([['', '—'], ...list.map((p) => [p.id, `${p.jersey != null ? `${p.jersey} · ` : ''}${p.name}`])], sel || '');
   const zone = {};
   for (let z = 1; z <= 6; z++) zone[z] = h('select', { 'aria-label': `Zona ${z}` }, opts(prev?.slots?.[z - 1]));
   const libero = h('select', { 'aria-label': 'Líbero' }, opts(prev?.libero));
+  const hid = hiddenCount(m);
+  const allBox = hid > 0 ? h('label', { class: 'check' }, h('input', { type: 'checkbox', onchange: (e) => {
+    list = matchRoster(m, { all: e.target.checked });
+    for (const sel of [...Object.values(zone), libero]) { const v = sel.value; sel.replaceChildren(...opts(v)); sel.value = v; }
+  } }), h('span', {}, `Mostrar también a los de otros equipos o rama (${hid})`)) : null;
   let serve = prev?.serve || 'us';
   const seg = h('div', { class: 'seg', role: 'group', 'aria-label': '¿Quién saca primero?' });
   const drawSeg = () => seg.replaceChildren(...[['us', 'Nosotros'], ['them', m.rival]].map(([k, t]) => h('button', { type: 'button', 'aria-pressed': serve === k ? 'true' : 'false', onclick: () => { serve = k; drawSeg(); } }, t)));
@@ -175,7 +283,7 @@ export function lineupSheet(m, setIdx) {
       h('p', { class: 'row-sub', style: { margin: 0 } }, 'Como la ves desde tu banca: la red arriba. Al sacar primero, el de zona 1 es el que saca.'),
       h('div', { class: 'cluster' }, h('button', { type: 'button', class: 'btn sm', onclick: sugerir }, ic('sparkles', 16), 'Sugerir alineación')),
       h('div', { class: 'lu-grid' }, h('div', { class: 'lu-net' }, 'Red'), ZONE_ORDER.front.map(cell), ZONE_ORDER.back.map(cell)),
-      field('Líbero (opcional)', libero),
+      field('Líbero (opcional)', libero), allBox,
       h('div', { class: 'field' }, h('span', { class: 'label' }, '¿Quién saca primero en este set?'), seg), sugBox, err),
     actions: [{ label: 'Cancelar' }, { label: 'Guardar', kind: 'primary', onClick: () => {
       const slots = [1, 2, 3, 4, 5, 6].map((z) => zone[z].value);
@@ -190,7 +298,8 @@ export function lineupSheet(m, setIdx) {
 }
 
 function subSheet(m, cur) {
-  const on = cur.slots.filter(Boolean), bench = players().filter((p) => !on.includes(p.id) && p.id !== cur.libero);
+  const on = cur.slots.filter(Boolean), bench = matchRoster(m, { all: true }).filter((p) => !on.includes(p.id) && p.id !== cur.libero)
+    .sort((a, b) => Number(matchRoster(m).includes(b)) - Number(matchRoster(m).includes(a)));
   const out = h('select', { 'aria-label': 'Sale' }, options(on.map((id) => [id, nameOf(id)]), ''));
   const inn = h('select', { 'aria-label': 'Entra' }, options(bench.map((p) => [p.id, p.name]), ''));
   openSheet({ title: 'Cambio', body: h('div', { class: 'grid' }, field('Sale', out), field('Entra', inn)),
@@ -202,12 +311,65 @@ function subSheet(m, cur) {
     } }] });
 }
 
+// ---------- v3.9.1: marcador en grande ----------
+// Pantalla completa con los puntos del set, para verlo de lejos o enseñárselo al equipo. Tocar un lado suma el punto.
+export function bigScore(m) {
+  const getM = () => state.data.matches.find((x) => x.id === m.id) || m;
+  const ours = teamName(teamOf(m)) || group()?.name || 'Nosotros';
+  let swapped = false, wake = null;
+  const returnTo = document.activeElement, root = document.getElementById('root');
+  const top = h('div', { class: 'bs-top' }), sides = h('div', { class: 'bs-sides' }), foot = h('div', { class: 'bs-foot' });
+  const ov = h('div', { class: 'bigscore', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Marcador en grande' }, top, sides, foot);
+  const tap = (k) => {
+    const mm = getM();
+    if (duoRole(mm) === 'ayudante') { toast('El marcador lo lleva el otro celular'); return; }
+    const sc = score(getLog(mm)?.log || [], mm.best_of);
+    if (sc.over) { toast('El partido ya tiene ganador'); return; }
+    try { navigator.vibrate?.(30); } catch { /* sin vibración */ }
+    logEvent(mm, k === 'us' ? 'pt_us' : 'pt_them', null);
+  };
+  function paint() {
+    const mm = getM(), log = getLog(mm)?.log || [], sc = score(log, mm.best_of);
+    const serving = replay(log, mm.lineups || [], players()).cur.serving;
+    const helper = duoRole(mm) === 'ayudante';
+    const side = (k) => h('button', { type: 'button', class: `bs-side ${k}`, disabled: helper || sc.over ? true : null, onclick: () => tap(k), 'aria-label': `Sumar un punto a ${k === 'us' ? ours : mm.rival}` },
+      h('span', { class: 'bs-name' }, k === 'us' ? ours : mm.rival, serving === k ? h('span', { class: 'bs-serve', 'aria-label': 'saca' }, ic('volleyball', 22)) : null),
+      h('span', { class: 'bs-pts' }, String(sc.cur[k])),
+      h('span', { class: 'bs-sets' }, `Sets ${sc.won[k]}`));
+    top.replaceChildren(
+      h('span', {}, sc.over ? 'Partido decidido' : `Set ${sc.idx + 1} · a ${sc.target}`, sc.sets.length > 1 ? h('small', {}, `  ${sc.sets.slice(0, -1).map((x) => `${x.us}-${x.them}`).join('  ')}`) : null),
+      h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Cerrar marcador grande', onclick: close }, ic('x', 28)));
+    sides.replaceChildren(...(swapped ? [side('them'), side('us')] : [side('us'), side('them')]));
+    foot.replaceChildren(...[
+      h('button', { type: 'button', class: 'btn', onclick: () => undo(getM()) }, ic('undo-2', 18), 'Deshacer'),
+      h('button', { type: 'button', class: 'btn', onclick: () => { swapped = !swapped; paint(); } }, ic('arrow-left-right', 18), 'Cambiar lados'),
+      sc.canClose && !helper ? h('button', { type: 'button', class: 'btn ball', onclick: () => closeSet(getM()) }, ic('check', 18), `Cerrar set ${sc.cur.us}-${sc.cur.them}`) : null,
+      h('span', { class: 'bs-hint' }, helper ? 'Eres el Ayudante: aquí solo ves el marcador.' : 'Toca un lado para sumarle el punto.')].filter(Boolean));
+  }
+  const off = onChange(() => { if (ov.isConnected) paint(); });
+  async function keepAwake() { try { if ('wakeLock' in navigator && document.visibilityState === 'visible') wake = await navigator.wakeLock.request('screen'); } catch { /* no disponible */ } }
+  const onVis = () => { if (document.visibilityState === 'visible') keepAwake(); };
+  const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('dialog[open]')) close(); };
+  function close() {
+    off(); document.removeEventListener('visibilitychange', onVis); document.removeEventListener('keydown', onKey);
+    try { wake?.release(); } catch { /* nada */ }
+    try { if (document.fullscreenElement) document.exitFullscreen?.(); } catch { /* nada */ }
+    ov.remove(); if (root) root.inert = false; try { returnTo?.focus(); } catch { /* nada */ }
+  }
+  document.addEventListener('visibilitychange', onVis); document.addEventListener('keydown', onKey);
+  paint(); document.body.append(ov); if (root) root.inert = true; keepAwake();
+  try { ov.requestFullscreen?.().catch(() => {}); } catch { /* el celular no deja pantalla completa: se ve igual */ }
+}
+
 // ---------- Pantalla de captura ----------
 export function capture(m, ctx) {
   const ui = ctx.ui, pr = capPrefs();
+  const duo = duoRole(m), helper = duo === 'ayudante';
+  if (duo && !DUO.timer) { duoLoop(m); duoSync(m); }
   const log = getLog(m)?.log || [], sc = score(log, m.best_of);
   // Con varios equipos, primero los que juegan en el equipo de este partido.
-  const roster = players().slice().sort((a, b) => Number(inTeam(b, teamOf(m))) - Number(inTeam(a, teamOf(m))) || (a.jersey ?? 999) - (b.jersey ?? 999) || a.name.localeCompare(b.name, 'es'));
+  const roster = matchRoster(m, { all: !!ui.allP }), hid = hiddenCount(m);
+  const allToggle = hid > 0 ? h('button', { type: 'button', class: 'btn ghost sm', onclick: () => { ui.allP = !ui.allP; ctx.rerender(); } }, ui.allP ? 'Solo los de este partido' : `Ver también a otros (${hid})`) : null;
   const rp = replay(log, m.lineups || [], roster), cur = rp.cur;
   const hasLineup = !!cur.slots && cur.set === sc.idx;
   ui.noLineup ||= {};
@@ -217,17 +379,21 @@ export function capture(m, ctx) {
   const board = h('section', { class: 'board' },
     h('div', { class: 'bd-sets' }, h('span', {}, `Sets ${sc.won.us}-${sc.won.them}`), h('span', {}, sc.over ? 'Partido decidido' : `Set ${sc.idx + 1} a ${sc.target}`)),
     h('div', { class: 'bd-score' },
-      h('button', { type: 'button', class: 'bd-side us', disabled: sc.over ? true : null, onclick: () => logEvent(m, 'pt_us', null), 'aria-label': 'Sumar un punto a tu equipo' },
+      h('button', { type: 'button', class: 'bd-side us', disabled: sc.over || helper ? true : null, onclick: () => logEvent(m, 'pt_us', null), 'aria-label': 'Sumar un punto a tu equipo' },
         h('span', { class: 'bd-n' }, String(sc.cur.us)), h('span', { class: 'bd-l' }, '+1 nosotros')),
       h('span', { class: 'bd-x', 'aria-hidden': 'true' }, '—'),
-      h('button', { type: 'button', class: 'bd-side them', disabled: sc.over ? true : null, onclick: () => logEvent(m, 'pt_them', null), 'aria-label': `Sumar un punto a ${m.rival}` },
+      h('button', { type: 'button', class: 'bd-side them', disabled: sc.over || helper ? true : null, onclick: () => logEvent(m, 'pt_them', null), 'aria-label': `Sumar un punto a ${m.rival}` },
         h('span', { class: 'bd-n' }, String(sc.cur.them)), h('span', { class: 'bd-l' }, `+1 ${m.rival}`))),
     serveTxt || hasLineup ? h('div', { class: 'bd-prev' }, serveTxt ? h('span', {}, ic('volleyball', 14), ` ${serveTxt}`) : null, hasLineup ? h('span', {}, rotLabel(cur.key)) : null) : null,
     sc.sets.length > 1 ? h('div', { class: 'bd-prev' }, sc.sets.slice(0, -1).map((s, i) => h('span', {}, `Set ${i + 1}: ${s.us}-${s.them}`))) : null,
     h('div', { class: 'cluster bd-tools' },
       h('button', { type: 'button', class: 'btn sm', disabled: log.length ? null : true, onclick: () => undo(m) }, ic('undo-2', 16), 'Deshacer'),
-      sc.canClose ? h('button', { type: 'button', class: 'btn ball sm', onclick: () => closeSet(m) }, ic('check', 16), `Cerrar set ${sc.idx + 1} (${sc.cur.us}-${sc.cur.them})`) : null,
-      h('button', { type: 'button', class: `btn sm ${sc.over ? 'primary' : ''}`, onclick: () => finish(m, ctx) }, ic('flag', 16), 'Terminar partido')),
+      sc.canClose && !helper ? h('button', { type: 'button', class: 'btn ball sm', onclick: () => closeSet(m) }, ic('check', 16), `Cerrar set ${sc.idx + 1} (${sc.cur.us}-${sc.cur.them})`) : null,
+      helper ? null : h('button', { type: 'button', class: `btn sm ${sc.over ? 'primary' : ''}`, onclick: () => finish(m, ctx) }, ic('flag', 16), 'Terminar partido'),
+      h('button', { type: 'button', class: 'btn sm', onclick: () => bigScore(m) }, ic('zoom-in', 16), 'Marcador grande'),
+      h('button', { type: 'button', class: `btn sm ${duo ? 'primary' : 'ghost'}`, onclick: () => duoSheet(m, ctx) }, ic('users', 16), duo ? (helper ? 'Ayudante' : 'Marcador') : 'Dos celulares')),
+    duo ? h('div', { class: `bd-prev duo-st ${DUO.err ? 'warn' : ''}`, role: 'status' }, h('span', {}, DUO.err || (helper ? 'Eres el Ayudante: tus acciones no mueven el marcador.' : 'Eres el Marcador: llevas los puntos y los sets.')),
+      h('span', {}, pendOf(m.id).add.length + pendOf(m.id).remove.length ? `${pendOf(m.id).add.length + pendOf(m.id).remove.length} por juntar` : DUO.last ? `Junto hace ${Math.max(0, Math.round((Date.now() - DUO.last) / 1000))} s` : 'Juntando…')) : null,
     h('div', { class: 'cluster bd-tools' },
       h('label', { class: 'check', title: 'Cada ace, remate, bloqueo o error suma el punto solo.' },
         h('input', { type: 'checkbox', checked: pr.auto ? true : null, onchange: (e) => { setPref('auto', e.target.checked); ctx.rerender(); } }), h('span', {}, 'Marcador automático')),
@@ -249,7 +415,7 @@ export function capture(m, ctx) {
         h('div', { class: 'cluster' }, h('button', { type: 'button', class: 'btn sm', onclick: () => subSheet(m, cur) }, ic('arrow-left-right', 16), 'Cambio'),
           h('button', { type: 'button', class: 'btn ghost sm', onclick: () => lineupSheet(m, sc.idx) }, 'Alineación'))),
       h('div', { class: 'court-live' }, h('div', { class: 'cl-net' }, 'Red'), ZONE_ORDER.front.map(zoneBtn), ZONE_ORDER.back.map(zoneBtn)),
-      lib || bench.length ? h('div', { class: 'cluster bench' }, lib ? pickBtn(lib, 'lib') : null, bench.map((p) => pickBtn(p, 'sm'))) : null);
+      lib || bench.length ? h('div', { class: 'cluster bench' }, lib ? pickBtn(lib, 'lib') : null, bench.map((p) => pickBtn(p, 'sm'))) : null, allToggle);
   } else {
     pick = h('section', { class: 'stack' },
       !sc.over && !ui.noLineup[sc.idx] ? h('div', { class: 'panel stack lineup-ask' },
@@ -259,7 +425,7 @@ export function capture(m, ctx) {
           h('a', { class: 'btn ghost sm', href: `#/alineacion/${m.id}` }, ic('printer', 16), 'Hoja para la mesa'),
           h('button', { type: 'button', class: 'btn ghost sm', onclick: () => { ui.noLineup[sc.idx] = true; ctx.rerender(); } }, 'Capturar sin alineación'))) : null,
       h('div', { class: 'split' }, h('strong', {}, ui.sel ? `Jugador: ${nameOf(ui.sel)}` : '1. Toca al jugador'), ui.sel ? h('button', { type: 'button', class: 'btn ghost sm', onclick: () => { ui.sel = null; ctx.rerender(); } }, 'Quitar') : null),
-      roster.length ? h('div', { class: 'roster', role: 'group', 'aria-label': 'Jugadores' }, roster.map((p) => pickBtn(p))) : note('Todavía no hay jugadores en el equipo.'));
+      roster.length ? h('div', { class: 'roster', role: 'group', 'aria-label': 'Jugadores' }, roster.map((p) => pickBtn(p))) : note('Todavía no hay jugadores en el equipo.'), allToggle);
   }
 
   const pad = h('section', { class: 'stack' }, h('strong', {}, '2. Toca lo que hizo'),
@@ -270,7 +436,7 @@ export function capture(m, ctx) {
     !ui.sel ? h('p', { class: 'row-sub', style: { margin: 0 } }, 'Primero elige al jugador. Para puntos sin jugador usa los botones del marcador o lo que hace el rival (abajo).') : null);
 
   const feed = log.slice(-6).reverse();
-  return h('div', { class: 'stack capture' }, board, pick, pad, rivalPanel(m, ctx, sc),
+  return h('div', { class: 'stack capture', 'data-match': m.id }, board, pick, pad, rivalPanel(m, ctx, sc),
     feed.length ? h('section', { class: 'stack' }, sectionTitle('Últimas acciones'),
       h('div', { class: 'rows' }, feed.map((e) => h('div', { class: 'row' }, h('span', { class: 'row-main' },
         h('strong', {}, e.a === 'set_end' ? `Fin del set ${e.set + 1}` : e.a === 'sub' ? `Cambio: entra ${nameOf(e.p)} por ${nameOf(e.out)}`

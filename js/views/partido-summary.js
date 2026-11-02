@@ -3,7 +3,7 @@ import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr, plural, atTim
 import { state, add, patch, remove, players, playerById, isStaff, inTeam, teamOf } from '../store.js';
 import { countsFor, playersIn, metrics, teamSummary, addCounts, fmtEff, result, replay, phaseStats, byRotation, rotLabel, RIVAL_GRID, ZONE_ORDER, zoneCounts, rivalStats, OPP_KINDS } from '../match-calc.js';
 import { note, empty, sectionTitle, field, options } from './ui.js';
-import { getLog, nameOf } from './partido-capture.js';
+import { getLog, nameOf, matchRoster } from './partido-capture.js';
 import { sugeridoButton } from './sugerido.js';
 import { coachLogSheet } from './lab-coaching.js';
 import { torneoById } from './torneos.js';
@@ -126,7 +126,7 @@ export function rsvpControl(m, me, readonly) {
 const tourRsvpNote = (m) => { const t = torneoById(m.tournament_id);
   return h('section', { class: 'stack' }, sectionTitle('Convocatoria'), h('div', { class: 'note' }, 'Este partido es del torneo ', h('a', { href: `#/torneo/${t.id}` }, t.name), '. La convocatoria se contesta en el torneo.')); };
 export function rsvpSection(m) {
-  const c = rsvpCounts(m), all = players().filter((p) => inTeam(p, teamOf(m)));   // con varios equipos, solo los que juegan en el equipo de este partido
+  const c = rsvpCounts(m), all = matchRoster(m);   // solo los del equipo y la rama de este partido
   const by = (st) => c.list.filter((r) => r.status === st).map((r) => nameOf(r.player_id)).sort((a, b) => a.localeCompare(b, 'es'));
   const answered = new Set(c.list.map((r) => r.player_id));
   const missing = all.filter((p) => !answered.has(p.id));

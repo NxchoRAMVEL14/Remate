@@ -1,5 +1,8 @@
 // "Más": todo lo que no cabe en la barra de abajo del celular. También aquí vive "Mi perfil de jugador".
 import { h, ic, openSheet, toast } from '../util.js';
+import { spikes } from './carga.js';
+import { unseenVideos } from './tecnica.js';
+const spikeCount = () => { try { return spikes().length; } catch { return 0; } };
 import { state, pendingClaims, players, myPlayer, saveSettings, getPlayer } from '../store.js';
 import { VERSION } from '../version.js';
 import { unseenUpdate } from './ayuda.js';
@@ -55,6 +58,8 @@ export default function mas() {
     item('#/teoria', 'notebook-pen', 'Teoría', 'Lecciones, quizzes, repaso general y tus errores. Para tus jugadores y para ti.'),
     item('#/casa', 'house', 'En casa', 'Rutinas opcionales para tus jugadores y quién está entrenando en casa.'),
     item('#/gym', 'dumbbell', 'Gym', 'Rutinas de pesas según lo que quieren lograr, quién va al gym y sus cargas.'),
+    item('#/carga', 'activity', 'Carga semanal', 'Qué tan pesado fue cada entreno para cada jugador y quién subió mucho esta semana.', spikeCount() ? `${spikeCount()} subieron` : null),
+    item('#/tecnica', 'video', 'Videos de técnica', 'Los videos que te mandan tus jugadores para revisar su técnica.', unseenVideos() ? `${unseenVideos()} sin ver` : null),
     item('#/mejoras', 'lightbulb', 'Mejoras de la app', 'Tu lista privada de cambios e ideas para Remate.', ideasPending ? `${ideasPending} pendientes` : null),
     item('#/ajustes', 'settings', 'Ajustes', 'Equipo, días de entrenamiento, respaldo y cuenta.'),
     item('#/ayuda', 'circle-help', 'Ayuda y fuentes', 'Cómo funciona Remate y de dónde viene la información.'),

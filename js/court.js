@@ -50,7 +50,7 @@ export function courtSVG(d, label = 'Diagrama de cancha') {
       const k = it.k || 'move';
       const dash = k === 'ball' ? 'stroke-dasharray="0.45 0.3"' : k === 'jump' ? 'stroke-dasharray="0.1 0.25" stroke-linecap="round"' : '';
       const col = k === 'ball' ? '#F7C600' : k === 'jump' ? '#FF7A5C' : '#FFFFFF';
-      s += `<line x1="${it.from[0]}" y1="${it.from[1]}" x2="${it.to[0]}" y2="${it.to[1]}" stroke="${col}" stroke-width="0.14" ${dash} marker-end="url(#${id}${k})"/>`;
+      s += `<line class="cs-a" x1="${it.from[0]}" y1="${it.from[1]}" x2="${it.to[0]}" y2="${it.to[1]}" stroke="${col}" stroke-width="0.14" ${dash} marker-end="url(#${id}${k})"/>`;
     }
   }
   for (const it of d?.items || []) {
@@ -63,6 +63,21 @@ export function courtSVG(d, label = 'Diagrama de cancha') {
     } else if (it.t === 'x') s += `<text x="${it.x}" y="${it.y}" text-anchor="middle" fill="#FFFFFF" style="font-size:${it.s || 0.8}px">${esc(it.text)}</text>`;
   }
   return s + '</svg>';
+}
+
+// v3.9: las flechas aparecen una por una, en el orden en que pasan (y vuelve a empezar).
+export function animateArrows(el) {
+  if (!el || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return el;
+  const arrows = [...el.querySelectorAll('.cs-a')];
+  if (arrows.length < 2) return el;
+  let k = 0;
+  const step = () => {
+    if (!el.isConnected && k > 0) { clearInterval(t); return; }
+    arrows.forEach((a, j) => { a.style.transition = 'opacity .35s'; a.style.opacity = j < k ? '1' : '0.12'; });
+    k = k > arrows.length + 1 ? 0 : k + 1;
+  };
+  const t = setInterval(step, 800); step();
+  return el;
 }
 
 // ---------- atajos para escribir diagramas (antes js/content/dx.js) ----------

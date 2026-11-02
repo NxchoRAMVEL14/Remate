@@ -20,12 +20,14 @@ export const TABLES = {
   gymLogs: 'gym_logs',
   // v3.7: lista de asistencia con QR (solo el entrenador)
   checkins: 'session_checkins',
+  // v3.9: esfuerzo de cada entreno (carga semanal) y videos de técnica
+  sessionRpe: 'session_rpe', techVideos: 'tech_videos',
 };
 export const KEYS = Object.keys(TABLES);
 // Qué pide cada quien a la nube (lo demás ni lo intenta). El capitán además pide el registro de partidos.
 const FETCH = {
   coach: KEYS,
-  player: ['groups', 'players', 'sessions', 'attendance', 'ratings', 'exams', 'claims', 'customEx', 'matches', 'matchStats', 'homeLogs', 'rsvps', 'playerTests', 'notices', 'tournaments', 'tRsvps', 'calFeeds', 'gymLogs'],
+  player: ['groups', 'players', 'sessions', 'attendance', 'ratings', 'exams', 'claims', 'customEx', 'matches', 'matchStats', 'homeLogs', 'rsvps', 'playerTests', 'notices', 'tournaments', 'tRsvps', 'calFeeds', 'gymLogs', 'sessionRpe', 'techVideos'],
   assistant: ['staff', 'groups', 'sessions', 'attendance', 'matches', 'matchLogs', 'matchStats', 'rsvps', 'notices', 'tournaments', 'tRsvps', 'calFeeds', 'checkins'],
 };
 // Lo que solo ve el entrenador (el jugador ni lo pide) y lo que llegó con la fase 2 (puede faltar si aún no corren el SQL nuevo).
@@ -37,6 +39,7 @@ const PHASE5 = new Set(['tournaments', 'tRsvps']);
 const PHASE6 = new Set(['calFeeds']);
 const PHASE7 = new Set(['gymLogs']);
 const PHASE8 = new Set(['checkins']);
+const PHASE9 = new Set(['sessionRpe', 'techVideos']);
 const isMissingTable = (e) => ['PGRST205', 'PGRST202', '42P01', '42883'].includes(e?.code) || /could not find the (table|function)|schema cache|does not exist/i.test(e?.message || '');
 const emptyData = () => ({ ...Object.fromEntries(KEYS.map((k) => [k, []])), roster: [] });   // roster: lista del equipo para ayudantes (sin códigos)
 
@@ -55,6 +58,7 @@ export const state = {
   equipos: true,                     // false si aún no corre el SQL de la v3.5 (equipos A y B, cuadro de eliminación)
   gym: true,                         // false si aún no corre el SQL de la v3.6 (Gym y jugadores en varios equipos)
   sql37: true,                       // false si aún no corre el SQL de la v3.7 (lista con QR y video en Remate)
+  sql39: true,                       // false si aún no corre el SQL de la v3.9 (carga semanal, videos de técnica, dos celulares)
 };
 
 // ---------- almacenamiento seguro ----------
@@ -106,6 +110,8 @@ const DEFAULTS = {
   calFeeds: () => ({ active: true, token: randomToken() }),
   gymLogs: () => ({ done_on: todayStr(), day: '', goal: '', plan: {}, sets: [], minutes: null, rpe: null, pain: false, note: '' }),
   checkins: () => ({ session_id: null, secret: '', open_until: null, late_after: null }),
+  sessionRpe: () => ({ rpe: null, minutes: null, note: '' }),
+  techVideos: () => ({ path: '', skill: '', note: '', comments: [], size_bytes: 0, seconds: null, seen_at: null }),
 };
 // Enlace secreto del calendario: 64 caracteres al azar.
 export function randomToken() { const b = new Uint8Array(32); crypto.getRandomValues(b); return [...b].map((x) => x.toString(16).padStart(2, '0')).join(''); }
@@ -123,6 +129,12 @@ export function add(key, row) {
   emit();
   return full;
 }
+// v3.9: guarda en memoria algo que la nube ya tiene (no lo vuelve a mandar).
+export function applyRemote(key, row, match = (r) => r.id === row.id) {
+  const i = state.data[key].findIndex(match);
+  if (i >= 0) state.data[key][i] = { ...state.data[key][i], ...row }; else state.data[key].push(row);
+  saveCache(); emit();
+}
 export function patch(key, id, changes) {
   const r = find(key, id); if (!r) return null;
   Object.assign(r, changes);
@@ -133,9 +145,9 @@ export function patch(key, id, changes) {
 export function remove(key, id) {
   state.data[key] = state.data[key].filter((r) => r.id !== id);
   const d = state.data;
-  if (key === 'players') for (const k of ['attendance', 'ratings', 'exams', 'claims', 'notes', 'matchStats', 'homeLogs', 'rsvps', 'playerTests', 'tRsvps', 'gymLogs']) d[k] = d[k].filter((r) => r.player_id !== id);
+  if (key === 'players') for (const k of ['attendance', 'ratings', 'exams', 'claims', 'notes', 'matchStats', 'homeLogs', 'rsvps', 'playerTests', 'tRsvps', 'gymLogs', 'sessionRpe', 'techVideos']) d[k] = d[k].filter((r) => r.player_id !== id);
   if (key === 'tournaments') { d.tRsvps = d.tRsvps.filter((r) => r.tournament_id !== id); d.matches.forEach((m) => { if (m.tournament_id === id) m.tournament_id = null; }); }
-  if (key === 'sessions') { d.attendance = d.attendance.filter((r) => r.session_id !== id); d.coachLogs.forEach((r) => { if (r.session_id === id) r.session_id = null; }); }
+  if (key === 'sessions') { d.attendance = d.attendance.filter((r) => r.session_id !== id); d.sessionRpe = d.sessionRpe.filter((r) => r.session_id !== id); d.coachLogs.forEach((r) => { if (r.session_id === id) r.session_id = null; }); }
   if (key === 'matches') { for (const k of ['matchLogs', 'matchStats', 'rsvps']) d[k] = d[k].filter((r) => r.match_id !== id); d.coachLogs.forEach((r) => { if (r.match_id === id) r.match_id = null; }); }
   persist({ op: 'remove', key, id });
   emit();
@@ -196,6 +208,7 @@ export const equiposReady = () => state.mode !== 'cloud' || state.equipos;
 export const gymReady = () => state.mode !== 'cloud' || state.gym;
 // v3.7: lista con QR y método «Video en Remate» del laboratorio (el mismo bloque de SQL).
 export const sql37Ready = () => state.mode !== 'cloud' || state.sql37;
+export const sql39Ready = () => state.mode !== 'cloud' || state.sql39;
 // ---------- equipos del grupo (v3.5): settings.teams = [{ id, name, branch }] ----------
 export const teams = () => (settings().teams || []).filter((t) => t && t.id && t.name);
 export const multiTeam = () => equiposReady() && teams().length > 1;
@@ -305,7 +318,7 @@ export async function refresh() {
   await flush();
   if (outbox.length) return false;                      // no pisar cambios que aún no se envían
   try {
-    let missing = false, missing3 = false, missing4 = false, missing5 = false, missing6 = false, missing7 = false, missing9 = false;
+    let missing = false, missing3 = false, missing4 = false, missing5 = false, missing6 = false, missing7 = false, missing9 = false, missing39 = false;
     const get = async (k) => {
       try { return await fetchAll(TABLES[k]); }
       catch (e) {
@@ -316,6 +329,7 @@ export async function refresh() {
         if (PHASE6.has(k) && isMissingTable(e)) { missing6 = true; return []; }
         if (PHASE7.has(k) && isMissingTable(e)) { missing7 = true; return []; }
         if (PHASE8.has(k) && isMissingTable(e)) { missing9 = true; return []; }
+        if (PHASE9.has(k) && isMissingTable(e)) { missing39 = true; return []; }
         throw e;
       }
     };
@@ -331,7 +345,7 @@ export async function refresh() {
     // v3.5: las columnas nuevas no se ven como tabla faltante; se prueba una vez si existen.
     let missing8 = false;
     if (!missing) { try { const c = await client(); const { error } = await c.from('matches').select('team').limit(1); if (error && (error.code === '42703' || /column|team/i.test(error.message || ''))) missing8 = true; } catch (e) { if (!isNetworkError(e)) missing8 = true; } }
-    state.data = next; state.online = true; state.lab = !missing; state.equipos = !missing8; state.casa = !missing3; state.team = !missing4; state.torneos = !missing5; state.cal = !missing6; state.gym = !missing7; if (state.role !== 'player') state.sql37 = !missing9;
+    state.data = next; state.online = true; state.lab = !missing; state.equipos = !missing8; state.casa = !missing3; state.team = !missing4; state.torneos = !missing5; state.cal = !missing6; state.gym = !missing7; if (state.role !== 'player') state.sql37 = !missing9; state.sql39 = !missing39;
     saveCache(); emit();
     return true;
   } catch (e) {
@@ -368,7 +382,7 @@ export function clearLocal() {
   for (const k of ls.keys()) if (k.startsWith('remate.cache.') || k.startsWith('remate.outbox.')) ls.del(k);
   ls.del(MODE_KEY);
   outbox = [];
-  Object.assign(state, { ready: false, mode: null, role: null, user: null, email: '', me: null, viewAs: null, self: false, data: emptyData(), pending: 0, lastError: null, lab: true, casa: true, team: true, torneos: true, cal: true, equipos: true, gym: true, sql37: true });
+  Object.assign(state, { ready: false, mode: null, role: null, user: null, email: '', me: null, viewAs: null, self: false, data: emptyData(), pending: 0, lastError: null, lab: true, casa: true, team: true, torneos: true, cal: true, equipos: true, gym: true, sql37: true, sql39: true });
 }
 export const pendingCount = () => outbox.length;
 

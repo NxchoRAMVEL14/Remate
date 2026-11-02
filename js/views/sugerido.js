@@ -9,6 +9,7 @@ import { BUILTIN, getExercise } from '../content/exercises.js';
 import { warmupFor } from '../content/templates.js';
 import { SKILL_BY_ID } from '../content/skills.js';
 import { note } from './ui.js';
+import { matchRoster } from './partido-capture.js';
 
 const SKILL_NAME = (k) => (k === 'juego' ? 'Side-out' : SKILL_BY_ID[k]?.name || k);
 const median = (xs) => { const a = xs.slice().sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : 2; };
@@ -66,7 +67,7 @@ export function nextTrainingDay(from = todayStr()) {
 
 export function buildPlan(m, dx, date) {
   const minutes = Math.max(45, Number(settings().minutes) || 90);
-  const team = players().filter((p) => p.active !== false && inTeam(p, teamOf(m)));
+  const team = matchRoster(m).filter((p) => p.active !== false);
   const level = Math.max(1, Math.min(6, median(team.map((p) => Number(p.level) || 1))));
   const used = new Set(), plan = [];
   plan.push({ ex: settings().warmup_prev !== false ? warmupFor(date) : 'fi-01', min: 10, note: '' });
@@ -159,7 +160,7 @@ function roleScore(p, role, cur, st) {
 
 export function suggestLineup(m) {
   const team = teamOf(m), no = new Set(state.data.rsvps.filter((r) => r.match_id === m.id && r.status === 'no').map((r) => r.player_id));
-  const cand = players().filter((p) => p.active !== false && inTeam(p, team) && !no.has(p.id));
+  const cand = matchRoster(m).filter((p) => p.active !== false && !no.has(p.id));
   if (cand.length < 6) return { error: `Hacen falta al menos 6 jugadores disponibles${no.size ? ' (sin contar a quienes dijeron que no van)' : ''}.` };
   const stats = new Map(cand.map((p) => [p.id, metrics(addCounts(...state.data.matchStats.filter((x) => x.player_id === p.id).map((x) => x.counts || {})))]));
   const ratings = state.data.ratings || [];

@@ -1,6 +1,8 @@
 // En casa: ejercicios opcionales para el jugador (físicos, técnicos con y sin balón) y su registro.
 // El entrenador ve el mismo contenido y quién está entrenando en casa.
 import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr, addDays, plural } from '../util.js';
+import { lazyFig } from '../figura.js';
+import { figFor } from '../content/movimientos.js';
 import { state, add, patch, remove, players, casaReady, teamReady } from '../store.js';
 import { weekStart } from '../lab-calc.js';
 import { CATS, STAGE, HOME, HOME_BY_ID, ROUTINES, FEEL, RULES, refName } from '../content/casa.js';
@@ -39,10 +41,12 @@ function logSheet(me, kind, ref, minutes) {
 }
 
 function exItem(ex, level, canLog, me) {
-  return h('details', { class: 'hx' },
+  const lf = lazyFig(figFor(ex), { size: 'md' });
+  return h('details', { class: 'hx', ontoggle: lf.ontoggle },
     h('summary', {}, h('span', { class: 'row-main' }, h('strong', {}, ex.name), h('span', { class: 'row-sub' }, `${doseOf(ex, level)} · ${ex.space}`)), ic('chevron-down', 18)),
     h('div', { class: 'hx-body stack' },
       h('p', { style: { margin: 0 } }, ex.goal),
+      lf.slot,
       h('ol', { class: 'plain' }, ex.how.map((x) => h('li', {}, x))),
       h('div', { class: 'cluster' }, ex.cues.map((c) => h('span', { class: 'chip info' }, c))),
       ex.safety ? note(`Seguridad: ${ex.safety}`, 'warn') : null,

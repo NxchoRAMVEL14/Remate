@@ -175,6 +175,12 @@ function coach() {
       } },
         options([['no', 'Solo yo'], ['asistente', 'Yo y mis asistentes adultos'], ['todos', 'Yo, mis asistentes y los capitanes']], st.qr_helpers || 'no')),
         'Un capitán es alumno: con el QR en su celular podría pasarle el código a alguien que no llegó. Necesita el SQL de la versión 3.8.'),
+      // v3.9: recordatorios automáticos (los manda la función «recordatorios» de Supabase cada 15 minutos).
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.reminders !== false ? true : null, onchange: (e) => { saveSettings({ reminders: e.target.checked }); toast(e.target.checked ? 'Recordatorios activados' : 'Recordatorios apagados'); } }),
+        h('span', {}, 'Recordatorio automático al celular de tus jugadores: antes de cada entreno publicado y el día de cada partido (a las 8:00).')),
+      field('Recordatorio del entreno', h('select', { onchange: (e) => { saveSettings({ reminder_hours: Number(e.target.value) }); toast('Guardado'); } },
+        options([['1', '1 hora antes'], ['2', '2 horas antes'], ['3', '3 horas antes'], ['4', '4 horas antes']], String(st.reminder_hours || 2))),
+        'Solo llega a quien activó las notificaciones (en iPhone, con la app instalada). Necesita la función «recordatorios» en Supabase: ver LEEME.'),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.warmup_prev !== false ? true : null, onchange: (e) => { saveSettings({ warmup_prev: e.target.checked }); toast(e.target.checked ? 'Calentamiento preventivo activado' : 'Calentamiento preventivo desactivado'); } }),
         h('span', {}, 'Empezar cada entrenamiento con el calentamiento preventivo (tobillo, rodilla y hombro). Se turnan las versiones A, B y C por semana.')),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.gym_players !== false ? true : null, onchange: (e) => { saveSettings({ gym_players: e.target.checked }); toast(e.target.checked ? 'Tus jugadores ya ven Gym' : 'Gym oculto para tus jugadores'); } }),

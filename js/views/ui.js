@@ -39,10 +39,10 @@ export function radarViewPicker(p, view, onPick) {
   return h('div', { class: 'seg rv-pick', role: 'group', 'aria-label': 'Ver el radar como' }, btns);
 }
 
-export function playerRow(p, { href, end } = {}) {
+export function playerRow(p, { href, end, sub } = {}) {
   return h(href ? 'a' : 'div', { class: 'row', href },
     jersey(p),
-    h('span', { class: 'row-main' }, h('strong', {}, p.name), h('span', { class: 'row-sub' }, playerSub(p))),
+    h('span', { class: 'row-main' }, h('strong', {}, p.name), h('span', { class: 'row-sub' }, sub || playerSub(p))),
     h('span', { class: 'row-end' }, end || null, lvl(p.level), href ? ic('chevron-right', 18) : null));
 }
 

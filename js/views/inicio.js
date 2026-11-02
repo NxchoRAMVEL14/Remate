@@ -13,6 +13,8 @@ import { unseenBanner } from './avisos.js';
 import { calButton, sessionEvent } from './sheets-session.js';
 import { isStaff } from '../store.js';
 import { retoCard } from './reto.js';
+import { rpeCard, myLoadLine } from './carga.js';
+import { videoCardFor } from './tecnica.js';
 import { PTESTS, testTrend } from '../content/gym.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
@@ -28,6 +30,7 @@ export default function inicio(ctx) {
     todayS ? h('a', { class: 'labcard checkin-card', href: '#/llegue' }, h('span', { class: 'lc-ic' }, ic('qr-code', 26)),
       h('span', { class: 'lc-t' }, h('strong', {}, 'Marcar mi llegada'), h('span', {}, `Hoy hay entreno${todayS.start_time ? ` a las ${String(todayS.start_time).slice(0, 5)}` : ''}. Al llegar, escanea el QR de tu entrenador.`)), ic('chevron-right', 20)) : null,
     unseenBanner(ctx),
+    rpeCard(me, { readonly: ctx.readonly }),
     isStaff() ? h('a', { class: 'labcard', href: '#/asistir' }, h('span', { class: 'lc-ic' }, ic('clipboard-check', 26)),
       h('span', { class: 'lc-t' }, h('strong', {}, 'Modo capitán'), h('span', {}, 'Pasa lista y captura los partidos del equipo.')), ic('chevron-right', 20)) : null,
     playerCard(me, stats));
@@ -50,6 +53,9 @@ export default function inicio(ctx) {
   // reto del equipo (v3.8)
   const rc = retoCard();
   if (rc) el.append(rc);
+  // v3.9: tu carga y tus videos de técnica
+  const ml = myLoadLine(me); if (ml) el.append(ml);
+  const vc = videoCardFor(me, ctx); if (vc) el.append(vc);
 
   // camino al siguiente nivel
   if (gap.top) {

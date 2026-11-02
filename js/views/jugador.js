@@ -2,6 +2,8 @@
 import { h, ic, toast, fmtDate, plural, confirmSheet } from '../util.js';
 import { state, getPlayer, settings, remove, resolveClaim, patch, teamReady, isMine, gymReady } from '../store.js';
 import { testsPanel } from './pruebas.js';
+import { loadSection } from './carga.js';
+import { videosOf } from './tecnica.js';
 import { homePlanSheet, planOf } from './casa.js';
 import { refName } from '../content/casa.js';
 import { gymPlanSheet, playerGymSheet, coachPlanOf, gymStats, specText } from './gym.js';
@@ -13,7 +15,7 @@ import { dots, statusChip, sectionTitle, empty, note } from './ui.js';
 import { playerCard, playerStats, badgesEl } from './card.js';
 import { playerFormSheet, deletePlayer, evaluateSheet, examSheet, codeSheet, noteSheet } from './sheets-player.js';
 
-const TABS = [['resumen', 'Resumen'], ['habilidades', 'Habilidades'], ['pruebas', 'Pruebas'], ['asistencia', 'Asistencia'], ['notas', 'Notas']];
+const TABS = [['resumen', 'Resumen'], ['habilidades', 'Habilidades'], ['pruebas', 'Pruebas'], ['asistencia', 'Asistencia'], ['carga', 'Carga'], ['videos', 'Videos'], ['notas', 'Notas']];
 
 export default function jugador(ctx) {
   const p = getPlayer(ctx.args[0]);
@@ -46,7 +48,7 @@ export default function jugador(ctx) {
     h('button', { type: 'button', role: 'tab', 'aria-selected': String(ui.tab === id), onclick: () => { ui.tab = id; paint(); } }, label)));
   function paint() {
     [...tabs.children].forEach((b, i) => b.setAttribute('aria-selected', String(TABS[i][0] === ui.tab)));
-    panel.replaceChildren(({ resumen, habilidades, pruebas: (pp) => testsPanel(pp, { canEdit: true }), asistencia, notas })[ui.tab](p, stats));
+    panel.replaceChildren(({ resumen, habilidades, pruebas: (pp) => testsPanel(pp, { canEdit: true }), asistencia, carga: (pp) => loadSection(pp), videos: (pp) => videosOf(pp, { coach: true }), notas })[ui.tab](p, stats));
   }
   paint();
   return { title: p.name, back: '#/jugadores', el: h('div', { class: 'page' }, playerCard(p, stats), actions, h('div', { class: 'stack' }, tabs, panel)) };

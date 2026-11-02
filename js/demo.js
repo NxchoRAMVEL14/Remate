@@ -91,9 +91,18 @@ export function makeDemoData() {
   const { seasonPlan, ...phase } = makeDemoPhase2({ R, players, sessions, gid });
   const gymLogs = makeDemoGym(players, today);
   groups[0].settings.season_plan = seasonPlan;
+  // v3.9: esfuerzo de cada entreno (1 a 10) de quienes fueron; demo-p5 subió mucho esta semana.
+  const sessionRpe = [];
+  for (const sx of sessions.filter((x) => x.status === 'hecha')) {
+    for (const a of attendance.filter((x) => x.session_id === sx.id && (x.status === 'presente' || x.status === 'retardo'))) {
+      const recent = sx.session_date >= addDays(today, -6);
+      const base = a.player_id === 'demo-p5' && recent ? 9 : 4 + ((a.player_id.charCodeAt(a.player_id.length - 1) + sx.session_date.charCodeAt(9)) % 4);
+      sessionRpe.push({ id: `demo-r-${sx.id}-${a.player_id}`, owner_id: 'demo', player_id: a.player_id, session_id: sx.id, rpe: base, minutes: a.player_id === 'demo-p5' && recent ? 120 : sx.minutes || 90, note: '', created_at: iso(Date.now()) });
+    }
+  }
   return { groups, players, sessions, attendance, ratings, exams, claims, notes: [
     { id: 'demo-n1', owner_id: 'demo', player_id: 'demo-p9', body: 'Platicar con ella: ha faltado dos veces seguidas.', created_at: iso(Date.now() - 864e5) },
-  ], customEx: [], gymLogs, ...phase };
+  ], customEx: [], gymLogs, sessionRpe, techVideos: [], ...phase };
 }
 
 // ---------- partidos, laboratorio, En casa, ayudantes y torneos (antes js/demo-lab.js) ----------

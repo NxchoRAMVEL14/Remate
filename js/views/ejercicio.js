@@ -3,7 +3,9 @@ import { h, ic, toast, openSheet, confirmSheet, relDay, todayStr, isUrl, ytId } 
 import { state, sessions, patch, remove, settings, saveSettings } from '../store.js';
 import { SKILL_BY_ID } from '../content/skills.js';
 import { getExercise, KINDS, MATERIAL, levelLabel } from '../content/exercises.js';
-import { courtSVG } from '../court.js';
+import { courtSVG, animateArrows } from '../court.js';
+import { figCard } from '../figura.js';
+import { figFor, stepFigs } from '../content/movimientos.js';
 import { empty, note, field } from './ui.js';
 import { customExerciseSheet } from './sheets-session.js';
 
@@ -17,11 +19,13 @@ export function exerciseDetail(ex) {
     h('div', { class: 'ex-meta' }, chip(`${ex.min} min`, 'ball'), chip(levelLabel(ex), 'info'), chip(KINDS[ex.kind] || ex.kind),
       ex.players && ex.players !== '—' ? chip(`${ex.players} jugadores`) : null,
       ex.skills.map((k) => chip(SKILL_BY_ID[k]?.name || k)), ex.material.map((m) => chip(MATERIAL[m] || m)), ex.custom ? chip('Propio', 'ok') : null),
-    ex.diagram ? h('figure', { class: 'court-wrap', style: { margin: 0 } }, h('div', { html: courtSVG(ex.diagram, `Diagrama de ${ex.name}`) }),
+    ex.diagram ? h('figure', { class: 'court-wrap', style: { margin: 0 } }, animateArrows(h('div', { html: courtSVG(ex.diagram, `Diagrama de ${ex.name}`) })),
       h('figcaption', {}, 'Cancha vista desde tu lado de la red. Círculos: jugadores. Flecha blanca: movimiento. Flecha amarilla: balón. Punteada coral: salto. Triángulos: conos.')) : null,
     sec('Objetivo', p(ex.goal)),
     sec('Organización', p(ex.setup)),
-    sec('Cómo se hace', list('ol', ex.how)),
+    // v3.9: el muñequito del movimiento; en calentamientos y físicos, uno por paso.
+    !stepFigs(ex) && figFor(ex).length ? figCard(figFor(ex), { size: ex.diagram ? 'sm' : 'md' }) : null,
+    sec('Cómo se hace', stepFigs(ex) ? h('ol', { class: 'fg-steps' }, ex.how.map((x, i) => h('li', {}, h('span', {}, x), stepFigs(ex)[i]?.length ? figCard(stepFigs(ex)[i], { size: 'sm' }) : null))) : list('ol', ex.how)),
     ex.easier || ex.harder ? h('div', { class: 'versus' },
       ex.easier ? h('div', {}, h('h3', {}, 'Más fácil'), p(ex.easier)) : null, ex.harder ? h('div', {}, h('h3', {}, 'Más difícil'), p(ex.harder)) : null) : null,
     sec('Puntos clave', list('ul', ex.cues)),

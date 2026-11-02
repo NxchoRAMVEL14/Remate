@@ -14,9 +14,9 @@ const ROUTES = { hoy: R('hoy'), jugadores: R('jugadores'), jugador: R('jugador')
   ruta: R('ruta'), ajustes: R('ajustes'), ayuda: R('ayuda'), novedades: R('ayuda', 'novedades'), partidos: R('partidos'), partido: R('partidos', 'partido'), lab: R('lab'), reportes: R('reportes'),
   mas: R('mas'), casa: R('casa'), mejoras: R('mejoras'), pruebas: R('pruebas'), temporada: R('temporada'), avisos: R('avisos'), radar: R('radar-guia'), comparar: R('radar-guia', 'comparar'),
   teoria: R('teoria'), torneo: R('torneos'), alineacion: R('partido-capture', 'alineacion'), rivales: R('rivales'), rival: R('rivales'), gym: R('gym'), medir: R('medir'),
-  'lista-qr': R('asistir', 'listaQr'), llegue: R('asistir', 'llegue'), asistir: R('asistir'), inicio: R('inicio'), entrenos: R('entrenos') };
-const COACH = new Set(['hoy', 'jugadores', 'jugador', 'sesiones', 'sesion', 'ejercicios', 'ejercicio', 'ruta', 'ajustes', 'ayuda', 'partidos', 'partido', 'lab', 'reportes', 'mas', 'casa', 'mejoras', 'pruebas', 'temporada', 'avisos', 'radar', 'novedades', 'teoria', 'comparar', 'torneo', 'alineacion', 'rivales', 'rival', 'gym', 'medir', 'lista-qr', 'llegue']);
-const PLAYER = new Set(['inicio', 'ruta', 'entrenos', 'partidos', 'partido', 'ejercicios', 'ejercicio', 'casa', 'pruebas', 'avisos', 'asistir', 'ajustes', 'ayuda', 'radar', 'novedades', 'teoria', 'torneo', 'gym', 'medir', 'llegue', 'lista-qr']);
+  'lista-qr': R('asistir', 'listaQr'), llegue: R('asistir', 'llegue'), asistir: R('asistir'), inicio: R('inicio'), entrenos: R('entrenos'), carga: R('carga'), tecnica: R('tecnica') };
+const COACH = new Set(['hoy', 'jugadores', 'jugador', 'sesiones', 'sesion', 'ejercicios', 'ejercicio', 'ruta', 'ajustes', 'ayuda', 'partidos', 'partido', 'lab', 'reportes', 'mas', 'casa', 'mejoras', 'pruebas', 'temporada', 'avisos', 'radar', 'novedades', 'teoria', 'comparar', 'torneo', 'alineacion', 'rivales', 'rival', 'gym', 'medir', 'lista-qr', 'llegue', 'carga', 'tecnica']);
+const PLAYER = new Set(['inicio', 'ruta', 'entrenos', 'partidos', 'partido', 'ejercicios', 'ejercicio', 'casa', 'pruebas', 'avisos', 'asistir', 'ajustes', 'ayuda', 'radar', 'novedades', 'teoria', 'torneo', 'gym', 'medir', 'llegue', 'lista-qr', 'tecnica']);
 const ASSISTANT = new Set(['asistir', 'partidos', 'partido', 'avisos', 'ejercicios', 'ejercicio', 'ajustes', 'ayuda', 'novedades', 'torneo', 'alineacion', 'lista-qr']);
 const MODS = new Map();
 const loadView = (file) => (MODS.has(file) ? Promise.resolve(MODS.get(file)) : import(`./views/${file}.js`).then((m) => { MODS.set(file, m); return m; }));
@@ -39,10 +39,10 @@ const NAV = {
   assistant: [['asistir', 'Asistir', 'clipboard-check'], ['partidos', 'Partidos', 'volleyball'], ['avisos', 'Avisos', 'bell'], ['ejercicios', 'Ejercicios', 'book-open']],
 };
 const PARENT = { jugador: 'jugadores', sesion: 'sesiones', ejercicio: 'ejercicios', partido: 'partidos', casa: 'ejercicios', pruebas: 'jugadores', temporada: 'sesiones', avisos: 'hoy', asistir: 'inicio', novedades: 'ajustes', comparar: 'jugadores', torneo: 'partidos', alineacion: 'partidos', rivales: 'partidos', rival: 'partidos', 'lista-qr': 'sesiones', llegue: 'inicio' };   // sección que se ilumina en la navegación
-const UNDER_MAS = new Set(['ejercicios', 'ruta', 'lab', 'reportes', 'ajustes', 'ayuda', 'mejoras', 'mas', 'novedades', 'gym']);
+const UNDER_MAS = new Set(['ejercicios', 'ruta', 'lab', 'reportes', 'ajustes', 'ayuda', 'mejoras', 'mas', 'novedades', 'gym', 'carga', 'tecnica']);
 // Pantalla en la que estás → sección de la mejora (para anotarla rápido desde el foco del encabezado).
 const IDEA_AREA = { hoy: 'hoy', jugadores: 'jugadores', jugador: 'jugadores', sesiones: 'entrenos', sesion: 'entrenos', partidos: 'partidos', partido: 'partidos',
-  casa: 'casa', lab: 'laboratorio', reportes: 'reportes', ruta: 'ruta', ejercicios: 'ejercicios', ejercicio: 'ejercicios', ajustes: 'ajustes', teoria: 'entrenos', comparar: 'jugadores', radar: 'jugadores', torneo: 'partidos', gym: 'gym', medir: 'laboratorio', 'lista-qr': 'entrenos' };          // en celular, estas iluminan "Más"
+  casa: 'casa', lab: 'laboratorio', reportes: 'reportes', ruta: 'ruta', ejercicios: 'ejercicios', ejercicio: 'ejercicios', ajustes: 'ajustes', teoria: 'entrenos', comparar: 'jugadores', radar: 'jugadores', torneo: 'partidos', gym: 'gym', medir: 'laboratorio', 'lista-qr': 'entrenos', carga: 'jugadores', tecnica: 'jugadores' };          // en celular, estas iluminan "Más"
 
 const root = $('#root');
 const uiState = new Map();

@@ -2,6 +2,8 @@
 // El jugador arma su rutina (se guarda en su celular) o usa la que le asigna el entrenador (columna gym_plan de su ficha).
 // Las sesiones que registra se guardan en la nube (gym_logs): las ven él y su entrenador.
 import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr, addDays, plural, DAYS, DAYS_LONG, nextWeekday, weeklyRule } from '../util.js';
+import { lazyFig } from '../figura.js';
+import { figFor } from '../content/movimientos.js';
 import { state, add, remove, patch, players, settings, gymReady, ls, multiTeam, teamOf, inTeam } from '../store.js';
 import { weekStart, num } from '../lab-calc.js';
 import { GYM, GYM_BY_ID, GROUPS, NEED, EQUIP, EXP, TIER, PHASE, MINUTES, GOALS, buildRoutine, normSpec, isSpec, maxDays, heavyMax, weekPlan,
@@ -76,11 +78,13 @@ const link = (href, text) => h('a', { href, target: '_blank', rel: 'noopener nor
 
 // ---------- piezas ----------
 function exItem(ex, { rx = null, last, n } = {}) {
-  return h('details', { class: 'hx' },
+  const lf = lazyFig(figFor(ex), { size: 'md' });
+  return h('details', { class: 'hx', ontoggle: lf.ontoggle },
     h('summary', {}, n ? h('span', { class: 'gx-n', 'aria-hidden': 'true' }, String(n)) : null,
       h('span', { class: 'row-main' }, h('strong', {}, ex.name), h('span', { class: 'row-sub' }, rx ? rxText(rx) : `${TIER[ex.tier]} · ${NEED[ex.need]}`)), ic('chevron-down', 18)),
     h('div', { class: 'hx-body stack' },
       h('p', { style: { margin: 0 } }, ex.why),
+      lf.slot,
       h('ol', { class: 'plain' }, ex.how.map((x) => h('li', {}, x))),
       h('div', { class: 'cluster' }, ex.cues.map((c) => h('span', { class: 'chip info' }, c))),
       h('dl', { class: 'gx-dl' }, h('dt', {}, 'Error común'), h('dd', {}, ex.err), h('dt', {}, 'Más fácil'), h('dd', {}, ex.easier), h('dt', {}, 'Más difícil'), h('dd', {}, ex.harder)),
@@ -364,7 +368,7 @@ function logPage(ctx) {
       h('div', { class: 'cluster' },
         h('button', { class: 'btn sm', type: 'button', onclick: () => { if (entry.s.length >= 8) return; entry.s.push([entry.s[entry.s.length - 1]?.[0] ?? '', '']); persist(); paintSets(); } }, ic('plus', 16), 'Serie'),
         entry.s.length > 1 ? h('button', { class: 'btn sm ghost', type: 'button', onclick: () => { entry.s.pop(); persist(); paintSets(); } }, ic('minus', 16), 'Quitar la última') : null,
-        h('details', { class: 'gx-how' }, h('summary', {}, '¿Cómo se hace?'), h('ol', { class: 'plain' }, ex.how.map((x) => h('li', {}, x))))));
+        (() => { const lf = lazyFig(figFor(ex), { size: 'sm' }); return h('details', { class: 'gx-how', ontoggle: lf.ontoggle }, h('summary', {}, '¿Cómo se hace?'), lf.slot, h('ol', { class: 'plain' }, ex.how.map((x) => h('li', {}, x)))); })()));
   };
 
   const date = h('input', { type: 'date', min: addDays(todayStr(), -7), max: todayStr(), value: dr.date, oninput: (e) => { dr.date = e.target.value; persist(); } });

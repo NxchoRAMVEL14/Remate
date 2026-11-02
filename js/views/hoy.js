@@ -1,6 +1,8 @@
 // "Hoy": lo próximo que viene y lo que necesita tu atención.
 import { h, ic, plural, toast, todayStr, fmtDate, sum } from '../util.js';
 import { retoCard, syncReto } from './reto.js';
+import { spikes } from './carga.js';
+import { unseenVideos } from './tecnica.js';
 import { state, players, sessions, pendingClaims, getPlayer, settings, resolveClaim, teamReady, torneosReady } from '../store.js';
 import { levelGap, attendanceFor, nextSession, planMinutes, focusOf, levelCounts, hasRatings, doneSessions } from '../calc.js';
 import { SKILL_BY_ID } from '../content/skills.js';
@@ -114,6 +116,15 @@ export default function hoy() {
       ic('chevron-right', 18))));
   }
 
+  // v3.9: quién subió mucho su carga y videos de técnica por revisar.
+  const sp = spikes();
+  if (sp.length) {
+    todo.append(h('div', { class: 'rows', 'aria-label': 'Carga alta' }, sp.map(({ p, f }) => playerRow(p, { href: `#/jugador/${p.id}/carga`,
+      sub: `Su carga subió a ${f.ratio} veces su promedio esta semana. Platica con él o ella.`, end: h('span', { class: 'chip warn' }, `×${f.ratio}`) }))));
+  }
+  const nv = unseenVideos();
+  if (nv) todo.append(h('div', { class: 'rows' }, h('a', { class: 'row', href: '#/tecnica' }, h('span', { class: 'jersey off', 'aria-hidden': 'true' }, ic('video', 20)),
+    h('span', { class: 'row-main' }, h('strong', {}, plural(nv, 'video de técnica por ver', 'videos de técnica por ver')), h('span', { class: 'row-sub' }, 'Tus jugadores te mandaron su técnica para que la revises.')), ic('chevron-right', 18))));
   if (claims.length) {
     todo.append(h('div', { class: 'rows', 'aria-label': 'Retos por aprobar' }, claims.map((c) => {
       const p = getPlayer(c.player_id), ch = CHALLENGE_BY_ID[c.challenge_id];
