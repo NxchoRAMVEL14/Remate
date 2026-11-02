@@ -15,6 +15,7 @@ import { isStaff } from '../store.js';
 import { retoCard } from './reto.js';
 import { rpeCard, myLoadLine } from './carga.js';
 import { videoCardFor } from './tecnica.js';
+import { fitCard } from './fit.js';
 import { PTESTS, testTrend } from '../content/gym.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
@@ -56,6 +57,8 @@ export default function inicio(ctx) {
   // v3.9: tu carga y tus videos de técnica
   const ml = myLoadLine(me); if (ml) el.append(ml);
   const vc = videoCardFor(me, ctx); if (vc) el.append(vc);
+  // v3.11: Remate Fit (solo adultos activados)
+  const fc = fitCard(me, ctx); if (fc) el.append(fc);
 
   // camino al siguiente nivel
   if (gap.top) {

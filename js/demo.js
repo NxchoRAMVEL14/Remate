@@ -8,6 +8,7 @@ import { score, storedSets, countsFor, playersIn } from './match-calc.js';
 import { weekStart } from './lab-calc.js';
 import { SCENARIOS } from './content/vision.js';
 import { buildRoutine, GYM_BY_ID, lowReps, topReps } from './content/gym.js';
+import { buildFit, FIT_BY_ID } from './content/fit.js';
 
 function rng(seed) { // generador determinista, para que el demo siempre se vea igual
   let a = seed >>> 0;
@@ -90,6 +91,7 @@ export function makeDemoData() {
   ];
   const { seasonPlan, ...phase } = makeDemoPhase2({ R, players, sessions, gid });
   const gymLogs = makeDemoGym(players, today);
+  const fit = makeDemoFit(players, today);
   groups[0].settings.season_plan = seasonPlan;
   // v3.9: esfuerzo de cada entreno (1 a 10) de quienes fueron; demo-p5 subió mucho esta semana.
   const sessionRpe = [];
@@ -102,7 +104,7 @@ export function makeDemoData() {
   }
   return { groups, players, sessions, attendance, ratings, exams, claims, notes: [
     { id: 'demo-n1', owner_id: 'demo', player_id: 'demo-p9', body: 'Platicar con ella: ha faltado dos veces seguidas.', created_at: iso(Date.now() - 864e5) },
-  ], customEx: [], gymLogs, sessionRpe, techVideos: [], ...phase };
+  ], customEx: [], gymLogs, sessionRpe, techVideos: [], ...fit, ...phase };
 }
 
 // ---------- partidos, laboratorio, En casa, ayudantes y torneos (antes js/demo-lab.js) ----------
@@ -336,4 +338,39 @@ function makeDemoGym(players, today) {
   // Jugadores en varios equipos: Dani y Sofi también juegan en el equipo B.
   for (const pid of ['demo-p2', 'demo-p3']) { const p = players.find((x) => x.id === pid); if (p) p.teams = ['demo-tb']; }
   return logs;
+}
+
+// ---------- v3.11: fechas de nacimiento y Remate Fit ----------
+// Casi todos tienen 15 a 17 años. Dani (19) usa Remate Fit y lo comparte; Aranza (18) todavía no lo tiene activado.
+function makeDemoFit(players, today) {
+  const AGES = { 'demo-p2': 19, 'demo-p11': 18 };
+  players.forEach((p, i) => {
+    const age = AGES[p.id] ?? 15 + (i % 3);
+    p.birth_date = addDays(today, -Math.round(age * 365.25) - 20 - i * 9);
+    p.fit = p.id === 'demo-p2';
+  });
+  const pid = 'demo-p2', since = addDays(today, -26);
+  const data = { goal: 'fuerza', exp: 'medio', days: 3, minutes: 60, place: 'completo', vbAuto: true, vbDays: 2, stepsGoal: 9000, since };
+  const fitProfiles = [{ id: 'demo-fp1', owner_id: 'demo', player_id: pid, data, share: true, created_at: since, updated_at: since }];
+  const fitLogs = [];
+  const r = buildFit(data, 2);
+  let n = 0;
+  for (let dd = -25; dd <= -1; dd += 2.5) {
+    const d = Math.round(dd), day = r.days[n % r.days.length], k = Math.floor(n / r.days.length);
+    const sets = day.items.map((rx) => {
+      const ex = FIT_BY_ID[rx.ex];
+      const base = ex.need === 'barra' ? 60 : ex.need === 'maquina' || ex.need === 'polea' ? 35 : ex.each ? 14 : 20;
+      const kg = ex.unit === 'kg' ? base + (ex.need === 'barra' ? 2.5 : 1) * k : null;
+      const reps = ex.unit === 's' ? 30 : ex.unit === 'saltos' ? 4 : Math.min(Number(String(rx.reps).split('-').pop()), Number(String(rx.reps).split('-')[0]) + (n % 2));
+      return { ex: rx.ex, s: Array.from({ length: rx.sets }, () => [kg, reps]) };
+    });
+    fitLogs.push({ id: `demo-fg-${n}`, owner_id: 'demo', player_id: pid, kind: 'gym', day: addDays(today, d), data: { key: day.key, name: day.name, goal: data.goal, minutes: day.min, rpe: 7, pain: false, note: '', sets }, created_at: new Date(Date.now() + d * 864e5).toISOString() });
+    n++;
+  }
+  for (let d = -27; d <= 0; d++) {
+    const date = addDays(today, d);
+    if (d % 3 !== 1) fitLogs.push({ id: `demo-fb-${d}`, owner_id: 'demo', player_id: pid, kind: 'body', day: date, data: { kg: Math.round((78.4 + d * 0.035 + ((d * 7) % 5) * 0.12) * 10) / 10, ...(d === -27 ? { cintura: 82.5, cadera: 96, brazo: 33.5, muslo: 56 } : d === -1 ? { cintura: 81.5, cadera: 95.5, brazo: 34, muslo: 56.5 } : {}) }, created_at: new Date(Date.now() + d * 864e5).toISOString() });
+    if (d > -14) fitLogs.push({ id: `demo-fs-${d}`, owner_id: 'demo', player_id: pid, kind: 'steps', day: date, data: { n: 6500 + ((d * 1373) % 4800 + 4800) % 4800 }, created_at: new Date(Date.now() + d * 864e5).toISOString() });
+  }
+  return { fitProfiles, fitLogs };
 }

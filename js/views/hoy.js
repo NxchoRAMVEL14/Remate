@@ -3,6 +3,7 @@ import { h, ic, plural, toast, todayStr, fmtDate, sum } from '../util.js';
 import { retoCard, syncReto } from './reto.js';
 import { spikes } from './carga.js';
 import { unseenVideos } from './tecnica.js';
+import { azarButton } from './azar.js';
 import { state, players, sessions, pendingClaims, getPlayer, settings, resolveClaim, teamReady, torneosReady } from '../store.js';
 import { levelGap, attendanceFor, nextSession, planMinutes, focusOf, levelCounts, hasRatings, doneSessions } from '../calc.js';
 import { SKILL_BY_ID } from '../content/skills.js';
@@ -59,7 +60,8 @@ export default function hoy() {
         h('button', { class: 'btn ball', type: 'button', onclick: () => attendanceSheet(next) }, ic('clipboard-check', 18), 'Pasar lista'),
         next.session_date === todayStr() ? h('a', { class: 'btn', href: `#/lista-qr/${next.id}` }, ic('qr-code', 18), 'Lista con QR') : null,
         h('a', { class: 'btn', href: `#/sesion/${next.id}` }, ic('book-open', 18), blocks ? 'Ver plan' : 'Armar plan'),
-        blocks ? h('button', { class: 'btn', type: 'button', onclick: () => openCourtMode(next) }, ic('timer', 18), 'Modo cancha') : null)));
+        blocks ? h('button', { class: 'btn', type: 'button', onclick: () => openCourtMode(next) }, ic('timer', 18), 'Modo cancha') : null,
+        next.session_date === todayStr() ? azarButton(next.id) : null)));
   } else {
     el.append(h('section', { class: 'panel stack' },
       h('h2', {}, 'No hay entrenamientos por venir'),

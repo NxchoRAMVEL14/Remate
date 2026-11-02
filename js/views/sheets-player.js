@@ -1,9 +1,9 @@
 // Hojas emergentes del entrenador sobre un jugador: datos, evaluación, examen, código y notas.
 import { h, ic, openSheet, confirmSheet, toast, copyText, shareText, newJoinCode, todayStr, fmtDate } from '../util.js';
-import { add, patch, remove, group, rate, recordExam, state, multiTeam, teams, teamOf, teamsOf, equiposReady, gymReady } from '../store.js';
+import { add, patch, remove, group, rate, recordExam, state, multiTeam, teams, teamOf, teamsOf, equiposReady, gymReady, sql311Ready } from '../store.js';
 import { SKILLS, PHASES, POSITIONS, BRANCHES, HANDS, POSITION_NAME } from '../content/skills.js';
 import { LEVELS, required } from '../content/levels.js';
-import { currentRatings, levelGap, nextLevelN } from '../calc.js';
+import { currentRatings, levelGap, nextLevelN, ageFrom } from '../calc.js';
 import { field, options, note } from './ui.js';
 
 // ---------- alta y edición ----------
@@ -29,6 +29,22 @@ export function playerFormSheet(p = null, { self = false, name: suggested = '', 
   const drawTeams = () => teamsBox?.replaceChildren(...teams().filter((t) => t.id !== team.value).map((t) =>
     h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: moreTeams.has(t.id) ? true : null, onchange: (e) => { if (e.target.checked) moreTeams.add(t.id); else moreTeams.delete(t.id); } }), h('span', {}, t.name))));
   team?.addEventListener('change', () => { moreTeams.delete(team.value); drawTeams(); }); drawTeams();
+  // v3.11: fecha de nacimiento (la edad se calcula sola) y Remate Fit, solo con 18 cumplidos.
+  const s311 = sql311Ready();
+  const birth = s311 ? h('input', { type: 'date', min: '1930-01-01', max: todayStr(), value: p?.birth_date || '', 'aria-label': 'Fecha de nacimiento' }) : null;
+  const ageOut = h('span', { class: 'row-sub', 'aria-live': 'polite' });
+  const fitChk = s311 ? h('input', { type: 'checkbox', checked: p?.fit ? true : null }) : null;
+  const fitHint = h('span', { class: 'row-sub' });
+  const fitRow = s311 ? h('label', { class: 'check' }, fitChk, h('span', {}, h('strong', {}, 'Remate Fit'), ' (zona de adultos: gym de adultos y, pronto, nutrición)', h('br'), fitHint)) : null;
+  const paintAge = () => {
+    if (!birth) return;
+    const a = ageFrom(birth.value);
+    ageOut.textContent = a == null ? 'La edad se calcula sola. Solo la ven tú y el jugador.' : `${a} años. Solo la ven tú y el jugador.`;
+    const ok = a != null && a >= 18;
+    fitChk.disabled = !ok; if (!ok) fitChk.checked = false;
+    fitHint.textContent = ok ? 'Le aparece en su Inicio. Lo suyo es privado: tú lo ves solo si él lo comparte.' : 'Solo para mayores de 18 con su fecha de nacimiento.';
+  };
+  birth?.addEventListener('input', paintAge); paintAge();
   const num = (el) => (el.value === '' ? null : Number(el.value));
   return openSheet({
     title: self ? 'Mi perfil de jugador' : p ? 'Editar jugador' : 'Nuevo jugador',
@@ -38,6 +54,8 @@ export function playerFormSheet(p = null, { self = false, name: suggested = '', 
       h('div', { class: 'grid' }, field('Rama', branch), field('Posición', pos), field('Mano de ataque', hand)),
       extraBox ? field('También juega bien de (comodín)', extraBox, 'Opcional. Su radar se puede ver con cada posición; el nivel y el examen se deciden con la principal.') : null,
       h('div', { class: 'grid' }, field('Estatura (cm)', height), field('Número de playera', jersey), team ? field(teamsBox ? 'Equipo principal' : 'Equipo', team) : null),
+      birth ? h('div', { class: 'field' }, h('span', { class: 'label' }, 'Fecha de nacimiento'), birth, ageOut) : null,
+      fitRow,
       teamsBox ? field('También juega en', teamsBox, 'Opcional. Ve la convocatoria y sale en la lista de cada equipo que marques.') : null,
       self ? null : h('label', { class: 'check' }, consent, 'Ya tengo la autorización de su madre, padre o tutor')),
     actions: [{ label: 'Cancelar' }, { label: 'Guardar', kind: 'primary', onClick: () => {
@@ -48,6 +66,11 @@ export function playerFormSheet(p = null, { self = false, name: suggested = '', 
       if (j != null && (j < 0 || j > 99)) { toast('El número va de 0 a 99'); return false; }
       const data = { name: n, branch: branch.value || null, position: pos.value, hand: hand.value || null, height_cm: h_, jersey: j,
         consent_at: self || consent.checked ? (p?.consent_at || new Date().toISOString()) : null };
+      if (birth) {
+        if (birth.value && (birth.value < '1930-01-01' || birth.value > todayStr())) { toast('Revisa la fecha de nacimiento'); return false; }
+        data.birth_date = birth.value || null;
+        data.fit = !!fitChk.checked && (ageFrom(birth.value) ?? 0) >= 18;
+      }
       if (team) data.team = team.value;
       if (teamsBox) data.teams = teams().map((t) => t.id).filter((id) => moreTeams.has(id) && id !== team.value);
       if (extraBox) data.positions = POSITIONS.map((x) => x.id).filter((id) => extra.has(id) && id !== pos.value && id !== 'sin_definir');

@@ -10,6 +10,7 @@ import { sectionTitle, empty, note, longDate, field, options, STATUS_LABEL } fro
 import { sessionFormSheet, attendanceSheet, pickExerciseSheet, undoDone, calButton, sessionEvent } from './sheets-session.js';
 import { noticeSheet } from './avisos.js';
 import { openCourtMode } from './court-mode.js';
+import { azarButton } from './azar.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
 
@@ -30,6 +31,7 @@ export default function sesion(ctx) {
       s.status !== 'cancelada' ? h('button', { class: 'btn primary', type: 'button', onclick: () => attendanceSheet(s) }, ic('clipboard-check', 18), marks.length ? 'Editar lista' : 'Pasar lista') : null,
       s.status !== 'cancelada' && s.session_date === todayStr() ? h('a', { class: 'btn ball', href: `#/lista-qr/${s.id}` }, ic('qr-code', 18), 'Lista con QR') : null,
       plan.length && s.status !== 'cancelada' ? h('button', { class: 'btn', type: 'button', onclick: () => openCourtMode(s) }, ic('timer', 18), 'Modo cancha') : null,
+      s.status !== 'cancelada' ? azarButton(s.id) : null,
       plan.length ? h('button', { class: 'btn', type: 'button', onclick: () => window.print() }, ic('printer', 18), 'Imprimir plan') : null),
     h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: s.published ? true : null, onchange: (e) => { patch('sessions', s.id, { published: e.target.checked }); toast(e.target.checked ? 'Publicado: tus jugadores ya lo ven' : 'Oculto para los jugadores'); } }),
       'Visible para los jugadores (plan y horario)'),

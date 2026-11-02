@@ -22,6 +22,17 @@ export function ratingHistory(playerId, skill, ratings) {
 }
 export const hasRatings = (playerId, ratings) => ratings.some((r) => r.player_id === playerId);
 
+// ---------- edad (v3.11) ----------
+// Años cumplidos a partir de la fecha de nacimiento (AAAA-MM-DD); null si no hay fecha.
+export function ageFrom(birth, today = todayStr()) {
+  if (!birth || !/^\d{4}-\d{2}-\d{2}/.test(birth)) return null;
+  const [y, m, d] = birth.slice(0, 10).split('-').map(Number), [ty, tm, td] = today.split('-').map(Number);
+  return ty - y - (tm < m || (tm === m && td < d) ? 1 : 0);
+}
+export const isAdult = (p) => (ageFrom(p?.birth_date) ?? 0) >= 18;
+// Remate Fit: activado por el entrenador y con 18 cumplidos (la nube también lo revisa).
+export const fitOk = (p) => !!p?.fit && isAdult(p);
+
 // ---------- nivel ----------
 export const nextLevelN = (player) => Math.min(6, (player.level || 1) + 1);
 

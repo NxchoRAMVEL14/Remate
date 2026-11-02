@@ -5,7 +5,7 @@ import { state, settings, multiTeam, teamName, teamsOf } from '../store.js';
 import { badgesFor } from '../badges.js';
 import { PTESTS, testTrend } from '../content/gym.js';
 import { sectionTitle, radarSVG, radarViewPicker, posView } from './ui.js';
-import { radarValues, attendanceFor, xpFor, levelGap, positionsOf, isWildcard } from '../calc.js';
+import { radarValues, attendanceFor, xpFor, levelGap, positionsOf, isWildcard, ageFrom } from '../calc.js';
 import { POSITION_NAME, BRANCHES, HANDS } from '../content/skills.js';
 import { LEVELS } from '../content/levels.js';
 
@@ -43,7 +43,7 @@ export function playerCard(p, stats = playerStats(p)) {
   const rated = rv.values.some((v) => v > 0);
   const extra = positionsOf(p).slice(1).map((x) => POSITION_NAME[x]);
   const meta = [multiTeam() ? teamsOf(p).map(teamName).join(' y ') : null, POSITION_NAME[p.position] !== 'Sin definir' ? POSITION_NAME[p.position] : null, extra.length ? `Comodín: también ${extra.join(', ')}` : null,
-    p.branch ? BRANCHES[p.branch] : null, p.hand ? `Mano ${HANDS[p.hand].toLowerCase()}` : null, p.height_cm ? `${p.height_cm} cm` : null].filter(Boolean);
+    p.branch ? BRANCHES[p.branch] : null, p.hand ? `Mano ${HANDS[p.hand].toLowerCase()}` : null, p.height_cm ? `${p.height_cm} cm` : null, ageFrom(p.birth_date) != null ? `${ageFrom(p.birth_date)} años` : null].filter(Boolean);
   return h('section', { class: 'card-player', 'aria-label': `Tarjeta de ${p.name}` },
     h('div', { class: 'big', 'aria-hidden': 'true' }, p.jersey != null ? String(p.jersey) : initials(p.name)[0]),
     h('h2', {}, p.name),
