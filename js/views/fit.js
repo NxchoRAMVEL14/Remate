@@ -1,5 +1,5 @@
-// Remate Fit (v3.11): la zona de adultos dentro de Remate. Solo la ven mayores de 18 que el entrenador activa
-// (y el entrenador con su propio perfil de jugador). Gym de adultos, peso, medidas y pasos.
+// Remate Fit (v3.11, nutrición en v3.12): la zona de adultos dentro de Remate. Solo la ven mayores de 18 que el entrenador activa
+// (y el entrenador con su propio perfil de jugador). Gym de adultos, comida, peso, medidas y pasos.
 // Lo de cada adulto es suyo: el entrenador lo ve solo si ese adulto activa «Compartir con mi entrenador».
 import { h, ic, toast, confirmSheet, fmtDate, todayStr, addDays, plural } from '../util.js';
 import { lazyFig } from '../figura.js';
@@ -13,24 +13,25 @@ import { WARMUP, COOLDOWN } from '../content/gym.js';
 import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
 import { lineChart } from './chart.js';
 import { enterSelf } from './mas.js';
+import { foodTab, recipePage, foodSummary, foodShared } from './fit-comida.js';
 
 // ---------- datos ----------
-const profOf = (pid) => (state.data.fitProfiles || []).find((r) => r.player_id === pid) || null;
+export const profOf = (pid) => (state.data.fitProfiles || []).find((r) => r.player_id === pid) || null;
 const byDay = (a, b) => `${b.day}${b.created_at || ''}`.localeCompare(`${a.day}${a.created_at || ''}`);
 export const fitLogsOf = (pid, kind) => (state.data.fitLogs || []).filter((l) => l.player_id === pid && (!kind || l.kind === kind)).sort(byDay);
-function saveProf(pid, data, extra = {}) {
+export function saveProf(pid, data, extra = {}) {
   const r = profOf(pid);
   if (r) return patch('fitProfiles', r.id, { data: { ...(r.data || {}), ...data }, updated_at: new Date().toISOString(), ...extra });
   return add('fitProfiles', { player_id: pid, data: { ...data }, share: false, ...extra });
 }
 // Un registro por día para pasos y para peso/medidas: si ya hay, se completa.
-function upsertDay(pid, kind, day, data) {
+export function upsertDay(pid, kind, day, data) {
   const ex = fitLogsOf(pid, kind).find((l) => l.day === day);
   if (ex) return patch('fitLogs', ex.id, { data: { ...(ex.data || {}), ...data } });
   return add('fitLogs', { player_id: pid, kind, day, data });
 }
-const specOf = (pid) => normFit(profOf(pid)?.data);
-function vbOf(me, spec) {
+export const specOf = (pid) => normFit(profOf(pid)?.data);
+export function vbOf(me, spec) {
   const auto = vbFromRemate({ attendance: state.data.attendance || [], sessions: state.data.sessions || [], matchStats: state.data.matchStats || [], matches: state.data.matches || [],
     playerId: me.id, teamDays: (settings().days || []).length });
   return { auto, days: spec.vbAuto ? auto.days : spec.vbDays };
@@ -79,9 +80,11 @@ function exItem(ex, { rx = null, last, n } = {}) {
 }
 
 // ---------- pestañas ----------
-const TABS = [['hoy', 'Hoy'], ['rutina', 'Mi rutina'], ['progreso', 'Progreso'], ['ajustes', 'Perfil']];
+const TABS = [['hoy', 'Hoy'], ['rutina', 'Rutina'], ['comida', 'Comida'], ['progreso', 'Progreso'], ['ajustes', 'Perfil']];
+const FOOD = ['comida', 'recetas', 'super'];
+const tabKey = (a) => (FOOD.includes(a) ? 'comida' : TABS.some(([k]) => k === a) ? a : 'hoy');
 function tabsEl(ctx, base = '#/fit') {
-  const cur = TABS.some(([k]) => k === ctx.args[0]) ? ctx.args[0] : 'hoy';
+  const cur = tabKey(ctx.args[0]);
   return h('div', { class: 'tabs', role: 'tablist' }, TABS.map(([k, t]) => h('button', { type: 'button', role: 'tab', 'aria-selected': k === cur ? 'true' : 'false', onclick: () => { location.hash = k === 'hoy' ? base : `${base}/${k}`; } }, t)));
 }
 
@@ -94,9 +97,11 @@ export default function fit(ctx) {
   // Vista previa del entrenador (no es su propio perfil): solo si ese adulto comparte.
   if (ctx.readonly && !profOf(me.id)?.share) return { title: 'Remate Fit', back: '#/inicio', el: h('div', { class: 'page' }, note(`Remate Fit es privado de ${me.name}. Lo verías aquí solo si activa «Compartir con mi entrenador».`)) };
   if (ctx.args[0] === 'registrar') return logPage(ctx, me);
-  const tab = TABS.some(([k]) => k === ctx.args[0]) ? ctx.args[0] : 'hoy';
+  if (ctx.args[0] === 'receta') return recipePage(ctx, me, !ctx.readonly);
+  const tab = tabKey(ctx.args[0]);
   const canEdit = !ctx.readonly;
-  const body = tab === 'rutina' ? routineTab(ctx, me, canEdit) : tab === 'progreso' ? progressTab(ctx, me, canEdit) : tab === 'ajustes' ? profileTab(ctx, me, canEdit) : todayTab(ctx, me, canEdit);
+  // La comida necesita el perfil Fit (objetivo y días de gym): si no hay, primero eso.
+  const body = tab === 'comida' ? (profOf(me.id) ? foodTab(ctx, me, canEdit, ctx.args[0]) : todayTab(ctx, me, canEdit)) : tab === 'rutina' ? routineTab(ctx, me, canEdit) : tab === 'progreso' ? progressTab(ctx, me, canEdit) : tab === 'ajustes' ? profileTab(ctx, me, canEdit) : todayTab(ctx, me, canEdit);
   return { title: 'Remate Fit', sub: 'Zona de adultos', back: '#/inicio', el: h('div', { class: 'page fit' }, tabsEl(ctx), body) };
 }
 
@@ -140,15 +145,14 @@ function todayTab(ctx, me, canEdit) {
       h('div', { class: 'fit-quick' }, h('label', { class: 'field' }, h('span', { class: 'label' }, 'Peso en ayunas (kg)'), kgIn), h('button', { type: 'button', class: 'btn', onclick: saveKg }, 'Guardar')),
       h('p', { class: 'row-sub', style: { margin: 0 } }, 'Los pasos los ves en tu reloj o en la app de salud de tu celular. El peso: por la mañana, después del baño y antes de desayunar.')) : null,
     state.role === 'coach' ? null : note(prof?.share ? 'Compartes tu Remate Fit con tu entrenador: ve tu rutina y tu progreso. Lo cambias en «Perfil».' : 'Tu Remate Fit es privado: tu entrenador no lo ve. Si quieres que te ayude, actívalo en «Perfil».'),
-    h('section', { class: 'panel stack' }, h('div', { class: 'split' }, h('h3', {}, 'Nutrición y recetas'), h('span', { class: 'chip info' }, 'Próximamente')),
-      h('p', { style: { margin: 0 } }, 'En la siguiente versión: tus calorías y macros, porciones del Sistema Mexicano de Equivalentes, recetas mexicanas y registro de comidas.')));
+    foodSummary(me, canEdit));
 }
 const kpi = (label, value, kind) => h('div', { class: `kpi ${kind || ''}` }, h('span', { class: 'n' }, value), h('span', { class: 'l' }, label));
 
 function firstTime(ctx, me) {
   return h('div', { class: 'stack' },
     h('section', { class: 'panel stack' }, h('h2', {}, `¡Bienvenido a Remate Fit, ${me.name.split(' ')[0]}!`),
-      h('p', { style: { margin: 0 } }, 'Tu zona de adultos: rutina de gym a tu medida que se ajusta a tu voleibol, tus cargas, tu peso, tus medidas y tus pasos. Pronto, nutrición y recetas.'),
+      h('p', { style: { margin: 0 } }, 'Tu zona de adultos: rutina de gym a tu medida que se ajusta a tu voleibol, plan de comida con recetas mexicanas, tus cargas, tu peso, tus medidas y tus pasos.'),
       h('p', { style: { margin: 0 } }, 'Primero dinos tu objetivo, tu experiencia y dónde entrenas.')),
     profileForm(me, normFit({}), (data) => { saveProf(me.id, { ...data, since: todayStr() }); toast('Listo: ya tienes tu rutina'); location.hash = '#/fit/rutina'; }, 'Armar mi rutina'),
     privacyNote());
@@ -385,7 +389,7 @@ function profileTab(ctx, me, canEdit) {
       h('p', { style: { margin: 0 } }, spec.since ? `Empezaste el ${longDay(spec.since)}. La semana 6 de cada bloque es de descarga.` : 'Todavía no empiezas un bloque.'),
       h('button', { type: 'button', class: 'btn', onclick: () => { saveProf(me.id, { since: todayStr() }); toast('Bloque nuevo desde hoy'); } }, ic('refresh-cw', 18), 'Empezar un bloque nuevo hoy')),
     isCoach ? null : h('section', { class: 'panel stack' }, h('h3', {}, 'Privacidad'),
-      h('label', { class: 'check' }, share, h('span', {}, h('strong', {}, 'Compartir con mi entrenador'), h('br'), h('span', { class: 'row-sub' }, 'Ve tu rutina, tus sesiones, tu peso, tus medidas y tus pasos. No puede cambiar nada. Lo apagas cuando quieras.'))),
+      h('label', { class: 'check' }, share, h('span', {}, h('strong', {}, 'Compartir con mi entrenador'), h('br'), h('span', { class: 'row-sub' }, 'Ve tu rutina, tus sesiones, tu plan de comida y un resumen de lo que registras, tu peso, tus medidas y tus pasos. No puede cambiar nada. Lo apagas cuando quieras.'))),
       privacyNote()),
     sourcesPanel());
 }
@@ -400,16 +404,16 @@ function coachView(ctx) {
   const adults = all.filter((p) => isAdult(p) && !p.fit && p.id !== me?.id);
   const noDate = all.filter((p) => !p.birth_date && p.id !== me?.id).length;
   const toggle = async (p, on) => {
-    if (on && !(await confirmSheet({ title: `¿Activar Remate Fit para ${p.name}?`, text: `${p.name} tiene ${ageFrom(p.birth_date)} años. Le aparece en su Inicio: gym de adultos, peso, medidas y pasos. Lo que registre es suyo; tú lo ves solo si lo comparte.`, ok: 'Activar' }))) return;
+    if (on && !(await confirmSheet({ title: `¿Activar Remate Fit para ${p.name}?`, text: `${p.name} tiene ${ageFrom(p.birth_date)} años. Le aparece en su Inicio: gym de adultos, comida y recetas, peso, medidas y pasos. Lo que registre es suyo; tú lo ves solo si lo comparte.`, ok: 'Activar' }))) return;
     patch('players', p.id, { fit: on }); toast(on ? `Remate Fit activado para ${p.name}` : `Remate Fit desactivado para ${p.name}`);
   };
   const mine = me && fitOk(me)
     ? h('a', { class: 'labcard', href: '#/fit', onclick: (e) => { e.preventDefault(); enterSelf(me.id); setTimeout(() => { location.hash = '#/fit'; }, 0); } },
-      h('span', { class: 'lc-ic' }, ic('dumbbell', 26)), h('span', { class: 'lc-t' }, h('strong', {}, 'Mi Remate Fit'), h('span', {}, 'Entra con tu perfil de jugador: tu rutina, tus cargas, tu peso y tus pasos.')), ic('chevron-right', 20))
+      h('span', { class: 'lc-ic' }, ic('dumbbell', 26)), h('span', { class: 'lc-t' }, h('strong', {}, 'Mi Remate Fit'), h('span', {}, 'Entra con tu perfil de jugador: tu rutina, tu comida, tus cargas, tu peso y tus pasos.')), ic('chevron-right', 20))
     : note(me ? 'Para usar Remate Fit tú: en Más → Mi perfil de jugador → Editar mis datos, pon tu fecha de nacimiento y activa «Remate Fit».' : 'Para usar Remate Fit tú: crea tu perfil de jugador (Más → Mi perfil de jugador) con tu fecha de nacimiento y activa «Remate Fit».');
   return { title: 'Remate Fit', sub: 'Zona de adultos', back: '#/mas', el: h('div', { class: 'page fit' },
     !s311 ? note('Para usar Remate Fit corre el SQL de la versión 3.11 en Supabase (el último bloque de sql/instalar.sql).', 'warn') : null,
-    h('p', { style: { margin: 0 } }, 'Gym de adultos, peso, medidas y pasos; pronto, nutrición y recetas. Solo para mayores de 18 que tú actives. Lo de cada adulto es suyo: lo ves solo si te lo comparte.'),
+    h('p', { style: { margin: 0 } }, 'Gym de adultos, comida y recetas, peso, medidas y pasos. Solo para mayores de 18 que tú actives. Lo de cada adulto es suyo: lo ves solo si te lo comparte.'),
     mine,
     sectionTitle('Adultos con Remate Fit'),
     active.length ? h('div', { class: 'rows' }, active.map((p) => {
@@ -434,6 +438,7 @@ function sharedView(ctx) {
     h('section', { class: 'panel stack' }, h('div', { class: 'split' }, h('h3', {}, FIT_GOALS[spec.goal].name), h('span', { class: 'chip' }, `${ageFrom(p.birth_date)} años`)),
       h('p', { class: 'row-sub', style: { margin: 0 } }, [splitName(spec.days), `${spec.minutes} min`, FIT_EXP[spec.exp].name, PLACES[spec.place].name, `${vb.days} días de voleibol`].join(' · ')),
       h('ul', { class: 'plain' }, r.days.map((d) => h('li', {}, `Día ${d.key}, ${d.name}: ${d.items.map((x) => fitName(x.ex)).join(', ')}`)))),
+    foodShared(p),
     note('Solo lectura: no puedes cambiar su rutina ni sus registros.'),
     progressTab(ctx, p, false)) };
 }
@@ -442,7 +447,7 @@ function sharedView(ctx) {
 export function fitCard(me, ctx) {
   if (!me || !fitOk(me) || !sql311Ready() || (ctx?.readonly && !profOf(me.id)?.share)) return null;
   const has = !!profOf(me.id);
-  let line = 'Gym de adultos, peso, medidas y pasos.';
+  let line = 'Gym de adultos, comida, peso, medidas y pasos.';
   if (has) { const { r } = routineOf(me); const d = nextKey(me.id, r); line = `Siguiente: día ${d.key}, ${d.name} (≈ ${d.min} min).`; }
   return h('a', { class: 'labcard fit-card', href: '#/fit' }, h('span', { class: 'lc-ic' }, ic('dumbbell', 26)),
     h('span', { class: 'lc-t' }, h('strong', {}, 'Remate Fit'), h('span', {}, has ? line : 'Tu zona de adultos: arma tu rutina en 1 minuto.')), ic('chevron-right', 20));

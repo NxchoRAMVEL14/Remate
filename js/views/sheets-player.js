@@ -35,7 +35,7 @@ export function playerFormSheet(p = null, { self = false, name: suggested = '', 
   const ageOut = h('span', { class: 'row-sub', 'aria-live': 'polite' });
   const fitChk = s311 ? h('input', { type: 'checkbox', checked: p?.fit ? true : null }) : null;
   const fitHint = h('span', { class: 'row-sub' });
-  const fitRow = s311 ? h('label', { class: 'check' }, fitChk, h('span', {}, h('strong', {}, 'Remate Fit'), ' (zona de adultos: gym de adultos y, pronto, nutrición)', h('br'), fitHint)) : null;
+  const fitRow = s311 ? h('label', { class: 'check' }, fitChk, h('span', {}, h('strong', {}, 'Remate Fit'), ' (zona de adultos: gym, comida y recetas)', h('br'), fitHint)) : null;
   const paintAge = () => {
     if (!birth) return;
     const a = ageFrom(birth.value);

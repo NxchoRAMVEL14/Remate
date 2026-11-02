@@ -9,6 +9,7 @@ import { weekStart } from './lab-calc.js';
 import { SCENARIOS } from './content/vision.js';
 import { buildRoutine, GYM_BY_ID, lowReps, topReps } from './content/gym.js';
 import { buildFit, FIT_BY_ID } from './content/fit.js';
+import { targets, dailyEq, mealPlan } from './content/nutricion.js';
 
 function rng(seed) { // generador determinista, para que el demo siempre se vea igual
   let a = seed >>> 0;
@@ -350,7 +351,8 @@ function makeDemoFit(players, today) {
     p.fit = p.id === 'demo-p2';
   });
   const pid = 'demo-p2', since = addDays(today, -26);
-  const data = { goal: 'fuerza', exp: 'medio', days: 3, minutes: 60, place: 'completo', vbAuto: true, vbDays: 2, stepsGoal: 9000, since };
+  const data = { goal: 'fuerza', exp: 'medio', days: 3, minutes: 60, place: 'completo', vbAuto: true, vbDays: 2, stepsGoal: 9000, since,
+    nutri: true, sex: 'M', cm: 181, meals: 4, occupation: 'sentado', diet: { veg: false, noDairy: false, noGluten: false }, picks: { 'bowl-pollo': 4, 'huevos-mexicana': 3, 'lentejas': 4, 'licuado-recuperacion': 3 } };
   const fitProfiles = [{ id: 'demo-fp1', owner_id: 'demo', player_id: pid, data, share: true, created_at: since, updated_at: since }];
   const fitLogs = [];
   const r = buildFit(data, 2);
@@ -371,6 +373,14 @@ function makeDemoFit(players, today) {
     const date = addDays(today, d);
     if (d % 3 !== 1) fitLogs.push({ id: `demo-fb-${d}`, owner_id: 'demo', player_id: pid, kind: 'body', day: date, data: { kg: Math.round((78.4 + d * 0.035 + ((d * 7) % 5) * 0.12) * 10) / 10, ...(d === -27 ? { cintura: 82.5, cadera: 96, brazo: 33.5, muslo: 56 } : d === -1 ? { cintura: 81.5, cadera: 95.5, brazo: 34, muslo: 56.5 } : {}) }, created_at: new Date(Date.now() + d * 864e5).toISOString() });
     if (d > -14) fitLogs.push({ id: `demo-fs-${d}`, owner_id: 'demo', player_id: pid, kind: 'steps', day: date, data: { n: 6500 + ((d * 1373) % 4800 + 4800) % 4800 }, created_at: new Date(Date.now() + d * 864e5).toISOString() });
+  }
+  // Comidas de los últimos 10 días: casi todo el plan palomeado; algunos días con una receta o un alimento extra.
+  const plan = mealPlan(dailyEq(targets({ sex: 'M', kg: 78, cm: 181, age: 19, goal: 'fuerza', sessions: 5, occupation: 'sentado' })), 4);
+  for (let d = -9; d <= 0; d++) {
+    const checks = {};
+    plan.forEach((m, i) => { if (d === 0 && i > 1) return; if (d === -4 && m.key === 'cen') return; checks[m.key] = { ...m.g }; if (d % 3 === 0 && m.key === 'com') { const g = Object.keys(m.g).find((x) => x === 'cer'); if (g) checks[m.key][g] = Math.max(0, m.g[g] - 1); } });
+    const extra = d === -4 ? [{ t: 'r', id: 'tinga-pollo', n: 1, meal: 'cen' }] : d === -2 ? [{ t: 'f', g: 'fru', name: 'Plátano', n: 2, meal: 'col1' }] : [];
+    fitLogs.push({ id: `demo-fm-${d}`, owner_id: 'demo', player_id: pid, kind: 'meal', day: addDays(today, d), data: { checks, extra }, created_at: new Date(Date.now() + d * 864e5).toISOString() });
   }
   return { fitProfiles, fitLogs };
 }
