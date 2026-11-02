@@ -1619,3 +1619,125 @@ create table if not exists public.reminders_sent (
 );
 alter table public.reminders_sent enable row level security;
 revoke all on public.reminders_sent from anon, authenticated;
+
+-- =====================================================================
+-- REMATE · v3.11: fecha de nacimiento y Remate Fit (zona de adultos: gym, registros y, en la 3.12, nutrición)
+-- Solo entran mayores de 18 que el entrenador activa. Lo de cada adulto es suyo: el entrenador lo ve solo si
+-- ese adulto activa «Compartir con mi entrenador» (o si es el propio perfil de jugador del entrenador).
+-- =====================================================================
+alter table public.players add column if not exists birth_date date;
+alter table public.players add column if not exists fit boolean not null default false;
+do $$ begin
+  alter table public.players add constraint players_birth_date_ok check (birth_date is null or birth_date >= date '1930-01-01');
+exception when duplicate_object then null; end $$;
+
+-- Edad cumplida en años (null si no hay fecha).
+create or replace function public.age_years(d date) returns int
+language sql stable as $$ select case when d is null then null else extract(year from age(current_date, d))::int end $$;
+
+-- Remate Fit solo con fecha de nacimiento y 18 años cumplidos. Si cambian la fecha y ya no cumple, se apaga solo.
+create or replace function public.players_fit_guard() returns trigger
+language plpgsql as $$
+begin
+  if new.fit and (new.birth_date is null or public.age_years(new.birth_date) < 18) then
+    if tg_op = 'UPDATE' and old.fit and new.birth_date is distinct from old.birth_date then
+      new.fit := false;
+    else
+      raise exception 'Remate Fit es solo para mayores de 18 años con su fecha de nacimiento' using errcode = '23514';
+    end if;
+  end if;
+  return new;
+end $$;
+drop trigger if exists players_fit_guard on public.players;
+create trigger players_fit_guard before insert or update of fit, birth_date on public.players
+  for each row execute function public.players_fit_guard();
+
+-- ¿Este jugador puede usar Remate Fit hoy?
+create or replace function public.fit_ok(p uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.players where id = p and active and fit
+                 and birth_date is not null and public.age_years(birth_date) >= 18);
+$$;
+-- El perfil de jugador del propio entrenador (Ajustes → Mi perfil de jugador).
+create or replace function public.coach_self_players() returns setof uuid
+language sql stable security definer set search_path = public as $$
+  select (g.settings->>'me_player')::uuid from public.groups g
+   where g.owner_id = auth.uid() and public.is_coach()
+     and coalesce(g.settings->>'me_player', '') ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$';
+$$;
+
+-- ---------- Perfil Fit (objetivo, experiencia, días, equipo, voleibol, compartir) ----------
+create table if not exists public.fit_profiles (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,   -- siempre el entrenador
+  player_id uuid not null unique references public.players(id) on delete cascade,
+  data jsonb not null default '{}'::jsonb check (jsonb_typeof(data) = 'object' and octet_length(data::text) <= 8000),
+  share boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+-- ---------- Registros Fit: gym, peso y medidas, pasos (y en la 3.12, comidas) ----------
+create table if not exists public.fit_logs (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  player_id uuid not null references public.players(id) on delete cascade,
+  kind text not null check (kind in ('gym', 'body', 'steps', 'meal')),
+  day date not null default current_date,
+  data jsonb not null default '{}'::jsonb check (jsonb_typeof(data) = 'object' and octet_length(data::text) <= 8000),
+  created_at timestamptz not null default now()
+);
+create index if not exists fit_logs_player_idx on public.fit_logs (player_id, kind, day desc);
+
+-- ¿Este adulto comparte su Remate Fit con su entrenador?
+create or replace function public.fit_shared(p uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select share from public.fit_profiles where player_id = p), false);
+$$;
+
+-- El dueño siempre es el entrenador del jugador.
+create or replace function public.fit_set_owner() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  select owner_id into new.owner_id from public.players where id = new.player_id;
+  if new.owner_id is null then raise exception 'Jugador no encontrado'; end if;
+  if tg_table_name = 'fit_profiles' then new.updated_at := now(); end if;
+  return new;
+end $$;
+drop trigger if exists fit_profiles_owner on public.fit_profiles;
+create trigger fit_profiles_owner before insert or update on public.fit_profiles for each row execute function public.fit_set_owner();
+drop trigger if exists fit_logs_owner on public.fit_logs;
+create trigger fit_logs_owner before insert or update on public.fit_logs for each row execute function public.fit_set_owner();
+
+alter table public.fit_profiles enable row level security;
+alter table public.fit_logs enable row level security;
+
+-- Adulto: todo lo suyo, mientras tenga Remate Fit activo.
+drop policy if exists fit_profiles_self on public.fit_profiles;
+create policy fit_profiles_self on public.fit_profiles for all to authenticated
+  using (player_id in (select public.my_player_ids()) and public.fit_ok(player_id))
+  with check (player_id in (select public.my_player_ids()) and public.fit_ok(player_id));
+drop policy if exists fit_logs_self on public.fit_logs;
+create policy fit_logs_self on public.fit_logs for all to authenticated
+  using (player_id in (select public.my_player_ids()) and public.fit_ok(player_id))
+  with check (player_id in (select public.my_player_ids()) and public.fit_ok(player_id) and day between current_date - 400 and current_date + 1);
+
+-- Entrenador: lo suyo (su propio perfil de jugador) completo; lo de otro adulto, solo leer y solo si lo comparte.
+drop policy if exists fit_profiles_coach_self on public.fit_profiles;
+create policy fit_profiles_coach_self on public.fit_profiles for all to authenticated
+  using (owner_id = auth.uid() and player_id in (select public.coach_self_players()) and public.fit_ok(player_id))
+  with check (player_id in (select public.coach_self_players()) and public.fit_ok(player_id));
+drop policy if exists fit_profiles_coach_shared on public.fit_profiles;
+create policy fit_profiles_coach_shared on public.fit_profiles for select to authenticated
+  using (owner_id = auth.uid() and public.is_coach() and share);
+drop policy if exists fit_logs_coach_self on public.fit_logs;
+create policy fit_logs_coach_self on public.fit_logs for all to authenticated
+  using (owner_id = auth.uid() and player_id in (select public.coach_self_players()) and public.fit_ok(player_id))
+  with check (player_id in (select public.coach_self_players()) and public.fit_ok(player_id) and day between current_date - 400 and current_date + 1);
+drop policy if exists fit_logs_coach_shared on public.fit_logs;
+create policy fit_logs_coach_shared on public.fit_logs for select to authenticated
+  using (owner_id = auth.uid() and public.is_coach() and public.fit_shared(player_id));
+
+revoke all on public.fit_profiles, public.fit_logs from anon;
+grant select, insert, update, delete on public.fit_profiles, public.fit_logs to authenticated;
+revoke all on function public.fit_ok(uuid), public.fit_shared(uuid), public.coach_self_players() from public, anon;
+grant execute on function public.fit_ok(uuid), public.fit_shared(uuid), public.coach_self_players() to authenticated;
