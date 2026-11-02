@@ -814,3 +814,26 @@ button.br-team { cursor: pointer; }
 .fit-steps span.ok i { opacity: 1; background: var(--ok); }
 .fit-steps b { font-weight: 400; font-size: .7rem; color: var(--ink-2); }
 .fit-card .lc-ic { background: var(--ok); }
+
+/* ---------- Remate Fit · Comida (v3.12) ---------- */
+.fit-sub { width: 100%; }
+.fit-sub button { flex: 1; }
+.fit-macro { grid-template-columns: 6.5rem 1fr auto; }
+.fit-macro strong { font-size: .85rem; min-width: 6.5rem; }
+.fit-meal .row { align-items: center; }
+.fit-portion.done strong { color: var(--ok); }
+.fit-step { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.fit-step b { min-width: 2.2rem; text-align: center; font-variant-numeric: tabular-nums; }
+.fit-step .iconbtn:disabled { opacity: .35; }
+.fit-foods { columns: 1; font-size: .92rem; margin: 4px 0 10px; }
+.fit-supp { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
+.fit-supp h4, .fit-shop h4 { margin: 0; }
+.fit-warn li::before { content: '⚠️ '; }
+.chipbtn { border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: 999px; padding: 6px 12px; min-height: 36px; font-weight: 700; font-size: .85rem; cursor: pointer; }
+.chipbtn[aria-pressed="true"] { background: var(--court); border-color: var(--court); color: #fff; }
+.fit-shop { gap: 6px; }
+.fit-shop-item.done strong { text-decoration: line-through; color: var(--ink-2); }
+.fit .tabs button { flex: 1; padding: 10px 6px; }
+a.fit-link { text-decoration: none; color: inherit; }
+.fit-shop-item { display: flex; align-items: center; gap: 10px; min-height: 40px; }
+.fit-shop-item input { flex: none; width: 22px; height: 22px; margin: 0; }
