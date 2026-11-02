@@ -577,6 +577,10 @@ button.br-team { cursor: pointer; }
 .md-video { display: none; width: 100%; max-height: 58vh; object-fit: contain; transition: transform .15s ease; cursor: zoom-in; }
 .md-stage.has .md-video { display: block; }
 .md-stage.has .md-empty { display: none; }
+.md-stage.picking .md-video { cursor: crosshair; outline: 3px dashed var(--ball); outline-offset: -3px; }
+.md-stage.picking::after { content: 'Toca sus pies'; position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: var(--ball); color: var(--ball-on); font-weight: 700; padding: 4px 12px; border-radius: 999px; pointer-events: none; }
+.md-fig { margin: 0; display: grid; gap: 4px; }
+.md-curve { width: 100%; max-width: 420px; height: 56px; background: var(--surface); border-radius: var(--r-s); }
 .md-empty { display: grid; justify-items: center; gap: 8px; color: rgba(255,255,255,.75); padding: 30px 16px; text-align: center; }
 .md-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .md-frame { font-variant-numeric: tabular-nums; font-weight: 700; font-size: .9rem; color: var(--ink-2); }
@@ -625,3 +629,9 @@ button.br-team { cursor: pointer; }
 .cal-part:first-of-type { border-top: 0; }
 .cal-pick { padding-left: 30px; }
 .cal-preview li { font-size: .92rem; }
+/* v3.8: reto del equipo */
+.reto-bar { height: 12px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.reto-bar > span { display: block; height: 100%; background: var(--link); border-radius: 999px; transition: width .3s ease; }
+.reto-bar > span.ok { background: var(--ok); }
+/* v3.8: aviso de iPhone en Safari, separado de lo que sigue */
+.main > .safari-note { max-width: 920px; margin: 0 auto 16px; display: grid; gap: 8px; }

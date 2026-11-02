@@ -48,6 +48,7 @@
 .band h2 { color: #fff; }
 .note { background: var(--info-bg); color: var(--ink); border-radius: var(--r-m); padding: 10px 14px; font-size: .94rem; }
 .note.warn { background: var(--warn-bg); }
+.note.ok { background: var(--ok-bg); }
 .note.bad { background: var(--bad-bg); }
 .empty { text-align: center; padding: 28px 16px; color: var(--ink-2); display: grid; gap: 10px; justify-items: center; }
 .empty h3 { color: var(--ink); }
@@ -207,3 +208,7 @@ dialog.sheet::backdrop { background: rgba(8, 20, 38, .55); }
   .main { padding: 0; }
   .panel, .rows { border: 1px solid #999; break-inside: avoid; }
 }
+/* v3.8: mientras carga el archivo de una pantalla nueva, una barrita arriba. */
+body.view-loading::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 100; background: linear-gradient(90deg, transparent, var(--ball), transparent); background-size: 50% 100%; animation: view-load 0.9s linear infinite; }
+@keyframes view-load { from { background-position: -50% 0; } to { background-position: 150% 0; } }
+@media (prefers-reduced-motion: reduce) { body.view-loading::before { animation: none; background: var(--ball); opacity: .6; } }
