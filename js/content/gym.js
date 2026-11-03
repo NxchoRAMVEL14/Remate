@@ -733,7 +733,40 @@ export function buildRoutine(raw) {
   if (spec.goal === 'regreso') notes.push('Si vienes de una lesión, solo con el alta de tu médico o fisioterapeuta. Haz esta rutina 2 o 3 semanas y luego arma una con tu objetivo.');
   if (spec.phase === 'torneo') notes.push('Semana de partido: haz la sesión 3 días o más antes del partido. Nada de pierna pesada ni saltos en las 48 horas antes.');
   if (spec.equip === 'mancuernas' && (spec.goal === 'salto' || spec.goal === 'fuerza')) notes.push('Sin barra, la sentadilla goblet y la búlgara hacen el trabajo: cuando el peso más alto te quede ligero, haz la bajada en 3 segundos.');
+  // v3.13: rutina personalizada (días y ejercicios que el jugador o su entrenador editó a mano).
+  if (Array.isArray(spec.custom) && spec.custom.length) {
+    const cd = customGymDays(spec.custom);
+    if (cd.length) return { spec, n: cd.length, days: cd, notes: ['Rutina personalizada: los días y ejercicios los elegiste tú. Con «Volver a la de Remate» regresas a la automática.', ...notes.filter((x) => /lesión|partido|técnica/.test(x))], custom: true };
+  }
   return { spec, n, days, notes };
+}
+
+// ---------- rutina personalizada (v3.13) ----------
+// custom: [{ name, items: [{ ex, role, sets, reps, rir, rest }] }] → días con letra, minutos y solo ejercicios que existen.
+const cleanRx = (rx, byId) => {
+  const ex = byId[rx?.ex]; if (!ex) return null;
+  const sets = Math.min(10, Math.max(1, Math.round(Number(rx.sets) || 3)));
+  const reps = String(rx.reps ?? '').trim().slice(0, 12) || '10';
+  const rest = Math.min(600, Math.max(0, Math.round(Number(rx.rest) || 60)));
+  const rir = rx.rir === null || rx.rir === '' || rx.rir === undefined ? null : Math.min(5, Math.max(0, Math.round(Number(rx.rir))));
+  return { ex: ex.id, role: rx.role || 'acc', sets, reps, rir: Number.isNaN(rir) ? null : rir, rest };
+};
+export const cleanCustom = (custom, byId) => (Array.isArray(custom) ? custom : []).slice(0, 7)
+  .map((d, i) => ({ name: String(d?.name || `Día ${LETTERS[i]}`).trim().slice(0, 40), items: (d?.items || []).map((rx) => cleanRx(rx, byId)).filter(Boolean).slice(0, 16) }))
+  .filter((d) => d.items.length);
+export function customGymDays(custom) {
+  return cleanCustom(custom, GYM_BY_ID).map((d, i) => ({ key: LETTERS[i], name: d.name, focus: 'Personalizado', items: d.items, min: dayMinutes(d.items), light: false, custom: true }));
+}
+// Papel y dosis de un ejercicio que se agrega a mano.
+export function gymRole(ex) {
+  if (['salto', 'lanzamiento', 'lateral'].includes(ex.pat)) return 'pow';
+  if (ex.pat === 'tronco') return 'core';
+  if (['aterrizaje', 'pantorrilla', 'aductor', 'hombro'].includes(ex.pat)) return 'prev';
+  return ex.need === 'barra' || ex.pat === 'rodilla' || ex.pat === 'cadera' ? 'main' : 'acc';
+}
+export function gymDefaultRx(exId, raw) {
+  const spec = normSpec(raw), ex = GYM_BY_ID[exId]; if (!ex) return null;
+  return prescribe(ex, gymRole(ex), spec.goal === 'regreso' ? 'nuevo' : spec.exp, spec.phase);
 }
 
 // ---------- semana: qué días ir al gym ----------

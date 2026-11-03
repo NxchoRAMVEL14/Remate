@@ -8,6 +8,7 @@ import { sugeridoButton } from './sugerido.js';
 import { coachLogSheet } from './lab-coaching.js';
 import { torneoById } from './torneos.js';
 import { calButton, matchEvent } from './sheets-session.js';
+import { matchTime } from '../horarios.js';
 
 const k = (n, l) => h('div', { class: 'kpi' }, h('span', { class: 'n' }, n), h('span', { class: 'l' }, l));
 const pctTxt = (x) => (x == null ? '—' : `${x}%`);
@@ -131,7 +132,7 @@ export function rsvpSection(m) {
   const answered = new Set(c.list.map((r) => r.player_id));
   const missing = all.filter((p) => !answered.has(p.id));
   const coach = state.role === 'coach';
-  const waText = `Convocatoria: partido contra ${m.rival}, ${fmtDate(m.match_date, { weekday: 'long', day: 'numeric', month: 'long' })}${m.venue ? `, en ${m.venue}` : ''}. Contesta en Remate (Partidos) si vas. ${missing.length ? `Faltan ${missing.length} por contestar.` : ''}`;
+  const waText = `Convocatoria: partido contra ${m.rival}, ${fmtDate(m.match_date, { weekday: 'long', day: 'numeric', month: 'long' })}${matchTime(m) ? `, ${matchTime(m)}` : ''}${m.venue ? `, en ${m.venue}` : ''}. Contesta en Remate (Partidos) si vas. ${missing.length ? `Faltan ${missing.length} por contestar.` : ''}`;
   return h('section', { class: 'stack' }, sectionTitle('Convocatoria'),
     h('div', { class: 'cluster' }, Object.entries(RSVP).map(([kk, [t, tone]]) => h('span', { class: `chip ${tone}` }, `${t}: ${c[kk]}`)), h('span', { class: 'chip' }, `Sin respuesta: ${missing.length}`)),
     h('div', { class: 'rows' },
@@ -209,7 +210,7 @@ export function playerMatchView(m, ctx) {
   return h('div', { class: 'page' },
     h('section', { class: 'panel stack' },
       h('div', { class: 'split' }, h('h2', {}, m.status === 'terminado' ? `${r.win ? 'Ganamos' : 'Perdimos'} ${r.text}` : upcoming ? 'Próximo partido' : `Sets ${r.text}`)),
-      h('p', { style: { margin: 0 } }, `${fmtDate(m.match_date, { weekday: 'long', day: 'numeric', month: 'long' })}${m.venue ? `, ${m.venue}` : ''}`),
+      h('p', { style: { margin: 0 } }, `${fmtDate(m.match_date, { weekday: 'long', day: 'numeric', month: 'long' })}${matchTime(m) ? `, ${matchTime(m)}` : ''}${m.venue ? `, ${m.venue}` : ''}`),
       (m.sets || []).length ? h('div', { class: 'cluster' }, m.sets.map((s, i) => h('span', { class: `chip ${s.us > s.them ? 'ok' : s.them > s.us ? 'bad' : ''}` }, `Set ${i + 1}: ${s.us}-${s.them}`))) : null,
       m.note ? h('p', { style: { margin: 0 } }, m.note) : null,
       upcoming && !ctx.readonly ? h('div', { class: 'cluster' }, calButton({ name: 'partido', events: [matchEvent(m)] })) : null),

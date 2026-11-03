@@ -4,6 +4,7 @@ import { retoCard, syncReto } from './reto.js';
 import { spikes } from './carga.js';
 import { unseenVideos } from './tecnica.js';
 import { azarButton } from './azar.js';
+import { matchTime } from '../horarios.js';
 import { state, players, sessions, pendingClaims, getPlayer, settings, resolveClaim, teamReady, torneosReady } from '../store.js';
 import { levelGap, attendanceFor, nextSession, planMinutes, focusOf, levelCounts, hasRatings, doneSessions } from '../calc.js';
 import { SKILL_BY_ID } from '../content/skills.js';
@@ -74,12 +75,12 @@ export default function hoy() {
   }
 
   // ---- próximo partido y convocatoria ----
-  const nextMatch = state.data.matches.filter((m) => m.status !== 'terminado' && m.match_date >= todayStr()).sort((a, b) => a.match_date.localeCompare(b.match_date))[0];
+  const nextMatch = state.data.matches.filter((m) => m.status !== 'terminado' && m.match_date >= todayStr()).sort((a, b) => `${a.match_date}${a.start_time || '99'}`.localeCompare(`${b.match_date}${b.start_time || '99'}`))[0];
   if (nextMatch) {
     const c = rsvpCounts(nextMatch);
     el.append(h('a', { class: 'panel', href: `#/partido/${nextMatch.id}`, style: { textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '12px' } },
       ic('volleyball', 26), h('span', { class: 'row-main' }, h('strong', {}, `Próximo partido: contra ${nextMatch.rival}`),
-        h('span', { class: 'row-sub' }, `${fmtDate(nextMatch.match_date, { weekday: 'long', day: 'numeric', month: 'short' })} · convocatoria: van ${c.voy}, en duda ${c.duda}, no van ${c.no}, sin respuesta ${Math.max(0, list.length - c.list.length)}`)),
+        h('span', { class: 'row-sub' }, `${fmtDate(nextMatch.match_date, { weekday: 'long', day: 'numeric', month: 'short' })}${matchTime(nextMatch) ? `, ${matchTime(nextMatch)}` : ''} · convocatoria: van ${c.voy}, en duda ${c.duda}, no van ${c.no}, sin respuesta ${Math.max(0, list.length - c.list.length)}`)),
       ic('chevron-right', 18)));
   }
 

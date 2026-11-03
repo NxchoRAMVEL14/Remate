@@ -8,7 +8,9 @@ import { state, add, patch, remove, players, settings, sql311Ready, ls, myPlayer
 import { fitOk, isAdult, ageFrom } from '../calc.js';
 import { num } from '../lab-calc.js';
 import { FIT_BY_ID, fitName, PLACES, FIT_GOALS, FIT_EXP, FIT_MINUTES, normFit, buildFit, nextFitStep, fitWeek, weeklyAverages, weeklyRate, rateText,
-  MEASURES, MEASURE_TIPS, STEP_NOTE, vbFromRemate, FIT_SOURCES, MUSCLES, VOLUME_TARGET, ROLE, NEED, TIER, splitName } from '../content/fit.js';
+  MEASURES, MEASURE_TIPS, STEP_NOTE, vbFromRemate, FIT_SOURCES, MUSCLES, VOLUME_TARGET, ROLE, NEED, TIER, splitName, ALL_EX, fitDefaultRx, cleanFitCustom } from '../content/fit.js';
+import { editorPage, pickExercise } from './rutina-editor.js';
+const FIT_LIB = { list: ALL_EX, byId: FIT_BY_ID };
 import { WARMUP, COOLDOWN } from '../content/gym.js';
 import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
 import { lineChart } from './chart.js';
@@ -46,7 +48,8 @@ function lastFor(pid, exId, skipId) {
   for (const l of fitLogsOf(pid, 'gym')) { if (l.id === skipId) continue; const e = (l.data?.sets || []).find((x) => x.ex === exId); if (e) return e; }
   return null;
 }
-const nextKey = (pid, r) => { const last = fitLogsOf(pid, 'gym')[0]?.data?.key; const i = r.days.findIndex((d) => d.key === last); return r.days[i >= 0 ? (i + 1) % r.days.length : 0]; };
+// El siguiente día de la rutina (las sesiones libres no cuentan para el orden).
+const nextKey = (pid, r) => { const last = fitLogsOf(pid, 'gym').find((l) => l.data?.key !== 'L')?.data?.key; const i = r.days.findIndex((d) => d.key === last); return r.days[i >= 0 ? (i + 1) % r.days.length : 0]; };
 
 // ---------- textos ----------
 const restText = (s) => (s < 60 ? `${s} s` : s % 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s / 60} min`);
@@ -97,6 +100,7 @@ export default function fit(ctx) {
   // Vista previa del entrenador (no es su propio perfil): solo si ese adulto comparte.
   if (ctx.readonly && !profOf(me.id)?.share) return { title: 'Remate Fit', back: '#/inicio', el: h('div', { class: 'page' }, note(`Remate Fit es privado de ${me.name}. Lo verías aquí solo si activa «Compartir con mi entrenador».`)) };
   if (ctx.args[0] === 'registrar') return logPage(ctx, me);
+  if (ctx.args[0] === 'editar') return ctx.readonly ? { title: 'Remate Fit', back: '#/fit/rutina', el: h('div', { class: 'page' }, note('Vista del entrenador: solo lectura.')) } : editRoutine(ctx, me);
   if (ctx.args[0] === 'receta') return recipePage(ctx, me, !ctx.readonly);
   const tab = tabKey(ctx.args[0]);
   const canEdit = !ctx.readonly;
@@ -132,7 +136,8 @@ function todayTab(ctx, me, canEdit) {
       h('div', {}, `${plural(day.items.length, 'ejercicio', 'ejercicios')}, ≈ ${day.min} min${day.light ? ' · día ligero de pierna por tu voleibol' : ''}`),
       h('div', { class: 'cluster' },
         canEdit ? h('a', { class: 'btn ball', href: `#/fit/registrar/${day.key}` }, ic('check', 18), `Registrar el día ${day.key}`) : null,
-        h('a', { class: 'btn', href: '#/fit/rutina' }, ic('dumbbell', 18), 'Ver la rutina'))),
+        h('a', { class: 'btn', href: '#/fit/rutina' }, ic('dumbbell', 18), 'Ver la rutina'),
+        canEdit ? h('a', { class: 'btn', href: '#/fit/registrar/libre' }, ic('plus', 18), 'Sesión libre') : null)),
     wk?.light ? note('Semana de descarga: una serie menos en cada ejercicio y sin subir peso. Te recuperas y luego sigues subiendo.', 'info') : null,
     h('div', { class: 'kpis fit-kpis' },
       kpi('Gym esta semana', `${gymWeek} de ${spec.days}`, gymWeek >= spec.days ? 'ok' : ''),
@@ -166,10 +171,13 @@ function routineTab(ctx, me, canEdit) {
   const vol = Object.entries(r.volume).filter(([m]) => m !== 'abdomen');
   return h('div', { class: 'stack' },
     h('section', { class: 'panel stack' },
-      h('div', { class: 'split' }, h('h3', {}, splitName(spec.days)), h('span', { class: 'chip ball' }, FIT_GOALS[spec.goal].name)),
+      h('div', { class: 'split' }, h('h3', {}, r.custom ? `Personalizada: ${plural(r.days.length, 'día', 'días')}` : splitName(spec.days)), h('span', { class: 'chip ball' }, FIT_GOALS[spec.goal].name)),
       h('p', { class: 'row-sub', style: { margin: 0 } }, [`${spec.days} días`, `${spec.minutes} min`, FIT_EXP[spec.exp].name, PLACES[spec.place].name, `${vb.days} de voleibol${spec.vbAuto ? ' (de Remate)' : ' (a mano)'}`].join(' · ')),
       wk ? h('p', { class: 'row-sub', style: { margin: 0 } }, `Bloque ${wk.block}, semana ${wk.week} de 6. ${wk.light ? 'Esta es de descarga.' : `La semana 6 es de descarga (termina el ${fmtDate(wk.ends, { day: 'numeric', month: 'short' })}).`}`) : null,
-      h('ul', { class: 'plain' }, r.notes.map((x) => h('li', {}, x)))),
+      h('ul', { class: 'plain' }, r.notes.map((x) => h('li', {}, x))),
+      canEdit ? h('div', { class: 'cluster' },
+        h('a', { class: 'btn sm', href: '#/fit/editar' }, ic('list-checks', 16), r.custom ? 'Editar días y ejercicios' : 'Personalizar'),
+        h('a', { class: 'btn sm', href: '#/fit/registrar/libre' }, ic('plus', 16), 'Sesión libre')) : null),
     r.days.map((d) => h('section', { class: 'panel stack gx-day' },
       h('div', { class: 'split' }, h('h3', {}, `Día ${d.key}: ${d.name}`), h('span', { class: 'cluster' }, d.light ? h('span', { class: 'chip info' }, 'Pierna ligera') : null, h('span', { class: 'chip ball' }, `≈ ${d.min} min`))),
       h('p', { class: 'row-sub', style: { margin: 0 } }, d.focus),
@@ -193,12 +201,23 @@ const sourcesPanel = () => h('details', { class: 'panel' }, h('summary', {}, h('
   h('ul', { class: 'plain' }, FIT_SOURCES.map(([t, u]) => h('li', {}, link(u, t)))),
   h('p', { class: 'row-sub' }, 'Las series, repeticiones y ajustes son propuestas de Remate basadas en estas fuentes. No sustituye a un médico ni a un entrenador certificado; si tienes una lesión o una enfermedad, consulta antes.'));
 
+// ---------- personalizar la rutina (v3.13) ----------
+function editRoutine(ctx, me) {
+  const spec = specOf(me.id), vb = vbOf(me, spec);
+  if (!profOf(me.id)) { location.hash = '#/fit'; return { title: 'Remate Fit', el: h('div') }; }
+  return editorPage(ctx, { title: 'Mi rutina', back: '#/fit/rutina', days: buildFit(spec, vb.days).days, custom: Array.isArray(spec.custom) && spec.custom.length > 0,
+    lib: { ...FIT_LIB, defaultRx: (id) => fitDefaultRx(id, spec) },
+    onSave: (custom) => { saveProf(me.id, { custom: cleanFitCustom(custom) }); toast('Rutina guardada'); location.hash = '#/fit/rutina'; },
+    onReset: () => { saveProf(me.id, { custom: null }); toast('Volviste a la rutina de Remate'); location.hash = '#/fit/rutina'; } });
+}
+
 // ---------- registrar una sesión ----------
 const DRAFT = (pid) => `remate.fit.draft.${pid}`;
 function logPage(ctx, me) {
   const back = '#/fit';
   const { spec, r } = routineOf(me);
-  const day = r.days.find((d) => d.key === ctx.args[1]);
+  // v3.13: «libre» = lo que hiciste hoy aunque no sea un día de tu rutina.
+  const day = ctx.args[1] === 'libre' ? { key: 'L', name: 'Sesión libre', items: [], min: 45 } : r.days.find((d) => d.key === ctx.args[1]);
   if (!day) return { title: 'Registrar', back, el: h('div', { class: 'page' }, empty('No encontré ese día', 'Puede que hayas cambiado tu rutina.', h('a', { class: 'btn', href: '#/fit/rutina' }, 'Ver mi rutina'))) };
   const ui = ctx.ui, canSave = !ctx.readonly;
   if (!ui.draft) {
@@ -211,8 +230,10 @@ function logPage(ctx, me) {
   let timer;
   const persist = () => { dr.at = Date.now(); clearTimeout(timer); timer = setTimeout(() => ls.set(DRAFT(me.id), JSON.stringify(dr)), 300); };
   const err = h('div', { class: 'note bad', role: 'alert', hidden: true });
-  const exBlock = (rx, k) => {
-    const ex = FIT_BY_ID[rx.ex], entry = dr.entries[k] || (dr.entries[k] = { ex: rx.ex, s: [['', '']] });
+  const rxOf = (entry) => day.items.find((x) => x.ex === entry.ex) || entry.rx || fitDefaultRx(entry.ex, spec);
+  const exBlock = (entry, k) => {
+    const rx = rxOf(entry), ex = FIT_BY_ID[entry.ex];
+    if (!ex || !rx) return null;
     const last = lastFor(me.id, rx.ex), tip = nextFitStep(rx, last), kgOn = ex.unit === 'kg';
     const repsLabel = ex.repsLabel || (ex.unit === 's' ? 'Segundos' : 'Reps');
     const list = h('div', { class: 'gx-sets' });
@@ -228,8 +249,13 @@ function logPage(ctx, me) {
       h('div', { class: 'cluster' },
         h('button', { class: 'btn sm', type: 'button', onclick: () => { if (entry.s.length >= 8) return; entry.s.push([entry.s[entry.s.length - 1]?.[0] ?? '', '']); persist(); paint(); } }, ic('plus', 16), 'Serie'),
         entry.s.length > 1 ? h('button', { class: 'btn sm ghost', type: 'button', onclick: () => { entry.s.pop(); persist(); paint(); } }, ic('minus', 16), 'Quitar la última') : null,
+        h('button', { class: 'btn sm ghost', type: 'button', onclick: () => { dr.entries.splice(k, 1); persist(); ctx.rerender(); } }, ic('x', 16), 'Hoy no lo hice'),
         h('details', { class: 'gx-how', ontoggle: lf.ontoggle }, h('summary', {}, '¿Cómo se hace?'), lf.slot, h('ol', { class: 'plain' }, ex.how.map((x) => h('li', {}, x))))));
   };
+  const addEx = () => pickExercise({ lib: FIT_LIB, exclude: dr.entries.map((e) => e.ex), title: 'Agregar a esta sesión', onPick: (id) => {
+    const rx = fitDefaultRx(id, spec), last = lastFor(me.id, id);
+    dr.entries.push({ ex: id, rx, s: Array.from({ length: rx.sets }, (_, i) => [last?.s?.[i]?.[0] ?? last?.s?.[0]?.[0] ?? '', '']) }); persist(); ctx.rerender();
+  } });
   const date = h('input', { type: 'date', min: addDays(todayStr(), -14), max: todayStr(), value: dr.date, oninput: (e) => { dr.date = e.target.value; persist(); } });
   const mins = h('input', { type: 'number', inputmode: 'numeric', min: 1, max: 240, value: dr.minutes ?? '', oninput: (e) => { dr.minutes = e.target.value; persist(); } });
   const rpeDesc = h('span', { class: 'hint' }), rpeSeg = h('div', { class: 'seg gx-rpe', role: 'group', 'aria-label': '¿Qué tan pesada fue la sesión?' });
@@ -266,7 +292,8 @@ function logPage(ctx, me) {
   const el = h('div', { class: 'page' },
     ui.recovered ? note('Recuperé lo que llevabas anotado de esta sesión.') : null,
     h('p', { style: { margin: 0 } }, 'Anota lo que vas haciendo. Lo que escribas se guarda en este celular hasta que toques «Guardar sesión».'),
-    day.items.map(exBlock),
+    dr.entries.length ? dr.entries.map(exBlock) : note(day.key === 'L' ? 'Agrega los ejercicios que hiciste hoy: por ejemplo, press de banca y elevaciones laterales.' : 'Quitaste todos los ejercicios: agrega los que hiciste.'),
+    canSave ? h('button', { class: 'btn', type: 'button', onclick: addEx }, ic('plus', 18), 'Agregar ejercicio') : null,
     h('section', { class: 'panel stack' }, h('h3', {}, 'Al terminar'),
       h('div', { class: 'grid' }, field('Fecha', date), field('Minutos', mins)),
       h('div', { class: 'field' }, h('span', { class: 'label' }, '¿Qué tan pesada fue la sesión?'), rpeSeg, rpeDesc),
@@ -276,7 +303,7 @@ function logPage(ctx, me) {
       h('button', { class: 'btn ghost', type: 'button', onclick: async () => {
         if (await confirmSheet({ title: '¿Descartar lo anotado?', text: 'Se borra lo que llevas de esta sesión.', ok: 'Descartar', danger: true })) { ls.del(DRAFT(me.id)); ui.draft = null; location.hash = back; }
       } }, 'Descartar')));
-  return { title: `Día ${day.key}`, sub: day.name, back, el };
+  return { title: day.key === 'L' ? 'Sesión libre' : `Día ${day.key}`, sub: day.key === 'L' ? 'Lo que hiciste hoy' : day.name, back, el };
 }
 
 // ---------- progreso ----------
@@ -343,7 +370,7 @@ export function progressTab(ctx, me, canEdit) {
     h('section', { class: 'panel stack' }, h('h3', {}, 'Gym'),
       exChart || note('Registra un ejercicio dos veces para ver tu avance.'),
       gym.length ? h('div', { class: 'rows' }, gym.slice(0, 20).map((l) => h('div', { class: 'row' },
-        h('span', { class: 'row-main' }, h('strong', {}, `Día ${l.data?.key || '?'}${l.data?.name ? `: ${l.data.name}` : ''}`),
+        h('span', { class: 'row-main' }, h('strong', {}, l.data?.key === 'L' ? 'Sesión libre' : `Día ${l.data?.key || '?'}${l.data?.name ? `: ${l.data.name}` : ''}`),
           h('span', { class: 'row-sub' }, [longDay(l.day), l.data?.minutes ? `${l.data.minutes} min` : null, l.data?.rpe ? `esfuerzo ${l.data.rpe}` : null, plural((l.data?.sets || []).length, 'ejercicio', 'ejercicios')].filter(Boolean).join(' · '))),
         l.data?.pain ? h('span', { class: 'chip warn' }, 'Molestia') : null,
         canEdit ? h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Borrar esta sesión', onclick: () => del(l, 'esta sesión') }, ic('trash-2', 18)) : null))) : null));
@@ -384,6 +411,7 @@ function profileTab(ctx, me, canEdit) {
   const share = h('input', { type: 'checkbox', checked: prof?.share ? true : null, onchange: (e) => { saveProf(me.id, {}, { share: e.target.checked }); toast(e.target.checked ? 'Ahora tu entrenador ve tu Remate Fit' : 'Tu Remate Fit vuelve a ser privado'); } });
   const isCoach = state.role === 'coach';
   return h('div', { class: 'stack' },
+    Array.isArray(spec.custom) && spec.custom.length ? note('Tu rutina está personalizada: estas respuestas cambian tus calorías, las dosis de los ejercicios nuevos que agregues y tu bloque, pero no tus días ni ejercicios. Para que Remate la vuelva a armar, en Rutina → Editar días y ejercicios → «Volver a la de Remate».') : null,
     profileForm(me, spec, (data) => { saveProf(me.id, data); toast('Guardado: tu rutina se actualizó'); location.hash = '#/fit/rutina'; }),
     h('section', { class: 'panel stack' }, h('h3', {}, 'Bloque de 6 semanas'),
       h('p', { style: { margin: 0 } }, spec.since ? `Empezaste el ${longDay(spec.since)}. La semana 6 de cada bloque es de descarga.` : 'Todavía no empiezas un bloque.'),

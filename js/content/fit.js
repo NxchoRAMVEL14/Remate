@@ -277,8 +277,48 @@ export function buildFit(raw, vb = 0) {
     items = items.map(({ p, ...rx }) => rx);
     return { key: String.fromCharCode(65 + i), name: bp.name, focus: bp.focus, kind: bp.kind, light, items, min: dayMinutes(items) };
   });
+  // v3.13: rutina personalizada (los días y ejercicios que el adulto editó a mano).
+  if (Array.isArray(spec.custom) && spec.custom.length) {
+    const cd = customFitDays(spec.custom);
+    if (cd.length) {
+      const v = weeklyVolume(cd);
+      return { spec, vb, n: cd.length, days: cd, volume: v, custom: true,
+        notes: ['Rutina personalizada: los días y ejercicios los elegiste tú. Las series por semana de abajo te dicen si alcanzas lo que pide tu objetivo. Con «Volver a la de Remate» regresas a la automática.',
+          ...(vb > 0 ? ['Separa el gym y el voleibol al menos 3 horas si puedes, y no hagas pierna pesada el día antes de un partido.'] : [])] };
+    }
+  }
   const volume = weeklyVolume(days);
   return { spec, vb, n: days.length, days, volume, notes: fitNotes(spec, vb, days, volume) };
+}
+
+// ---------- rutina personalizada y sesión libre (v3.13) ----------
+// Patrón de cada ejercicio (para contar las series por músculo): el primer patrón de ORDER donde aparece.
+const SLOT_OF = {};
+for (const [pat, ids] of Object.entries(ORDER)) for (const id of ids) if (!SLOT_OF[id]) SLOT_OF[id] = pat;
+const cleanRx = (rx) => {
+  const ex = FIT_BY_ID[rx?.ex]; if (!ex) return null;
+  const sets = Math.min(10, Math.max(1, Math.round(Number(rx.sets) || 3)));
+  const reps = String(rx.reps ?? '').trim().slice(0, 12) || '10';
+  const rest = Math.min(600, Math.max(0, Math.round(Number(rx.rest) || 60)));
+  let rir = rx.rir === null || rx.rir === '' || rx.rir === undefined ? null : Math.min(5, Math.max(0, Math.round(Number(rx.rir))));
+  if (Number.isNaN(rir)) rir = null;
+  return { ex: ex.id, pat: SLOT_OF[ex.id] || ex.pat, role: ROLE[rx.role] ? rx.role : fitRole(ex), sets, reps, rir, rest };
+};
+export const cleanFitCustom = (custom) => (Array.isArray(custom) ? custom : []).slice(0, 7)
+  .map((d, i) => ({ name: String(d?.name || `Día ${String.fromCharCode(65 + i)}`).trim().slice(0, 40), items: (d?.items || []).map(cleanRx).filter(Boolean).slice(0, 16) }))
+  .filter((d) => d.items.length);
+export function customFitDays(custom) {
+  return cleanFitCustom(custom).map((d, i) => ({ key: String.fromCharCode(65 + i), name: d.name, focus: 'Personalizado', kind: 'custom', light: false, items: d.items, min: dayMinutes(d.items), custom: true }));
+}
+export function fitRole(ex) {
+  if (ex.unit === 'saltos' || ex.pat === 'salto' || ex.pat === 'lanzamiento') return 'pow';
+  if (ex.pat === 'tronco' || ex.pat === 'core') return 'core';
+  if (ex.need === 'barra') return 'main';
+  return /^(Bíceps|Tríceps|Hombro \(deltoides|Pantorrilla|Sóleo|Cuádriceps$|Parte de atrás|Aductores|Frente)/.test(ex.body || '') ? 'acc' : 'sec';
+}
+export function fitDefaultRx(exId, raw) {
+  const spec = normFit(raw), ex = FIT_BY_ID[exId]; if (!ex) return null;
+  return { ...prescribe(ex, fitRole(ex), spec, false), pat: SLOT_OF[ex.id] || ex.pat };
 }
 
 // Series por semana de cada músculo (las indirectas cuentan la mitad).

@@ -3,7 +3,8 @@
 // y después queda guardado. Remate propone nombre, rama, formato, fecha, sede, partidos, horarios y pases directos,
 // y SIEMPRE te deja revisar y corregir antes de guardar.
 import { h, ic, toast, openSheet, todayStr } from '../util.js';
-import { state, add, patch, group, torneosReady, equiposReady, multiTeam, teams } from '../store.js';
+import { state, add, patch, group, torneosReady, equiposReady, multiTeam, teams, sql313Ready } from '../store.js';
+import { hhmm, addMin, defaultMinutes } from '../horarios.js';
 import { field, options, note } from './ui.js';
 import { RAMAS, makeBracket, ourTeamId } from './torneos.js';
 
@@ -164,7 +165,8 @@ function matchRow(game, extra) {
   const mineA = ia !== null, rival = mineA ? game.b : game.a, team = mineA ? ia : ib;
   const date = extra.date || todayStr();
   const row = { group_id: group()?.id, rival: rival.slice(0, 60), match_date: date, venue: (extra.venue || '').slice(0, 80), kind: extra.tournament_id || extra.name ? 'torneo' : 'amistoso', best_of: 3,
-    note: [extra.tournament_id ? '' : (extra.name || '').trim(), game.time ? `Hora: ${game.time}` : ''].filter(Boolean).join(' · '), status: date > todayStr() ? 'planeado' : 'en_juego' };
+    note: [extra.tournament_id ? '' : (extra.name || '').trim(), game.time && !sql313Ready() ? `Hora: ${game.time}` : ''].filter(Boolean).join(' · '), status: date > todayStr() ? 'planeado' : 'en_juego' };
+  if (sql313Ready() && hhmm(game.time)) { row.start_time = hhmm(game.time); row.end_time = addMin(row.start_time, defaultMinutes(3)); }
   if (extra.tournament_id) row.tournament_id = extra.tournament_id;
   if (equiposReady() && multiTeam()) row.team = team || teams()[0].id;
   return row;

@@ -7,13 +7,15 @@ import { figFor } from '../content/movimientos.js';
 import { state, add, remove, patch, players, settings, gymReady, ls, multiTeam, teamOf, inTeam } from '../store.js';
 import { weekStart, num } from '../lab-calc.js';
 import { GYM, GYM_BY_ID, GROUPS, NEED, EQUIP, EXP, TIER, PHASE, MINUTES, GOALS, buildRoutine, normSpec, isSpec, maxDays, heavyMax, weekPlan,
-  nextStep, blockWeek, topReps, lowReps, available, groupOf, gymName, WARMUP, COOLDOWN, READ, RULES, ARRIVE, GYM_SOURCES } from '../content/gym.js';
+  nextStep, blockWeek, topReps, lowReps, available, groupOf, gymName, WARMUP, COOLDOWN, READ, RULES, ARRIVE, GYM_SOURCES, gymDefaultRx, cleanCustom } from '../content/gym.js';
+import { editorPage, pickExercise } from './rutina-editor.js';
 import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
 import { lineChart } from './chart.js';
 import { calItemSheet } from './sheets-session.js';
 
 // ---------- datos ----------
-const KEY = { mine: (id) => `remate.gym.mine.${id}`, use: (id) => `remate.gym.use.${id}`, draft: (id) => `remate.gym.draft.${id}` };
+const KEY = { mine: (id) => `remate.gym.mine.${id}`, use: (id) => `remate.gym.use.${id}`, draft: (id) => `remate.gym.draft.${id}`, none: (id) => `remate.gym.none.${id}` };
+const GYM_LIB = { list: GYM, byId: GYM_BY_ID };
 const readJSON = (k) => { try { return JSON.parse(ls.get(k) || 'null'); } catch { return null; } };
 export const gymVisible = () => settings().gym_players !== false;
 export const gymLogsOf = (pid) => (state.data.gymLogs || []).filter((l) => l.player_id === pid)
@@ -23,7 +25,8 @@ export const coachPlanOf = (p) => (isSpec(p?.gym_plan) ? normSpec(p.gym_plan) : 
 // Rutina que usa el jugador: la de su entrenador o la suya (si eligió la suya).
 export function activeSpec(me) {
   const coachSpec = coachPlanOf(me), mine = readJSON(KEY.mine(me.id));
-  const fromLog = !isSpec(mine) && !coachSpec ? gymLogsOf(me.id).find((l) => isSpec(l.plan))?.plan : null;
+  // v3.13: si el jugador borró su rutina, ya no se recupera de sus sesiones guardadas.
+  const fromLog = !isSpec(mine) && !coachSpec && ls.get(KEY.none(me.id)) !== '1' ? gymLogsOf(me.id).find((l) => isSpec(l.plan))?.plan : null;
   const own = isSpec(mine) ? normSpec(mine) : isSpec(fromLog) ? normSpec(fromLog) : null;
   if (coachSpec && (ls.get(KEY.use(me.id)) !== 'mine' || !own)) return { spec: coachSpec, src: 'coach', coachSpec, own };
   if (own) return { spec: own, src: 'mine', coachSpec, own };
@@ -253,12 +256,14 @@ function routineTab(ctx, me, canLog) {
     paintPreview();
     const save = () => {
       if (ctx.readonly) { toast('Vista previa: aquí no se guarda'); return; }
-      ls.set(KEY.mine(me.id), JSON.stringify({ ...normSpec(ui.draftSpec), since: todayStr() }));
-      ls.set(KEY.use(me.id), 'mine');
+      const { custom, ...plain } = normSpec(ui.draftSpec);   // al cambiar las respuestas, Remate arma otra vez la rutina
+      ls.set(KEY.mine(me.id), JSON.stringify({ ...plain, since: todayStr() }));
+      ls.set(KEY.use(me.id), 'mine'); ls.del(KEY.none(me.id));
       ui.edit = false; ui.draftSpec = null; toast('Rutina guardada en este celular'); ctx.rerender();
     };
     return h('div', { class: 'stack' },
       act.spec ? null : h('p', { style: { margin: 0 } }, 'Contesta seis preguntas y Remate te arma una rutina con calentamiento, series, repeticiones y descansos. La puedes cambiar cuando quieras.'),
+      act.spec && Array.isArray(ui.draftSpec.custom) && ui.draftSpec.custom.length ? note('Tienes una rutina personalizada. Si usas estas respuestas, Remate arma otra vez la rutina y se pierden tus cambios.', 'warn') : null,
       rulesPanel(!act.spec && !gymLogsOf(me.id).length),
       specForm(ui.draftSpec, paintPreview), preview,
       h('div', { class: 'cluster' },
@@ -277,8 +282,15 @@ function routineTab(ctx, me, canLog) {
       act.src === 'coach' && s.note ? h('p', { style: { margin: 0 } }, `Tu entrenador: “${s.note}”`) : null,
       bw?.light ? note('Semana ligera: haz una serie menos en cada ejercicio y no subas peso. La siguiente semana vuelve a armar tu rutina (o súbele la experiencia si ya dominas la técnica).') : null,
       ctx.readonly ? null : h('div', { class: 'cluster' }, h('button', { class: 'btn sm', type: 'button', onclick: () => { ui.edit = true; ui.draftSpec = normSpec(act.src === 'mine' ? s : (act.own || s)); ctx.rerender(); } },
-        ic('pencil', 16), act.src === 'coach' && !act.own ? 'Armar la mía' : 'Cambiar mi rutina'),
-        h('button', { class: 'btn sm', type: 'button', onclick: () => gymCalSheet(me) }, ic('calendar-plus', 16), 'Agregar al calendario'))),
+        ic('pencil', 16), act.src === 'coach' && !act.own ? 'Armar la mía' : 'Cambiar mis respuestas'),
+        h('button', { class: 'btn sm', type: 'button', onclick: () => { location.hash = '#/gym/editar'; } }, ic('list-checks', 16), r.custom ? 'Editar días y ejercicios' : 'Personalizar'),
+        canLog ? h('a', { class: 'btn sm', href: '#/gym/registrar/libre' }, ic('plus', 16), 'Sesión libre') : null,
+        h('button', { class: 'btn sm', type: 'button', onclick: () => gymCalSheet(me) }, ic('calendar-plus', 16), 'Agregar al calendario'),
+        act.src === 'mine' ? h('button', { class: 'btn sm ghost', type: 'button', onclick: async () => {
+          if (!(await confirmSheet({ title: '¿Borrar mi rutina?', text: act.coachSpec ? 'Se borra la que armaste tú; te queda la de tu entrenador. Tus sesiones guardadas no se borran.' : 'Se borra tu rutina de este celular. Tus sesiones guardadas no se borran. Luego puedes armar otra.', ok: 'Borrar', danger: true }))) return;
+          ls.del(KEY.mine(me.id)); ls.set(KEY.none(me.id), '1'); ls.del(KEY.use(me.id)); toast('Rutina borrada'); ctx.rerender();
+        } }, ic('trash-2', 16), 'Borrar mi rutina') : null),
+      r.custom ? note('Rutina personalizada por ti.') : null),
     routineBlock(r, { pid: me.id, canLog, me }),
     readPanel(), rulesPanel());
 }
@@ -315,7 +327,7 @@ function setsText(e) {
   return `${gymName(e.ex)}: ${parts.join(', ')}`;
 }
 function logRow(l, canDelete, who) {
-  const head = [who, l.day ? `Día ${l.day}` : 'Sesión', fmtDate(l.done_on, { weekday: 'short', day: 'numeric', month: 'short' }), l.minutes ? `${l.minutes} min` : null, l.rpe ? `esfuerzo ${l.rpe} (${RPE[l.rpe].toLowerCase()})` : null].filter(Boolean).join(' · ');
+  const head = [who, l.day === 'L' ? 'Sesión libre' : l.day ? `Día ${l.day}` : 'Sesión', fmtDate(l.done_on, { weekday: 'short', day: 'numeric', month: 'short' }), l.minutes ? `${l.minutes} min` : null, l.rpe ? `esfuerzo ${l.rpe} (${RPE[l.rpe].toLowerCase()})` : null].filter(Boolean).join(' · ');
   return h('details', { class: 'hx' },
     h('summary', {}, h('span', { class: 'row-main' }, h('strong', {}, head), h('span', { class: 'row-sub' }, `${plural((l.sets || []).length, 'ejercicio', 'ejercicios')}${l.goal && GOALS[l.goal] ? ` · ${GOALS[l.goal].name}` : ''}`)),
       l.pain ? h('span', { class: 'chip bad' }, 'Molestia') : null, ic('chevron-down', 18)),
@@ -333,13 +345,16 @@ function logPage(ctx) {
   const back = '#/gym';
   if (!me) return { title: 'Registrar', back, el: h('div', { class: 'page' }, empty('Solo para jugadores', 'Entra a tu perfil de jugador para registrar tus sesiones.')) };
   const act = activeSpec(me);
-  const r = act.spec ? buildRoutine(act.spec) : null, day = r?.days.find((d) => d.key === ctx.args[1]);
+  const r = act.spec ? buildRoutine(act.spec) : null;
+  // v3.13: «libre» = una sesión con los ejercicios que tú elijas (aunque no sea un día de tu rutina).
+  const day = ctx.args[1] === 'libre' ? { key: 'L', name: 'Sesión libre', items: [], min: 45 } : r?.days.find((d) => d.key === ctx.args[1]);
   if (!day) return { title: 'Registrar', back, el: h('div', { class: 'page' }, empty('No encontré ese día', 'Puede que hayas cambiado tu rutina.', h('a', { class: 'btn', href: back }, 'Ver mi rutina'))) };
   const ui = ctx.ui, canSave = gymReady() && !ctx.readonly;
+  const goal = act.spec?.goal || 'salto';
   if (!ui.draft) {
     const saved = readJSON(KEY.draft(me.id));
-    if (saved && saved.key === day.key && saved.goal === act.spec.goal && saved.at && Date.now() - saved.at < 12 * 3600e3) { ui.draft = saved; ui.recovered = true; }
-    else ui.draft = { key: day.key, goal: act.spec.goal, date: todayStr(), minutes: day.min, rpe: null, pain: false, note: '', at: Date.now(),
+    if (saved && saved.key === day.key && saved.goal === goal && saved.at && Date.now() - saved.at < 12 * 3600e3) { ui.draft = saved; ui.recovered = true; }
+    else ui.draft = { key: day.key, goal, date: todayStr(), minutes: day.min, rpe: null, pain: false, note: '', at: Date.now(),
       entries: day.items.map((rx) => { const last = lastFor(me.id, rx.ex); return { ex: rx.ex, s: Array.from({ length: rx.sets }, (_, i) => [last?.s?.[i]?.[0] ?? last?.s?.[0]?.[0] ?? '', '']) }; }) };
   }
   const dr = ui.draft;
@@ -347,8 +362,10 @@ function logPage(ctx) {
   const persist = () => { dr.at = Date.now(); clearTimeout(timer); timer = setTimeout(() => ls.set(KEY.draft(me.id), JSON.stringify(dr)), 300); };
   const err = h('div', { class: 'note bad', role: 'alert', hidden: true });
 
-  const exBlock = (rx, k) => {
-    const ex = GYM_BY_ID[rx.ex], entry = dr.entries[k] || (dr.entries[k] = { ex: rx.ex, s: [['', '']] });
+  const rxOf = (entry) => day.items.find((x) => x.ex === entry.ex) || entry.rx || gymDefaultRx(entry.ex, act.spec || {});
+  const exBlock = (entry, k) => {
+    const rx = rxOf(entry), ex = GYM_BY_ID[entry.ex];
+    if (!ex || !rx) return null;
     const last = lastFor(me.id, rx.ex), tip = nextStep(rx, last);
     const kgOn = ex.unit === 'kg';
     const repsLabel = ex.repsLabel || (ex.unit === 's' ? 'Segundos' : 'Reps');
@@ -368,8 +385,13 @@ function logPage(ctx) {
       h('div', { class: 'cluster' },
         h('button', { class: 'btn sm', type: 'button', onclick: () => { if (entry.s.length >= 8) return; entry.s.push([entry.s[entry.s.length - 1]?.[0] ?? '', '']); persist(); paintSets(); } }, ic('plus', 16), 'Serie'),
         entry.s.length > 1 ? h('button', { class: 'btn sm ghost', type: 'button', onclick: () => { entry.s.pop(); persist(); paintSets(); } }, ic('minus', 16), 'Quitar la última') : null,
+        h('button', { class: 'btn sm ghost', type: 'button', onclick: () => { dr.entries.splice(k, 1); persist(); ctx.rerender(); } }, ic('x', 16), 'Hoy no lo hice'),
         (() => { const lf = lazyFig(figFor(ex), { size: 'sm' }); return h('details', { class: 'gx-how', ontoggle: lf.ontoggle }, h('summary', {}, '¿Cómo se hace?'), lf.slot, h('ol', { class: 'plain' }, ex.how.map((x) => h('li', {}, x)))); })()));
   };
+  const addEx = () => pickExercise({ lib: GYM_LIB, exclude: dr.entries.map((e) => e.ex), title: 'Agregar a esta sesión', onPick: (id) => {
+    const rx = gymDefaultRx(id, act.spec || {}), last = lastFor(me.id, id);
+    dr.entries.push({ ex: id, rx, s: Array.from({ length: rx.sets }, (_, i) => [last?.s?.[i]?.[0] ?? last?.s?.[0]?.[0] ?? '', '']) }); persist(); ctx.rerender();
+  } });
 
   const date = h('input', { type: 'date', min: addDays(todayStr(), -7), max: todayStr(), value: dr.date, oninput: (e) => { dr.date = e.target.value; persist(); } });
   const mins = h('input', { type: 'number', inputmode: 'numeric', min: 1, max: 240, value: dr.minutes ?? '', oninput: (e) => { dr.minutes = e.target.value; persist(); } });
@@ -403,7 +425,7 @@ function logPage(ctx) {
     if (m != null && !(m >= 1 && m <= 240)) return fail('Los minutos deben estar entre 1 y 240.');
     const spec = normSpec(act.spec);
     add('gymLogs', { player_id: me.id, done_on: dr.date || todayStr(), day: day.key, goal: spec.goal, minutes: m, rpe: dr.rpe || null, pain: !!dr.pain, note: (dr.note || '').trim(),
-      plan: { goal: spec.goal, days: spec.days, minutes: spec.minutes, exp: spec.exp, equip: spec.equip, phase: spec.phase, since: spec.since || null }, sets: sets.slice(0, 16) });
+      plan: { goal: spec.goal, days: spec.days, minutes: spec.minutes, exp: spec.exp, equip: spec.equip, phase: spec.phase, since: spec.since || null, ...(Array.isArray(spec.custom) && spec.custom.length ? { custom: spec.custom } : {}) }, sets: sets.slice(0, 16) });
     ls.del(KEY.draft(me.id)); ui.draft = null;
     toast(dr.pain ? 'Guardado. Avísale a tu entrenador de la molestia.' : '¡Bien! Sesión guardada', 3200);
     location.hash = '#/gym/registro';
@@ -414,7 +436,8 @@ function logPage(ctx) {
     ui.recovered ? note('Recuperé lo que llevabas anotado de esta sesión.') : null,
     gameNote(me),
     h('p', { style: { margin: 0 } }, 'Anota lo que vas haciendo. Si no hiciste una serie, déjala vacía. Lo que escribas se guarda en este celular hasta que toques «Guardar sesión».'),
-    day.items.map(exBlock),
+    dr.entries.length ? dr.entries.map(exBlock) : note(day.key === 'L' ? 'Agrega los ejercicios que hiciste hoy.' : 'Quitaste todos los ejercicios: agrega los que hiciste.'),
+    canSave || ctx.readonly ? h('button', { class: 'btn', type: 'button', onclick: addEx }, ic('plus', 18), 'Agregar ejercicio') : null,
     h('section', { class: 'panel stack' }, h('h3', {}, 'Al terminar'),
       h('div', { class: 'grid' }, field('Fecha', date), field('Minutos', mins)),
       h('div', { class: 'field' }, h('span', { class: 'label' }, '¿Qué tan pesada fue la sesión?'), rpeSeg, rpeDesc),
@@ -425,7 +448,7 @@ function logPage(ctx) {
       h('button', { class: 'btn ghost', type: 'button', onclick: async () => {
         if (await confirmSheet({ title: '¿Descartar lo anotado?', text: 'Se borra lo que llevas de esta sesión.', ok: 'Descartar', danger: true })) { ls.del(KEY.draft(me.id)); ui.draft = null; location.hash = back; }
       } }, 'Descartar')));
-  return { title: `Día ${day.key}`, sub: day.name, back, el };
+  return { title: day.key === 'L' ? 'Sesión libre' : `Día ${day.key}`, sub: day.key === 'L' ? 'Lo que hiciste hoy' : day.name, back, el };
 }
 
 // ---------- entrenador ----------
@@ -469,6 +492,7 @@ export function playerGymSheet(p) {
     logs.length ? h('div', { class: 'rows' }, logs.slice(0, 8).map((l) => logRow(l, false))) : empty('Sin sesiones registradas', null)),
   actions: [{ label: 'Cerrar' },
     plan ? { label: 'Quitar rutina', kind: 'danger', onClick: () => { patch('players', p.id, { gym_plan: {} }); toast('Rutina quitada'); } } : null,
+    plan && gymReady() ? { label: 'Personalizar', onClick: () => { setTimeout(() => { location.hash = `#/gym/editar/${p.id}`; }, 0); } } : null,
     gymReady() ? { label: plan ? 'Cambiar rutina' : 'Asignar rutina', kind: 'primary', onClick: () => { setTimeout(() => gymPlanSheet([p]), 50); } } : null].filter(Boolean) });
 }
 
@@ -519,8 +543,35 @@ function buildTab(ctx) {
     preview);
 }
 
+// v3.13: personalizar días y ejercicios. Jugador: su rutina (o parte de la del entrenador y la guarda como suya).
+// Entrenador: #/gym/editar/<jugador> personaliza la rutina que le asignó.
+function editPage(ctx) {
+  const back = '#/gym';
+  if (ctx.role === 'coach') {
+    const p = players().find((x) => x.id === ctx.args[1]), plan = p ? coachPlanOf(p) : null;
+    if (!plan) return { title: 'Personalizar', back, el: h('div', { class: 'page' }, empty('Sin rutina asignada', 'Primero asígnale una rutina a ese jugador.')) };
+    return editorPage(ctx, { title: `Rutina de ${p.name}`, back, days: buildRoutine(plan).days, custom: Array.isArray(plan.custom) && plan.custom.length > 0,
+      lib: { ...GYM_LIB, defaultRx: (id) => gymDefaultRx(id, plan) },
+      onSave: (custom) => { patch('players', p.id, { gym_plan: { ...plan, custom: cleanCustom(custom, GYM_BY_ID) } }); toast(`Rutina de ${p.name} guardada`); location.hash = back; },
+      onReset: () => { const { custom, ...rest } = plan; patch('players', p.id, { gym_plan: rest }); toast('Volvió a la rutina de Remate'); location.hash = back; } });
+  }
+  const me = ctx.me, act = me ? activeSpec(me) : null;
+  if (!act?.spec) return { title: 'Personalizar', back, el: h('div', { class: 'page' }, empty('Todavía no tienes rutina', 'Primero arma tu rutina con las preguntas; luego la personalizas.', h('a', { class: 'btn', href: back }, 'Armar mi rutina'))) };
+  const s = act.spec;
+  return editorPage(ctx, { title: 'Mi rutina de gym', back, days: buildRoutine(s).days, custom: Array.isArray(s.custom) && s.custom.length > 0,
+    lib: { ...GYM_LIB, defaultRx: (id) => gymDefaultRx(id, s) },
+    onSave: (custom) => {
+      const { note: _n, ...base } = s;
+      ls.set(KEY.mine(me.id), JSON.stringify({ ...base, custom: cleanCustom(custom, GYM_BY_ID), since: s.since || todayStr() }));
+      ls.set(KEY.use(me.id), 'mine'); ls.del(KEY.none(me.id));
+      toast(act.src === 'coach' ? 'Guardada como tu rutina (la de tu entrenador sigue ahí)' : 'Rutina guardada en este celular'); location.hash = back;
+    },
+    onReset: act.src === 'mine' ? () => { const { custom, ...rest } = s; ls.set(KEY.mine(me.id), JSON.stringify(rest)); toast('Volviste a la rutina de Remate'); location.hash = back; } : null });
+}
+
 export default function gym(ctx) {
   if (ctx.args[0] === 'registrar') return logPage(ctx);
+  if (ctx.args[0] === 'editar') return editPage(ctx);
   return ctx.role === 'coach' ? coachView(ctx) : playerView(ctx);
 }
 

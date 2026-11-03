@@ -7,6 +7,7 @@ import { attendanceFor, doneSessions } from '../calc.js';
 import { leave, restartDemo } from '../auth.js';
 import { sectionTitle, note, field, options } from './ui.js';
 import { aboutSection } from './ayuda.js';
+import { DEFAULT_CATS, catsOf, isOpen, bornText, CAT_SOURCES } from '../content/categorias.js';
 import { client, isNetworkError } from '../cloud.js';
 
 function attendanceCsv() {
@@ -122,6 +123,34 @@ function supportSection() {
     h('div', { class: 'cluster' }, h('button', { class: 'btn', type: 'button', disabled: teamReady() ? null : true, onclick: newStaffSheet }, ic('user-plus', 18), 'Invitar asistente')));
 }
 
+// v3.13: categorías por edad (las de la liga o asociación donde juegas).
+function categoriesSection() {
+  const y = new Date().getFullYear();
+  const list = catsOf(settings()).map((c) => ({ ...c }));
+  const box = h('div', { class: 'stack' });
+  const num = (v, on) => h('input', { type: 'number', min: 5, max: 80, inputmode: 'numeric', value: v ?? '', placeholder: '—', onchange: (e) => on(e.target.value === '' ? null : Number(e.target.value)) });
+  const paint = () => box.replaceChildren(
+    h('div', { class: 'rows' }, list.map((c, i) => h('div', { class: 'row cat-row' },
+      h('input', { type: 'text', maxlength: 30, value: c.name, 'aria-label': 'Nombre de la categoría', oninput: (e) => { c.name = e.target.value; } }),
+      h('label', { class: 'cat-age' }, h('span', {}, 'de'), num(c.min, (v) => { c.min = v; paint(); })),
+      h('label', { class: 'cat-age' }, h('span', {}, 'a'), num(c.max, (v) => { c.max = v; paint(); })),
+      h('span', { class: 'row-sub cat-born' }, bornText({ ...c, min: c.min ?? null, max: c.max ?? null }, y)),
+      h('button', { type: 'button', class: 'iconbtn', 'aria-label': `Quitar ${c.name}`, onclick: () => { list.splice(i, 1); paint(); } }, ic('x', 16))))),
+    h('div', { class: 'cluster' },
+      list.length < 12 ? h('button', { type: 'button', class: 'btn sm', onclick: () => { list.push({ id: `c${Date.now().toString(36)}`, name: '', min: null, max: null }); paint(); } }, ic('plus', 16), 'Categoría') : null,
+      h('button', { type: 'button', class: 'btn sm primary', onclick: () => {
+        const clean = list.map((c) => ({ ...c, name: (c.name || '').trim() })).filter((c) => c.name);
+        if (!clean.length) { toast('Deja al menos una categoría'); return; }
+        saveSettings({ categories: clean }); toast('Categorías guardadas');
+      } }, ic('check', 16), 'Guardar'),
+      h('button', { type: 'button', class: 'btn sm ghost', onclick: () => { list.splice(0, list.length, ...DEFAULT_CATS.map((c) => ({ ...c }))); paint(); } }, 'Volver a las de CONADE')));
+  paint();
+  return h('section', { class: 'stack' }, sectionTitle('Categorías por edad'),
+    h('p', { style: { margin: 0 } }, `Cuenta la edad que el jugador cumple en el año de la competencia (en ${y}: ${y} menos su año de nacimiento). Las de base son las de los Juegos Nacionales CONADE 2026; cámbialas a las de tu liga o asociación. Deja la edad vacía para «cualquier edad» (por ejemplo, Libre).`),
+    box,
+    h('details', {}, h('summary', {}, 'De dónde salen'), h('ul', { class: 'plain' }, CAT_SOURCES.map(([t, u]) => h('li', {}, h('a', { href: u, target: '_blank', rel: 'noopener noreferrer' }, t))))));
+}
+
 function asistente() {
   return { title: 'Ajustes', el: h('div', { class: 'page' },
     h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField()),
@@ -177,8 +206,8 @@ function coach() {
         'Un capitán es alumno: con el QR en su celular podría pasarle el código a alguien que no llegó. Necesita el SQL de la versión 3.8.'),
       // v3.9: recordatorios automáticos (los manda la función «recordatorios» de Supabase cada 15 minutos).
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.reminders !== false ? true : null, onchange: (e) => { saveSettings({ reminders: e.target.checked }); toast(e.target.checked ? 'Recordatorios activados' : 'Recordatorios apagados'); } }),
-        h('span', {}, 'Recordatorio automático al celular de tus jugadores: antes de cada entreno publicado y el día de cada partido (a las 8:00).')),
-      field('Recordatorio del entreno', h('select', { onchange: (e) => { saveSettings({ reminder_hours: Number(e.target.value) }); toast('Guardado'); } },
+        h('span', {}, 'Recordatorio automático al celular de tus jugadores: antes de cada entreno publicado y de cada partido (si el partido no tiene hora, a las 8:00 de ese día).')),
+      field('Recordatorio del entreno y del partido', h('select', { onchange: (e) => { saveSettings({ reminder_hours: Number(e.target.value) }); toast('Guardado'); } },
         options([['1', '1 hora antes'], ['2', '2 horas antes'], ['3', '3 horas antes'], ['4', '4 horas antes']], String(st.reminder_hours || 2))),
         'Solo llega a quien activó las notificaciones (en iPhone, con la app instalada). Necesita la función «recordatorios» en Supabase: ver LEEME.'),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.warmup_prev !== false ? true : null, onchange: (e) => { saveSettings({ warmup_prev: e.target.checked }); toast(e.target.checked ? 'Calentamiento preventivo activado' : 'Calentamiento preventivo desactivado'); } }),
@@ -187,6 +216,7 @@ function coach() {
         h('span', {}, 'Mostrar Gym a mis jugadores: rutinas de pesas según su objetivo, registro de cargas y consejos para llegar bien al entreno.')),
       field('Pruebas físicas cada (semanas)', h('input', { type: 'number', min: 4, max: 26, inputmode: 'numeric', value: st.tests_every || 10, onchange: (e) => { saveSettings({ tests_every: Math.min(26, Math.max(4, Number(e.target.value) || 10)) }); toast('Guardado'); } }), 'Cada cuánto te recuerdo en Hoy medir salto, velocidad de 10 m y plancha. 8 a 13 semanas son 2 a 3 meses.')),
     teamsSection(),
+    categoriesSection(),
     supportSection(),
     h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField()),
     h('section', { class: 'stack' }, sectionTitle('Tus datos'),

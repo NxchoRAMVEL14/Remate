@@ -11,6 +11,7 @@ import { labCalDefaults, labCalEvents } from './lab-salto.js';
 import { testsDue, testsEvery } from './pruebas.js';
 import { planOf } from './casa.js';
 import { CONFIG } from '../../config.js';
+import { hhmm, matchMinutes } from '../horarios.js';
 
 // ---------- crear o editar sesión ----------
 function nextTrainingDay() {
@@ -198,9 +199,11 @@ export function sessionEvent(s, alarm = 60) {
   return { uid: `s-${s.id}`, summary: `${s.title || 'Entrenamiento'} · ${team}`, date: s.session_date, time: /^\d\d:\d\d$/.test(time) ? time : null,
     minutes: Number(s.minutes) || Number(st.minutes) || 90, desc: 'Entrenamiento de voleibol. El plan está en Remate.', alarm };
 }
-export function matchEvent(m) {
+export function matchEvent(m, alarm = 60) {
   const t = state.data.tournaments.find((x) => x.id === m.tournament_id);
-  return { uid: `m-${m.id}`, summary: multiTeam() ? `${teamName(teamOf(m))} vs ${m.rival}` : `Partido contra ${m.rival}`, date: m.match_date, location: m.venue || t?.venue || '', desc: [t ? `Torneo: ${t.name}` : '', m.note || ''].filter(Boolean).join('\n') };
+  const time = hhmm(m.start_time);   // v3.13: con hora, el partido entra con inicio, fin y aviso; sin hora, de todo el día
+  return { uid: `m-${m.id}`, summary: multiTeam() ? `${teamName(teamOf(m))} vs ${m.rival}` : `Partido contra ${m.rival}`, date: m.match_date, location: m.venue || t?.venue || '',
+    ...(time ? { time, minutes: matchMinutes(m), alarm } : {}), desc: [t ? `Torneo: ${t.name}` : '', m.note || ''].filter(Boolean).join('\n') };
 }
 export const tourEvent = (t) => ({ uid: `t-${t.id}`, summary: `Torneo: ${t.name}`, date: t.start_date, end: t.end_date, location: t.venue || '', desc: t.note || '' });
 
@@ -215,7 +218,7 @@ export function upcomingEvents(role, me, alarm = 60) {
   }
   for (const m of d.matches) {
     if (m.match_date < from || m.match_date > to || m.status === 'terminado') continue;
-    ev.push(matchEvent(m));
+    ev.push(matchEvent(m, alarm));
   }
   for (const t of d.tournaments) {
     if ((t.end_date || t.start_date) < from || t.start_date > to) continue;
