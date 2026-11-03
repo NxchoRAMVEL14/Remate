@@ -2,6 +2,7 @@
 // para músculo (aislados, máquinas, en casa y en la cancha). Las series, repeticiones y «te sobran» son
 // propuestas de Remate basadas en las fuentes de FIT_SOURCES, no cifras de un estudio en particular.
 import { GYM, NEED, TIER, topReps, lowReps } from './gym.js';
+import { MAQ } from './maquinas.js';
 import { todayStr, addDays, diffDays } from '../util.js';
 
 const X = (o) => ({ safety: '', side: false, each: false, adult: true, ...o });
@@ -86,7 +87,7 @@ export const FIT_EX = [
     cues: ['Inclínate al arrancar', 'Calidad, no cansancio'], err: 'Hacerlos cansado: ya no son de velocidad.', easier: 'Al 80% de tu velocidad.', harder: 'Arranques desde el piso o en subida.', safety: 'Nada de sprints si traes molestia en el muslo de atrás.' }),
 ];
 
-export const ALL_EX = [...GYM, ...FIT_EX];
+export const ALL_EX = [...GYM, ...FIT_EX, ...MAQ];   // v3.14: más máquinas y poleas
 export const FIT_BY_ID = Object.fromEntries(ALL_EX.map((e) => [e.id, e]));
 export const fitName = (id) => FIT_BY_ID[id]?.name || id;
 
@@ -302,7 +303,7 @@ const cleanRx = (rx) => {
   const rest = Math.min(600, Math.max(0, Math.round(Number(rx.rest) || 60)));
   let rir = rx.rir === null || rx.rir === '' || rx.rir === undefined ? null : Math.min(5, Math.max(0, Math.round(Number(rx.rir))));
   if (Number.isNaN(rir)) rir = null;
-  return { ex: ex.id, pat: SLOT_OF[ex.id] || ex.pat, role: ROLE[rx.role] ? rx.role : fitRole(ex), sets, reps, rir, rest };
+  return { ex: ex.id, pat: SLOT_OF[ex.id] || ex.slot || ex.pat, role: ROLE[rx.role] ? rx.role : fitRole(ex), sets, reps, rir, rest };
 };
 export const cleanFitCustom = (custom) => (Array.isArray(custom) ? custom : []).slice(0, 7)
   .map((d, i) => ({ name: String(d?.name || `Día ${String.fromCharCode(65 + i)}`).trim().slice(0, 40), items: (d?.items || []).map(cleanRx).filter(Boolean).slice(0, 16) }))
@@ -311,6 +312,7 @@ export function customFitDays(custom) {
   return cleanFitCustom(custom).map((d, i) => ({ key: String.fromCharCode(65 + i), name: d.name, focus: 'Personalizado', kind: 'custom', light: false, items: d.items, min: dayMinutes(d.items), custom: true }));
 }
 export function fitRole(ex) {
+  if (ex.role) return ex.role;
   if (ex.unit === 'saltos' || ex.pat === 'salto' || ex.pat === 'lanzamiento') return 'pow';
   if (ex.pat === 'tronco' || ex.pat === 'core') return 'core';
   if (ex.need === 'barra') return 'main';
@@ -318,7 +320,7 @@ export function fitRole(ex) {
 }
 export function fitDefaultRx(exId, raw) {
   const spec = normFit(raw), ex = FIT_BY_ID[exId]; if (!ex) return null;
-  return { ...prescribe(ex, fitRole(ex), spec, false), pat: SLOT_OF[ex.id] || ex.pat };
+  return { ...prescribe(ex, fitRole(ex), spec, false), pat: SLOT_OF[ex.id] || ex.slot || ex.pat };
 }
 
 // Series por semana de cada músculo (las indirectas cuentan la mitad).

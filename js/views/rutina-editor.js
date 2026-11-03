@@ -8,11 +8,12 @@ const LET = 'ABCDEFG';
 // Grupo de un ejercicio para el buscador, a partir de la zona del cuerpo que trabaja.
 export function exGroup(ex) {
   const b = ex.body || '', p = ex.pat || '';
-  if (['salto', 'lanzamiento', 'lateral', 'pow', 'sprint'].includes(p) || ex.unit === 'saltos') return 'Saltos y potencia';
+  if (['salto', 'lanzamiento', 'pow', 'sprint'].includes(p) || ex.unit === 'saltos' || (p === 'lateral' && ex.id.startsWith('g-'))) return 'Saltos y potencia';
   if (/^Pecho|^Hombro, pecho/.test(b)) return 'Pecho';
   if (/^Espalda/.test(b)) return 'Espalda';
   if (/^(Hombro|Manguito|Serrato)/.test(b)) return 'Hombro';
   if (/^(Bíceps|Tríceps)/.test(b)) return 'Brazos';
+  if (/^Trapecio/.test(b)) return 'Hombro';
   if (/^(Abdomen|Costados|Tronco)/.test(b)) return 'Tronco y abdomen';
   return 'Pierna y glúteo';
 }
@@ -22,18 +23,19 @@ export const rxLine = (rx, ex) => [`${rx.sets} × ${rx.reps}${ex?.side ? ' por l
 
 // Buscador de ejercicios: lib = { list: [ejercicios], byId }. exclude: ids que ya están.
 export function pickExercise({ lib, title = 'Agregar ejercicio', exclude = [], onPick }) {
-  const st = { q: '', g: '' };
+  const st = { q: '', g: '', m: false };
   const listEl = h('div', { class: 'rows ed-pick' });
   const q = h('input', { type: 'search', placeholder: 'Buscar: press, sentadilla, bíceps…', 'aria-label': 'Buscar ejercicio' });
   const seg = h('div', { class: 'cluster' });
-  const paintSeg = () => seg.replaceChildren(...[['', 'Todos'], ...GROUP_ORDER.map((g) => [g, g])].map(([k, t]) => h('button', { type: 'button', class: 'chipbtn', 'aria-pressed': st.g === k ? 'true' : 'false', onclick: () => { st.g = k; paintSeg(); paint(); } }, t)));
+  const paintSeg = () => seg.replaceChildren(...[['', 'Todos'], ...GROUP_ORDER.map((g) => [g, g])].map(([k, t]) => h('button', { type: 'button', class: 'chipbtn', 'aria-pressed': st.g === k ? 'true' : 'false', onclick: () => { st.g = k; paintSeg(); paint(); } }, t)),
+    h('button', { type: 'button', class: 'chipbtn', 'aria-pressed': st.m ? 'true' : 'false', onclick: () => { st.m = !st.m; paintSeg(); paint(); } }, 'Solo máquinas y poleas'));
   let sheet;
   const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const paint = () => {
     const s = norm(st.q.trim());
-    const xs = lib.list.filter((e) => (!st.g || exGroup(e) === st.g) && (!s || norm(`${e.name} ${e.body}`).includes(s)));
+    const xs = lib.list.filter((e) => (!st.m || e.need === 'maquina' || e.need === 'polea') && (!st.g || exGroup(e) === st.g) && (!s || norm(`${e.name} ${e.body}`).includes(s)));
     listEl.replaceChildren(...(xs.length ? xs.slice(0, 80).map((e) => h('button', { type: 'button', class: 'row', disabled: exclude.includes(e.id) ? true : null, onclick: () => { onPick(e.id); sheet?.close(); } },
-      h('span', { class: 'row-main' }, h('strong', {}, e.name), h('span', { class: 'row-sub' }, exclude.includes(e.id) ? 'Ya está' : `${exGroup(e)} · ${e.body}`)), ic('plus', 18)))
+      h('span', { class: 'row-main' }, h('strong', {}, e.name), h('span', { class: 'row-sub' }, exclude.includes(e.id) ? 'Ya está' : `${e.need === 'maquina' ? 'Máquina' : e.need === 'polea' ? 'Polea' : exGroup(e)} · ${e.body}`)), ic('plus', 18)))
       : [h('p', { class: 'row-sub' }, 'Ningún ejercicio con eso.')]));
   };
   q.addEventListener('input', () => { st.q = q.value; paint(); });

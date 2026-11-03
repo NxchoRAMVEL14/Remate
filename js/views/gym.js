@@ -7,7 +7,7 @@ import { figFor } from '../content/movimientos.js';
 import { state, add, remove, patch, players, settings, gymReady, ls, multiTeam, teamOf, inTeam } from '../store.js';
 import { weekStart, num } from '../lab-calc.js';
 import { GYM, GYM_BY_ID, GROUPS, NEED, EQUIP, EXP, TIER, PHASE, MINUTES, GOALS, buildRoutine, normSpec, isSpec, maxDays, heavyMax, weekPlan,
-  nextStep, blockWeek, topReps, lowReps, available, groupOf, gymName, WARMUP, COOLDOWN, READ, RULES, ARRIVE, GYM_SOURCES, gymDefaultRx, cleanCustom } from '../content/gym.js';
+  nextStep, blockWeek, topReps, lowReps, available, groupOf, gymName, WARMUP, COOLDOWN, READ, RULES, ARRIVE, GYM_SOURCES, gymDefaultRx, cleanCustom, GYM_ALL } from '../content/gym.js';
 import { editorPage, pickExercise } from './rutina-editor.js';
 import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
 import { lineChart } from './chart.js';
@@ -15,7 +15,7 @@ import { calItemSheet } from './sheets-session.js';
 
 // ---------- datos ----------
 const KEY = { mine: (id) => `remate.gym.mine.${id}`, use: (id) => `remate.gym.use.${id}`, draft: (id) => `remate.gym.draft.${id}`, none: (id) => `remate.gym.none.${id}` };
-const GYM_LIB = { list: GYM, byId: GYM_BY_ID };
+const GYM_LIB = { list: GYM_ALL, byId: GYM_BY_ID };
 const readJSON = (k) => { try { return JSON.parse(ls.get(k) || 'null'); } catch { return null; } };
 export const gymVisible = () => settings().gym_players !== false;
 export const gymLogsOf = (pid) => (state.data.gymLogs || []).filter((l) => l.player_id === pid)
@@ -191,7 +191,7 @@ function libraryTab(ctx) {
   const norm = (t) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   function paint() {
     ui.q = q.value; ui.eq = eq.value;
-    const list = GYM.filter((e) => (!ui.grp || groupOf(e) === ui.grp) && (!ui.eq || available(e, ui.eq)) && (!ui.q || norm(`${e.name} ${e.body} ${e.why}`).includes(norm(ui.q))));
+    const list = GYM_ALL.filter((e) => (!ui.grp || groupOf(e) === ui.grp) && (!ui.eq || available(e, ui.eq)) && (!ui.q || norm(`${e.name} ${e.body} ${e.why}`).includes(norm(ui.q))));
     count.textContent = plural(list.length, 'ejercicio', 'ejercicios');
     rows.replaceChildren(...(list.length ? list.map((e) => exItem(e)) : [h('div', { class: 'empty' }, 'Ningún ejercicio coincide.')]));
   }

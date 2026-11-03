@@ -1,6 +1,7 @@
 // Físico: pruebas físicas (antes en pruebas.js) y Gym (ejercicios con pesas y máquinas, objetivos y el generador de rutinas).
 // Las series, repeticiones y descansos son propuestas de Remate basadas en las fuentes de abajo (GYM_SOURCES), no cifras de un estudio.
 import { addDays, diffDays, todayStr } from '../util.js';
+import { MAQ } from './maquinas.js';
 
 // =====================================================================
 // Pruebas físicas de los jugadores. Se recomienda repetirlas cada 2 o 3 meses, siempre igual.
@@ -513,7 +514,9 @@ export const GYM = [
     harder: 'Una sola mancuerna (el tronco trabaja para no inclinarse).',
     dose: { nuevo: [2, '20 m'], medio: [3, '30 m'], avanzado: [3, '30 m'] } }),
 ];
-export const GYM_BY_ID = Object.fromEntries(GYM.map((e) => [e.id, e]));
+// v3.14: las máquinas y poleas también se pueden usar (al personalizar, en la sesión libre o al registrar).
+export const GYM_BY_ID = Object.fromEntries([...GYM, ...MAQ].map((e) => [e.id, e]));
+export const GYM_ALL = [...GYM, ...MAQ];
 export const gymName = (id) => GYM_BY_ID[id]?.name || id;
 export const groupOf = (ex) => Object.keys(GROUPS).find((g) => GROUPS[g].pats.includes(ex.pat));
 
@@ -759,6 +762,7 @@ export function customGymDays(custom) {
 }
 // Papel y dosis de un ejercicio que se agrega a mano.
 export function gymRole(ex) {
+  if (ex.role) return ex.role === 'main' ? 'main' : ex.role === 'core' ? 'core' : 'acc';
   if (['salto', 'lanzamiento', 'lateral'].includes(ex.pat)) return 'pow';
   if (ex.pat === 'tronco') return 'core';
   if (['aterrizaje', 'pantorrilla', 'aductor', 'hombro'].includes(ex.pat)) return 'prev';

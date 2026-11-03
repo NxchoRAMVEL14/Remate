@@ -2,6 +2,7 @@
 // Pose: t = tronco; L y R = piernas [muslo, espinilla, pie]; A y B = brazos [brazo, antebrazo]; x = corrimiento; up = altura del piso.
 // Son esquemas para entender la forma del movimiento, no una lección de técnica fina.
 import { pose as P } from '../figura.js';
+import { MACHINE_MOVES } from './maquinas-dibujos.js';
 
 const G = 176;                                   // altura del piso en el dibujo
 const box = (x, w, h2) => ({ k: 'box', x, w, h: h2 });
@@ -138,6 +139,7 @@ export const MOVES = {
   defensa: { name: 'Defensa en sombra', frames: [READY, P({ x: 14, t: 35, L: [85, -35, 90], R: [-45, -70, 50], A: [50, 50], B: [50, 50] }), READY], hold: [0.3, 0.3, 0], ms: 1600 },
   reaccion: { name: 'Juego de reacción', view: 'front', frames: [P({ x: 0, L: [20, -15, 90], R: [20, -15, 90], A: [35, 50], B: [35, 50] }), P({ x: 26, L: [35, -15, 90], R: [5, -10, 90], A: [35, 50], B: [35, 50] }), P({ x: 0, L: [20, -15, 90], R: [20, -15, 90], A: [35, 50], B: [35, 50] }), P({ x: -26, L: [5, -10, 90], R: [35, -15, 90], A: [35, 50], B: [35, 50] })], ms: 1800 },
 };
+Object.assign(MOVES, MACHINE_MOVES);   // v3.14: máquinas y poleas
 for (const [id, m] of Object.entries(MOVES)) m.id = id;
 export const move = (id) => MOVES[id] || null;
 
@@ -164,7 +166,7 @@ const FIG = {
   'f-curl-m': 'curl_biceps', 'f-curl-liga': 'curl_biceps', 'f-ext-triceps-polea': 'triceps_polea', 'f-ext-triceps-m': 'ext_triceps', 'f-fondos-banco': 'fondos_banco',
   'f-elev-lateral': 'elev_lateral', 'f-elev-lateral-liga': 'elev_lateral', 'f-apertura': 'aperturas', 'f-press-inclinado': 'press_mancuernas', 'f-flexion-pies': 'lagartija',
   'f-press-liga': 'press_hombro', 'f-remo-barra': 'remo_barra', 'f-remo-polea': 'remo_sentado', 'f-remo-liga': 'remo_de_pie', 'f-jalon-liga': 'jalon_polea',
-  'f-ext-cuad': 'ext_cuadriceps', 'f-sent-pc': 'sentadilla', 'f-zancada-atras': 'zancada', 'f-sprint': 'aceleracion',
+  'f-ext-cuad': 'mq_ext_cuad', 'f-sent-pc': 'sentadilla', 'f-zancada-atras': 'zancada', 'f-sprint': 'aceleracion',
   // En casa
   'h-tobillo': S('movilidad_tobillo', 'flexor_cadera'), 'h-sentadilla': 'sentadilla', 'h-zancada': 'zancada', 'h-puente': 'puente', 'h-talones': 'talones',
   'h-plancha': S('plancha', 'plancha_lateral'), 'h-hombro': 'ytw', 'h-lagartija': 'lagartija', 'h-equilibrio': 'equilibrio', 'h-saltitos': S('saltitos', 'salto_congela'),
@@ -200,6 +202,7 @@ const list = (x) => (Array.isArray(x) ? x : x ? [x] : []).map((id) => MOVES[id])
 export function figFor(ex) {
   if (!ex) return [];
   if (FIG[ex.id]) return list(FIG[ex.id]);
+  if (ex.fig) return list(ex.fig);   // v3.14: máquinas y poleas → su dibujo esquemático (maquinas-dibujos.js)
   if (STEPS[ex.id]) return list(STEPS[ex.id].flat().filter((v, i, a) => a.indexOf(v) === i).slice(0, 4));
   const k = ex.skills?.[0];
   return k && BY_SKILL[k] ? list(BY_SKILL[k]) : [];

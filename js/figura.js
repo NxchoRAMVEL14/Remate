@@ -73,7 +73,13 @@ function propsSVG(mv, J, groundY) {
     else if (k === 'ball') out.push(`<circle class="fg-ball" cx="${handMid[0].toFixed(1)}" cy="${(handMid[1] - 5).toFixed(1)}" r="5.5"/>`);
     else if (k === 'ankle') for (const q of [J.L[2]]) out.push(`<rect class="fg-pr" x="${(q[0] - 3.5).toFixed(1)}" y="${(q[1] - 5).toFixed(1)}" width="7" height="6" rx="2"/>`);
     else if (k === 'band') { const to = [pr.to?.[0] ?? 20, pr.to?.[1] ?? J.A[2][1]]; out.push(`<line class="fg-band" x1="${A[0].toFixed(1)}" y1="${A[1].toFixed(1)}" x2="${to[0]}" y2="${to[1]}"/>`); }
-    else if (k === 'cable') { const to = pr.to || [20, 20]; out.push(`<line class="fg-band" x1="${A[0].toFixed(1)}" y1="${A[1].toFixed(1)}" x2="${to[0]}" y2="${to[1]}"/><rect class="fg-pr" x="${to[0] - 3}" y="${to[1] - 3}" width="6" height="6"/>`); }
+    else if (k === 'cable') { const to = pr.to || [20, 20], q = pr.j ? jt(J, pr.j) : A; out.push(`<line class="fg-band" x1="${q[0].toFixed(1)}" y1="${q[1].toFixed(1)}" x2="${to[0]}" y2="${to[1]}"/><rect class="fg-pr" x="${to[0] - 3}" y="${to[1] - 3}" width="6" height="6"/>`); }
+    // v3.14: piezas de máquina que se mueven con el cuerpo.
+    else if (k === 'lever') { const q = jt(J, pr.j || 'A2'), to = pr.to; out.push(`<line class="fg-lever" x1="${(q[0] + (pr.dx || 0)).toFixed(1)}" y1="${(q[1] + (pr.dy || 0)).toFixed(1)}" x2="${to[0]}" y2="${to[1]}"/><circle class="fg-pivot" cx="${to[0]}" cy="${to[1]}" r="3.5"/>`); }
+    else if (k === 'roller') { const q = jt(J, pr.j); out.push(`<circle class="fg-pr" cx="${(q[0] + (pr.dx || 0)).toFixed(1)}" cy="${(q[1] + (pr.dy || 0)).toFixed(1)}" r="${pr.r || 5}"/>`); }
+    else if (k === 'padj') { const a = jt(J, pr.j), b = pr.j2 ? jt(J, pr.j2) : [a[0] + (pr.v?.[0] || 0), a[1] + (pr.v?.[1] || 0)], dx = pr.dx || 0, dy = pr.dy || 0;
+      out.push(`<line class="fg-padl" x1="${(a[0] + dx).toFixed(1)}" y1="${(a[1] + dy).toFixed(1)}" x2="${(b[0] + dx).toFixed(1)}" y2="${(b[1] + dy).toFixed(1)}"/>`); }
+    else if (k === 'hnd') for (const q of [A, B]) out.push(`<rect class="fg-pr" x="${(q[0] - 2).toFixed(1)}" y="${(q[1] - 5).toFixed(1)}" width="4" height="10" rx="1.5"/>`);
     else if (k === 'kneeband') { const a = J.L[1]; out.push(`<line class="fg-band" x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${pr.to || 190}" y2="${a[1].toFixed(1)}"/><rect class="fg-pr" x="${(pr.to || 190) - 3}" y="${(a[1] - 3).toFixed(1)}" width="6" height="6"/>`); }
     else if (k === 'grip') out.push(`<line class="fg-wall" x1="${(A[0] - 30).toFixed(1)}" y1="${(A[1] - 2).toFixed(1)}" x2="${(A[0] + 30).toFixed(1)}" y2="${(A[1] - 2).toFixed(1)}"/>`);
     else if (k === 'ballA') out.push(`<circle class="fg-ball" cx="${A[0].toFixed(1)}" cy="${(A[1] - 6).toFixed(1)}" r="5.5"/>`);
@@ -95,10 +101,20 @@ function sceneSVG(mv, groundY) {
     else if (k === 'line') s.push(`<line class="fg-mark" x1="${pr.x}" y1="${GROUND - 1}" x2="${pr.x}" y2="${GROUND + 6}"/>`);
     else if (k === 'net') s.push(`<line class="fg-net" x1="${pr.x}" y1="${pr.y}" x2="${pr.x}" y2="${GROUND}"/>`);
     else if (k === 'pad') s.push(`<rect class="fg-box" x="${pr.x}" y="${pr.y}" width="${pr.w}" height="${pr.h}" rx="2"/>`);
+    // v3.14: máquinas (esquema): estructura, asiento, cojines, columna de placas, poleas y cable fijo.
+    else if (k === 'frame') s.push(`<polyline class="fg-mach" points="${pr.pts.map((q) => q.join(',')).join(' ')}"/>`);
+    else if (k === 'seat') s.push(`<line class="fg-mach" x1="${pr.x + pr.w / 2}" y1="${pr.y + 4}" x2="${pr.x + pr.w / 2}" y2="${GROUND}"/><rect class="fg-box" x="${pr.x}" y="${pr.y}" width="${pr.w}" height="${pr.h || 7}" rx="3"/>`);
+    else if (k === 'padl') s.push(`<polyline class="fg-padl" points="${pr.pts.map((q) => q.join(',')).join(' ')}"/>`);
+    else if (k === 'stack') { const top = pr.top ?? 50, x = pr.x; s.push(`<rect class="fg-mach" x="${x}" y="${top}" width="16" height="${GROUND - top}" rx="1"/>`);
+      for (let i = 0; i < 6; i++) s.push(`<rect class="fg-plate" x="${x + 2}" y="${GROUND - 6 - i * 6}" width="12" height="4.5" rx="1"/>`); }
+    else if (k === 'pulley') s.push(`<circle class="fg-pulley" cx="${pr.x}" cy="${pr.y}" r="4"/>`);
+    else if (k === 'rope') s.push(`<polyline class="fg-rope" points="${pr.pts.map((q) => q.join(',')).join(' ')}"/>`);
   }
   return s.join('');
 }
 
+// Punto del cuerpo por nombre: hip, sh, neck, head o extremidad + índice (L1 = rodilla, L2 = tobillo, A1 = codo, A2 = mano).
+function jt(J, name) { if (J[name] && !Array.isArray(J[name][0])) return J[name]; return J[name[0]][Number(name.slice(1))]; }
 const seg = (a, b, cls) => `<line class="${cls}" x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}"/>`;
 const poly = (pts, cls) => `<polyline class="${cls}" points="${pts.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join(' ')}"/>`;
 function bodySVG(mv, p) {
