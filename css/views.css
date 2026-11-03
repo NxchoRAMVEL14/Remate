@@ -837,3 +837,31 @@ button.br-team { cursor: pointer; }
 a.fit-link { text-decoration: none; color: inherit; }
 .fit-shop-item { display: flex; align-items: center; gap: 10px; min-height: 40px; }
 .fit-shop-item input { flex: none; width: 22px; height: 22px; margin: 0; }
+
+/* ---------- Horarios de partidos y torneos (v3.13) ---------- */
+.sch-edit { border: 1.5px solid var(--line); border-radius: var(--r-m); padding: 10px 12px; }
+.sch-edit summary { cursor: pointer; min-height: 32px; }
+.sch-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.sch-days button { font-size: .85rem; text-transform: capitalize; }
+.sch-time { display: inline-flex; align-items: center; gap: 2px; }
+.sch-time input { width: 9.5rem; }
+.sch-date { font-weight: 800; padding: 10px 2px 4px; }
+.sch-date::first-letter { text-transform: uppercase; }
+.sch-slot { flex-wrap: wrap; gap: 8px; }
+.sch-slot.on { background: var(--surface-2); }
+.sch-fill { display: flex; gap: 8px; width: 100%; padding-left: 30px; }
+.sch-fill input { flex: 1; min-width: 0; }
+.sch-fill select { flex: none; width: auto; }
+/* Categorías por edad (v3.13) */
+.cat-row { display: grid; grid-template-columns: auto auto 1fr auto; gap: 6px 8px; align-items: center; }
+.cat-row > input[type=text] { grid-column: 1 / 4; min-width: 0; }
+.cat-row .iconbtn { grid-column: 4; grid-row: 1; }
+.cat-age { display: inline-flex; align-items: center; gap: 4px; font-size: .85rem; color: var(--ink-2); }
+.cat-age input { width: 4.2rem; }
+.cat-born { grid-column: 3 / 5; }
+.roster-pick .row-main .chip { align-self: flex-start; margin-top: 2px; }
+.ed-item { align-items: center; flex-wrap: wrap; }
+.ed-item .ed-open { flex: 1 1 calc(100% - 48px); }
+.ed-open { background: none; border: 0; text-align: left; padding: 0; cursor: pointer; color: inherit; font: inherit; flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ed-ctl { display: flex; gap: 4px; width: 100%; justify-content: flex-end; margin-top: -4px; }
+.ed-pick { max-height: 55vh; overflow: auto; }

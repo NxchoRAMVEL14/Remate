@@ -49,11 +49,16 @@ Deno.serve(async () => {
             body: s.start_time ? `Entreno ${s.session_date === now.date ? 'hoy' : 'mañana'} a las ${hhmm(s.start_time)}${s.title ? `: ${s.title}` : ''}. Llega a tiempo y con agua.` : `Hoy hay entreno${s.title ? `: ${s.title}` : ''}.` });
         }
       }
-      const { data: ms } = await admin.from('matches').select('id, match_date, rival, venue, status, team').eq('group_id', g.id).eq('match_date', now.date).neq('status', 'terminado');
+      // select('*'): funciona con o sin el SQL de la v3.13 (hora de los partidos).
+      const { data: ms } = await admin.from('matches').select('*').eq('group_id', g.id).eq('match_date', now.date).neq('status', 'terminado');
       for (const m of ms || []) {
-        if (now.mins >= wall(m.match_date, '08:00') && now.mins < wall(m.match_date, '21:00')) {
+        // Con hora (v3.13): el aviso llega en las horas de anticipación que eligió el entrenador. Sin hora: de 8 am a 9 pm.
+        const at = m.start_time ? hhmm(m.start_time) : '';
+        const ok = at ? (() => { const left = wall(m.match_date, at) - now.mins; return left > 0 && left <= hours * 60; })()
+          : now.mins >= wall(m.match_date, '08:00') && now.mins < wall(m.match_date, '21:00');
+        if (ok) {
           due.push({ kind: 'partido', id: m.id, title: g.name, url: `#/partido/${m.id}`, team: m.team || null, match: m.id,
-            body: `Hoy juegan contra ${m.rival}${m.venue ? ` en ${m.venue}` : ''}. Revisa la convocatoria y llega a tiempo.` });
+            body: `Hoy juegan contra ${m.rival}${at ? ` a las ${at}` : ''}${m.venue ? ` en ${m.venue}` : ''}. Revisa la convocatoria y llega a tiempo.` });
         }
       }
       if (!due.length) continue;

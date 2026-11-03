@@ -1741,3 +1741,22 @@ revoke all on public.fit_profiles, public.fit_logs from anon;
 grant select, insert, update, delete on public.fit_profiles, public.fit_logs to authenticated;
 revoke all on function public.fit_ok(uuid), public.fit_shared(uuid), public.coach_self_players() from public, anon;
 grant execute on function public.fit_ok(uuid), public.fit_shared(uuid), public.coach_self_players() to authenticated;
+
+-- =====================================================================
+-- REMATE · v3.13 — Hora de los partidos, horarios y categoría de los torneos.
+-- Se puede correr las veces que quieras. No borra nada.
+-- =====================================================================
+alter table public.matches     add column if not exists start_time time;   -- hora de inicio
+alter table public.matches     add column if not exists end_time time;     -- hora de término (aproximada)
+-- Días y horas en que el torneo puede tener partidos: { "days": [2, 4], "times": ["20:00", "21:00"], "minutes": 60 }
+-- (days: 0 domingo … 6 sábado).
+alter table public.tournaments add column if not exists schedule jsonb not null default '{}'::jsonb;
+-- Categoría por edad del torneo (la clave de una de las categorías de Ajustes; vacío = sin categoría).
+alter table public.tournaments add column if not exists category text not null default '' check (char_length(category) <= 20);
+do $$ begin
+  alter table public.tournaments add constraint tournaments_schedule_ok check (jsonb_typeof(schedule) = 'object' and octet_length(schedule::text) <= 2000);
+exception when duplicate_object then null; end $$;
+-- Los partidos que ya traían «Hora: 20:00» en la nota (los del cuadro y los del lector de carteles) pasan a la hora nueva.
+update public.matches
+   set start_time = (substring(note from 'Hora: ?([0-2]?[0-9]:[0-5][0-9])'))::time
+ where start_time is null and note ~ 'Hora: ?([01]?[0-9]|2[0-3]):[0-5][0-9]';

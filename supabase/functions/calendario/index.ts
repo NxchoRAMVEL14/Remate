@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     const [{ data: g }, { data: ss }, { data: ms }, tr] = await Promise.all([
       db.from('groups').select('name, settings').eq('id', gid).maybeSingle(),
       db.from('sessions').select('id, session_date, start_time, minutes, title, status, published').eq('group_id', gid).eq('published', true).gte('session_date', from).order('session_date').limit(300),
-      db.from('matches').select('id, match_date, rival, venue, kind, status, note, tournament_id').eq('group_id', gid).gte('match_date', from).order('match_date').limit(300),
+      db.from('matches').select('*').eq('group_id', gid).gte('match_date', from).order('match_date').limit(300),
       db.from('tournaments').select('id, name, venue, start_date, end_date, note').eq('group_id', gid).gte('start_date', addDays(from, -30)).order('start_date').limit(100),
     ]);
     const team = g?.name || 'Mi equipo', st = (g?.settings || {}) as Record<string, unknown>;
@@ -76,7 +76,13 @@ Deno.serve(async (req) => {
     }
     for (const m of ms || []) {
       const t = m.tournament_id ? tours.get(m.tournament_id) : null;
+      // v3.13: con hora de inicio el partido entra con su hora y aviso 1 hora antes; sin hora, de todo el día.
+      const a = String(m.start_time || '').slice(0, 5), b = String(m.end_time || '').slice(0, 5);
+      const hm = (x: string) => (/^\d\d:\d\d$/.test(x) ? +x.slice(0, 2) * 60 + +x.slice(3) : null);
+      const ma = hm(a), mb = hm(b);
+      const minutes = ma == null ? 90 : mb != null && mb > ma ? mb - ma : (Number(m.best_of) === 5 ? 105 : 60);
       L.push(...vevent({ uid: `m-${m.id}`, summary: `Partido contra ${m.rival}`, date: m.match_date, location: m.venue || t?.venue || '',
+        time: ma == null ? null : a, minutes,
         desc: [t ? `Torneo: ${t.name}` : KINDS[m.kind] || '', m.note || ''].filter(Boolean).join('\n') }));
     }
     for (const t of tr.data || []) L.push(...vevent({ uid: `t-${t.id}`, summary: `Torneo: ${t.name}`, date: t.start_date, end: t.end_date, location: t.venue || '', desc: t.note || '' }));
