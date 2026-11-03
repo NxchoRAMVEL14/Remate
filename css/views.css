@@ -653,6 +653,13 @@ button.br-team { cursor: pointer; }
 .fg-band { stroke: var(--link); stroke-width: 2; stroke-dasharray: 4 3; }
 .fg-box { fill: var(--surface); stroke: var(--ink-2); stroke-width: 2; }
 .fg-wall { stroke: var(--ink-2); stroke-width: 4; stroke-linecap: round; }
+.fg-mach { fill: none; stroke: var(--ink-2); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: .75; }
+.fg-padl { fill: none; stroke: var(--ink-2); stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; opacity: .4; }
+.fg-plate { fill: var(--ink-2); opacity: .55; }
+.fg-pulley { fill: var(--surface); stroke: var(--ink-2); stroke-width: 2; }
+.fg-rope { fill: none; stroke: var(--link); stroke-width: 2; stroke-dasharray: 4 3; }
+.fg-lever { stroke: var(--link); stroke-width: 4; stroke-linecap: round; }
+.fg-pivot { fill: var(--surface); stroke: var(--link); stroke-width: 2; }
 .fg-net { stroke: var(--ink-2); stroke-width: 3; stroke-dasharray: 2 3; }
 .fg-cone { fill: #f08a24; }
 .fg-mark { stroke: var(--ball); stroke-width: 3; }
