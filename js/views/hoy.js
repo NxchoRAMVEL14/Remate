@@ -20,6 +20,7 @@ import { currentBlock } from './temporada.js';
 import { rsvpCounts } from './partido-summary.js';
 import { tournamentsNeedingAnswers } from './torneos.js';
 import { testsDue, testsEvery } from './pruebas.js';
+import { fraseCard } from './frase.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
 
@@ -179,6 +180,7 @@ export default function hoy() {
   el.append(h('div', { class: 'cluster' },
     h('button', { class: 'btn', type: 'button', onclick: () => playerFormSheet() }, ic('plus', 18), 'Agregar jugador'),
     h('button', { class: 'btn', type: 'button', onclick: () => sessionFormSheet(null, (s) => { location.hash = `#/sesion/${s.id}`; }) }, ic('calendar-days', 18), 'Nuevo entrenamiento')));
+  el.append(fraseCard());   // v3.16: la frase del día
   return { title: 'Hoy', sub: fmtDate(todayStr(), { weekday: 'long', day: 'numeric', month: 'long' }), el };
 }
 

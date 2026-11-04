@@ -2,6 +2,7 @@
 import { h, ic, toast, confirmSheet, openSheet, download, copyText, shareText, fmtDate, newJoinCode, DAYS, DAYS_LONG, plural, THEMES, getTheme, setTheme } from '../util.js';
 import { state, group, settings, saveSettings, add, patch, remove, players, sessions, exportBackup, importBackup, refresh, pendingCount, teamReady, equiposReady, teams } from '../store.js';
 import { pushSettings } from './avisos.js';
+import { fraseField } from './frase.js';
 import { disablePush } from '../push.js';
 import { attendanceFor, doneSessions } from '../calc.js';
 import { leave, restartDemo } from '../auth.js';
@@ -153,7 +154,7 @@ function categoriesSection() {
 
 function asistente() {
   return { title: 'Ajustes', el: h('div', { class: 'page' },
-    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField()),
+    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField(), fraseField()),
     h('section', { class: 'stack' }, sectionTitle('Notificaciones'), pushSettings()),
     aboutSection(),
     h('section', { class: 'stack' }, sectionTitle('Cuenta'),
@@ -218,7 +219,7 @@ function coach() {
     teamsSection(),
     categoriesSection(),
     supportSection(),
-    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField()),
+    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField(), fraseField()),
     h('section', { class: 'stack' }, sectionTitle('Tus datos'),
       state.mode === 'cloud' ? h('p', { style: { margin: 0 } }, pendingCount() ? `${plural(pendingCount(), 'cambio espera', 'cambios esperan')} conexión para enviarse.` : state.online ? 'Todo está guardado en la nube.' : 'Sin internet: los cambios se guardan en este celular y se envían al volver la conexión.') : note('Modo demo: los datos son de ejemplo y viven solo en este navegador. Para usar Remate con tus jugadores, conéctalo a Supabase (el LEEME explica cómo).', 'warn'),
       h('div', { class: 'cluster' },
@@ -245,14 +246,14 @@ function coach() {
 function jugador(ctx) {
   const me = ctx.me;
   if (ctx.self) return { title: 'Ajustes', el: h('div', { class: 'page' },
-    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField()),
+    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField(), fraseField()),
     h('section', { class: 'stack' }, sectionTitle('Tu perfil de jugador'),
       h('p', { style: { margin: 0 } }, `Estás usando Remate con tu ficha de jugador (${me.name}). Lo que registres aquí (En casa, retos, convocatorias y Teoría) cuenta como de ese jugador.`),
       h('div', { class: 'cluster' }, h('button', { class: 'btn', type: 'button', onclick: () => import('./sheets-player.js').then((m) => m.playerFormSheet(me, { self: true })) }, ic('pencil', 18), 'Editar mis datos'),
         h('button', { class: 'btn primary', type: 'button', onclick: () => import('./mas.js').then((m) => m.leaveSelf('#/ajustes')) }, ic('undo-2', 18), 'Volver a entrenador'))),
     aboutSection()) };
   return { title: 'Ajustes', el: h('div', { class: 'page' },
-    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField()),
+    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField(), fraseField()),
     ctx.readonly ? null : h('section', { class: 'stack' }, sectionTitle('Notificaciones'), pushSettings()),
     h('section', { class: 'stack' }, sectionTitle('Tu información'),
       h('p', { style: { margin: 0 } }, `Tu entrenador guarda tu nombre o apodo${me ? ` (${me.name})` : ''}, tu posición, tus evaluaciones y tu asistencia. No guarda teléfono, domicilio ni fotos. Solo tú y tu entrenador ven tu avance. Si quieres que se corrija o se borre algo, pídeselo a tu entrenador.`)),

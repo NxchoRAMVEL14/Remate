@@ -1,21 +1,28 @@
 // Remate Fit (v3.11, nutrición en v3.12): la zona de adultos dentro de Remate. Solo la ven mayores de 18 que el entrenador activa
 // (y el entrenador con su propio perfil de jugador). Gym de adultos, comida, peso, medidas y pasos.
 // Lo de cada adulto es suyo: el entrenador lo ve solo si ese adulto activa «Compartir con mi entrenador».
-import { h, ic, toast, confirmSheet, fmtDate, todayStr, addDays, plural } from '../util.js';
+import { h, ic, toast, confirmSheet, openSheet, fmtDate, todayStr, addDays, plural } from '../util.js';
 import { lazyFig } from '../figura.js';
 import { figFor } from '../content/movimientos.js';
 import { state, add, patch, remove, players, settings, sql311Ready, ls, myPlayer } from '../store.js';
 import { fitOk, isAdult, ageFrom } from '../calc.js';
 import { num } from '../lab-calc.js';
 import { FIT_BY_ID, fitName, PLACES, FIT_GOALS, FIT_EXP, FIT_MINUTES, normFit, buildFit, nextFitStep, fitWeek, weeklyAverages, weeklyRate, rateText,
-  MEASURES, MEASURE_TIPS, STEP_NOTE, vbFromRemate, FIT_SOURCES, MUSCLES, VOLUME_TARGET, ROLE, NEED, TIER, splitName, ALL_EX, fitDefaultRx, cleanFitCustom } from '../content/fit.js';
+  MEASURES, MEASURE_TIPS, STEP_NOTE, vbFromRemate, FIT_SOURCES, MUSCLES, VOLUME_TARGET, ROLE, NEED, TIER, splitName, ALL_EX, fitDefaultRx, cleanFitCustom,
+  registerOwn, cleanOwn, OWN_MUS, rampOf, applyRamp, e1rm, dayMinutes, fitAvailable } from '../content/fit.js';
+import { TEMPLATES, proposeDay, musOf, MUS_BY } from '../content/musculos.js';
+import { WD_NAMES } from './rutina-editor.js';
 import { editorPage, pickExercise } from './rutina-editor.js';
+import { CARDIO_TYPES } from './fit-bascula.js';
+import { readShotSheet, entryForm, dailyReminderSheet, dayPicker, dayWord, activitySheet } from './fit-bascula.js';
+import { chartsTab } from './fit-graficas.js';
 const FIT_LIB = { list: ALL_EX, byId: FIT_BY_ID };
 import { WARMUP, COOLDOWN } from '../content/gym.js';
 import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
 import { lineChart } from './chart.js';
 import { enterSelf } from './mas.js';
 import { foodTab, recipePage, foodSummary, foodShared } from './fit-comida.js';
+import { shareSheet, shareBtn, packRoutine, unpackRoutine, routineLink, routineText, firstName } from './compartir.js';
 
 // ---------- datos ----------
 export const profOf = (pid) => (state.data.fitProfiles || []).find((r) => r.player_id === pid) || null;
@@ -32,7 +39,47 @@ export function upsertDay(pid, kind, day, data) {
   if (ex) return patch('fitLogs', ex.id, { data: { ...(ex.data || {}), ...data } });
   return add('fitLogs', { player_id: pid, kind, day, data });
 }
-export const specOf = (pid) => normFit(profOf(pid)?.data);
+// v3.16: actividad del día (pasos, puntos cardio, minutos de cardio). null = quitar ese dato; si no queda nada, se borra el día.
+export function saveActivity(pid, day, d) {
+  const ex = fitLogsOf(pid, 'steps').find((l) => l.day === day);
+  const data = { ...(ex?.data || {}) };
+  for (const [k, v] of Object.entries(d)) { if (v == null) delete data[k]; else data[k] = v; }
+  if (!Object.keys(data).length) { if (ex) remove('fitLogs', ex.id); return; }
+  if (ex) patch('fitLogs', ex.id, { data }); else add('fitLogs', { player_id: pid, kind: 'steps', day, data });
+}
+export const activityOf = (pid, day) => fitLogsOf(pid, 'steps').find((l) => l.day === day)?.data || {};
+export const specOf = (pid) => { const d = profOf(pid)?.data; if (d?.myEx) registerOwn(d.myEx); return normFit(d); };
+// v3.18: tu semana (voleibol y los entrenos que das) y la biblioteca con lo que más usas y tus ejercicios propios.
+export const weekOf = (spec) => ({ vb: (spec.week?.vb || []).filter((x) => x >= 0 && x <= 6), coach: (spec.week?.coach || []).filter((x) => x >= 0 && x <= 6), coachMin: Number(spec.week?.coachMin) || 150 });
+const WD_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+const WD_ORDER = [1, 2, 3, 4, 5, 6, 0];
+const wdOfDate = (d) => new Date(`${d}T12:00:00`).getDay();
+function recentEx(pid) {
+  const n = new Map();
+  fitLogsOf(pid, 'gym').slice(0, 40).forEach((l, i) => (l.data?.sets || []).forEach((e) => n.set(e.ex, (n.get(e.ex) || 0) + 1 + (40 - i) / 40)));
+  return [...n].sort((a, b) => b[1] - a[1]).map(([id]) => id).slice(0, 12);
+}
+function libFor(me, spec, canEdit = true) {
+  return { ...FIT_LIB, list: ALL_EX, recent: recentEx(me.id), defaultRx: (id) => fitDefaultRx(id, spec), addOwn: canEdit ? (name, done) => ownSheet(me, name, done) : null };
+}
+// «Agregar mi propio ejercicio»: nombre, músculo, con qué y cómo se cuenta.
+function ownSheet(me, preset, done) {
+  const name = h('input', { type: 'text', maxlength: 50, value: preset || '', placeholder: 'Por ejemplo: Press de pecho Hammer' });
+  const mus = h('select', {}, options(Object.entries(OWN_MUS).map(([k, [b]]) => [k, MUS_BY[k]?.name || b]), 'pecho'));
+  const need = h('select', {}, options([['maquina', 'Máquina'], ['polea', 'Polea'], ['barra', 'Barra'], ['mancuerna', 'Mancuernas'], ['nada', 'Peso corporal'], ['liga', 'Liga']], 'maquina'));
+  const unit = h('select', {}, options([['kg', 'Kilos y repeticiones'], ['reps', 'Solo repeticiones'], ['s', 'Segundos']], 'kg'));
+  openSheet({ title: 'Mi propio ejercicio', body: h('div', { class: 'stack' }, field('Nombre', name, 'Como lo conoces en tu gym.'), h('div', { class: 'grid' }, field('Músculo principal', mus), field('Con qué', need)), field('Cómo lo anotas', unit),
+    note('Solo existe en tu Remate Fit. Sale con un dibujo genérico y cuenta en tus series por músculo.')),
+  actions: [{ label: 'Cancelar' }, { label: 'Agregar', kind: 'primary', onClick: () => {
+    const nm = name.value.trim(); if (nm.length < 3) { toast('Escribe el nombre del ejercicio'); return false; }
+    const list = cleanOwn(profOf(me.id)?.data?.myEx);
+    const same = list.find((x) => x.name.toLowerCase() === nm.toLowerCase());
+    const id = same?.id || `u-${Date.now().toString(36)}`;
+    if (!same) list.push({ id, name: nm, mus: mus.value, need: need.value, unit: unit.value });
+    registerOwn(list); done(id);   // primero se agrega donde estabas; luego se guarda (y la pantalla se vuelve a dibujar)
+    saveProf(me.id, { myEx: list }); toast(same ? 'Ya lo tenías' : 'Ejercicio agregado'); return true;
+  } }] });
+}
 export function vbOf(me, spec) {
   const auto = vbFromRemate({ attendance: state.data.attendance || [], sessions: state.data.sessions || [], matchStats: state.data.matchStats || [], matches: state.data.matches || [],
     playerId: me.id, teamDays: (settings().days || []).length });
@@ -42,7 +89,9 @@ function routineOf(me) {
   const spec = specOf(me.id), vb = vbOf(me, spec), r = buildFit(spec, vb.days), wk = fitWeek(spec.since);
   // Semana de descarga (cada 6): una serie menos en todo y sin subir peso.
   if (wk?.light) r.days.forEach((d) => d.items.forEach((rx) => { rx.sets = Math.max(1, rx.sets - 1); }));
-  return { spec, vb, r, wk };
+  const ramp = rampOf(spec);   // v3.18: regreso gradual
+  if (ramp) applyRamp(r.days);
+  return { spec, vb, r, wk, ramp };
 }
 function lastFor(pid, exId, skipId) {
   for (const l of fitLogsOf(pid, 'gym')) { if (l.id === skipId) continue; const e = (l.data?.sets || []).find((x) => x.ex === exId); if (e) return e; }
@@ -50,6 +99,16 @@ function lastFor(pid, exId, skipId) {
 }
 // El siguiente día de la rutina (las sesiones libres no cuentan para el orden).
 const nextKey = (pid, r) => { const last = fitLogsOf(pid, 'gym').find((l) => l.data?.key !== 'L')?.data?.key; const i = r.days.findIndex((d) => d.key === last); return r.days[i >= 0 ? (i + 1) % r.days.length : 0]; };
+// v3.18: si tus días van en días de la semana, lo que toca hoy (o el próximo).
+function planToday(pid, r, today = todayStr()) {
+  const fixed = r.days.some((d) => Number.isInteger(d.wd));
+  if (!fixed) return { fixed, day: nextKey(pid, r) };
+  const done = fitLogsOf(pid, 'gym').some((l) => l.day === today && l.data?.key !== 'L');
+  const wd = wdOfDate(today), todays = r.days.find((d) => d.wd === wd);
+  let next = null, inDays = 0;
+  for (let k = 1; k <= 7 && !next; k++) { const x = r.days.find((d) => d.wd === (wd + k) % 7); if (x) { next = x; inDays = k; } }
+  return { fixed, today: todays || null, done, next, inDays, day: todays && !done ? todays : next || todays || r.days[0] };
+}
 
 // ---------- textos ----------
 const restText = (s) => (s < 60 ? `${s} s` : s % 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s / 60} min`);
@@ -92,6 +151,7 @@ function tabsEl(ctx, base = '#/fit') {
 }
 
 export default function fit(ctx) {
+  if (ctx.args[0] === 'usar') return useFit(ctx);
   if (ctx.role === 'coach') return coachView(ctx);
   const me = ctx.me;
   if (!me) return { title: 'Remate Fit', el: h('div', { class: 'page' }, empty('Sin perfil', 'Entra con tu código para usar Remate Fit.')) };
@@ -113,46 +173,96 @@ export default function fit(ctx) {
 function todayTab(ctx, me, canEdit) {
   const prof = profOf(me.id);
   if (!prof && canEdit) return firstTime(ctx, me);
-  const { spec, vb, r, wk } = routineOf(me);
-  const day = nextKey(me.id, r);
+  const { spec, vb, r, wk, ramp } = routineOf(me);
+  const plan = planToday(me.id, r), day = plan.day;
   const today = todayStr();
+  const wkx = weekOf(spec), wdToday = wdOfDate(today);
+  const dayWords = ['hoy', 'mañana', 'pasado mañana'];
+  const head = !plan.fixed ? `Siguiente: día ${day.key}, ${day.name}`
+    : plan.today && !plan.done ? `Hoy ${WD_NAMES[wdToday].toLowerCase()}: ${plan.today.name}`
+      : plan.next ? `${plan.done ? 'Ya entrenaste hoy. ' : 'Hoy descansas del gym. '}${plan.inDays < 3 ? dayWords[plan.inDays].replace(/^./, (c) => c.toUpperCase()) : `El ${WD_NAMES[plan.next.wd].toLowerCase()}`}: ${plan.next.name}` : `Siguiente: ${day.name}`;
+  const todayExtra = [wkx.vb.includes(wdToday) ? 'hoy tienes voleibol' : null, wkx.coach.includes(wdToday) ? 'hoy das entrenamiento' : null].filter(Boolean);
+  const lastGym = fitLogsOf(me.id, 'gym')[0]?.day;
+  const longPause = !ramp && lastGym && lastGym < addDays(today, -21);
   const weekFrom = addDays(today, -6);
   const gymWeek = fitLogsOf(me.id, 'gym').filter((l) => l.day >= weekFrom).length;
-  const steps = fitLogsOf(me.id, 'steps'), stepsToday = steps.find((l) => l.day === today)?.data?.n;
+  // v3.16: anotar de cualquier día (hoy, ayer u otro).
+  ctx.ui.qday = ctx.ui.qday && ctx.ui.qday <= today ? ctx.ui.qday : today;
+  const qday = ctx.ui.qday, qLabel = dayWord(qday), qDe = qLabel.startsWith('el ') ? `del ${qLabel.slice(3)}` : `de ${qLabel}`;
+  const steps = fitLogsOf(me.id, 'steps'), stepsToday = steps.find((l) => l.day === qday)?.data?.n;
   const st7 = steps.filter((l) => l.day >= weekFrom && Number(l.data?.n) > 0);
   const stAvg = st7.length ? Math.round(st7.reduce((a, l) => a + Number(l.data.n), 0) / st7.length) : null;
-  const body = fitLogsOf(me.id, 'body'), kgToday = body.find((l) => l.day === today)?.data?.kg;
+  const body = fitLogsOf(me.id, 'body'), kgToday = body.find((l) => l.day === qday)?.data?.kg;
   const avgs = weeklyAverages(body, 3), rate = weeklyRate(avgs), lastAvg = [...avgs].reverse().find((a) => a.avg != null);
 
   const stepsIn = h('input', { type: 'number', inputmode: 'numeric', min: 0, max: 80000, step: 100, value: stepsToday ?? '', placeholder: 'Pasos', 'aria-label': 'Pasos de hoy' });
   const kgIn = h('input', { type: 'number', inputmode: 'decimal', min: 30, max: 250, step: 0.1, value: kgToday ?? '', placeholder: 'kg', 'aria-label': 'Peso de hoy en kg' });
-  const saveSteps = () => { const n = num(stepsIn.value); if (n == null || n < 0 || n > 80000) { toast('Escribe tus pasos de hoy (0 a 80,000)'); return; } upsertDay(me.id, 'steps', today, { n: Math.round(n) }); toast('Pasos guardados'); };
-  const saveKg = () => { const kg = num(kgIn.value); if (kg == null || kg < 30 || kg > 250) { toast('Escribe tu peso en kg (30 a 250)'); return; } upsertDay(me.id, 'body', today, { kg: r1(kg) }); toast('Peso guardado'); };
+  const saveSteps = () => { const n = num(stepsIn.value); if (n == null || n < 0 || n > 80000) { toast(`Escribe tus pasos ${qDe} (0 a 80,000)`); return; } saveActivity(me.id, qday, { n: Math.round(n) }); toast(`Pasos ${qDe} guardados`); };
+  const saveKg = () => { const kg = num(kgIn.value); if (kg == null || kg < 30 || kg > 250) { toast('Escribe tu peso en kg (30 a 250)'); return; } upsertDay(me.id, 'body', qday, { kg: r1(kg) }); toast(`Peso ${qDe} guardado`); };
+  const saveShot = (d) => { const { day, pasos, ...b } = d; if (Object.keys(b).length) upsertDay(me.id, 'body', day, b); if (pasos != null) saveActivity(me.id, day, { n: pasos }); toast('Guardado'); };
+  const saveMany = (rows) => { rows.forEach(({ day, ...d }) => saveActivity(me.id, day, d)); toast(`Guardé ${plural(rows.length, 'día', 'días')}`); };
+  const existing = (d) => activityOf(me.id, d);
+  const daySeg = dayPicker(qday, (d) => { ctx.ui.qday = d; ctx.rerender(); });
+  const act = activityOf(me.id, qday), kgQ = body.find((l) => l.day === qday)?.data;
+  const already = [act.n != null ? `${Number(act.n).toLocaleString('es-MX')} pasos` : null, act.pc != null ? `${act.pc} pts cardio` : null, act.cmin ? `${act.cmin} min de cardio` : null, kgQ?.kg ? `${kgQ.kg} kg` : null].filter(Boolean);
 
   return h('div', { class: 'stack' },
     h('section', { class: 'band next fit-band' },
       h('div', { class: 'when' }, [FIT_GOALS[spec.goal].name, wk ? `semana ${wk.week} de 6${wk.light ? ' · descarga' : ''}` : null].filter(Boolean).join(' · ')),
-      h('h2', {}, `Siguiente: día ${day.key}, ${day.name}`),
-      h('div', {}, `${plural(day.items.length, 'ejercicio', 'ejercicios')}, ≈ ${day.min} min${day.light ? ' · día ligero de pierna por tu voleibol' : ''}`),
+      h('h2', {}, head),
+      h('div', {}, `Día ${day.key}: ${plural(day.items.length, 'ejercicio', 'ejercicios')}, ≈ ${day.min} min${day.light ? ' · día ligero de pierna por tu voleibol' : ''}${todayExtra.length ? ` · ${todayExtra.join(' y ')}` : ''}`),
       h('div', { class: 'cluster' },
         canEdit ? h('a', { class: 'btn ball', href: `#/fit/registrar/${day.key}` }, ic('check', 18), `Registrar el día ${day.key}`) : null,
         h('a', { class: 'btn', href: '#/fit/rutina' }, ic('dumbbell', 18), 'Ver la rutina'),
         canEdit ? h('a', { class: 'btn', href: '#/fit/registrar/libre' }, ic('plus', 18), 'Sesión libre') : null)),
     wk?.light ? note('Semana de descarga: una serie menos en cada ejercicio y sin subir peso. Te recuperas y luego sigues subiendo.', 'info') : null,
+    ramp ? note(`Regreso gradual, semana ${ramp.week} de 2: una serie menos y una repetición más de sobra en cada ejercicio. Así tu cuerpo se readapta sin lastimarte.`, 'info') : null,
+    longPause && canEdit ? h('div', { class: 'note info stack' }, h('span', {}, `Tu última sesión fue el ${longDay(lastGym)}. Si vienes regresando, activa el regreso gradual: 2 semanas con una serie menos.`),
+      h('button', { type: 'button', class: 'btn sm', onclick: () => { saveProf(me.id, { rampSince: today }); toast('Regreso gradual activado por 2 semanas'); } }, 'Activar regreso gradual')) : null,
+    plan.fixed ? weekStrip(r, wkx, wdToday) : null,
     h('div', { class: 'kpis fit-kpis' },
-      kpi('Gym esta semana', `${gymWeek} de ${spec.days}`, gymWeek >= spec.days ? 'ok' : ''),
+      kpi('Gym esta semana', `${gymWeek} de ${r.days.length}`, gymWeek >= r.days.length ? 'ok' : ''),
       kpi('Pasos (promedio 7 días)', stAvg != null ? stAvg.toLocaleString('es-MX') : '—', stAvg != null && stAvg >= spec.stepsGoal ? 'ok' : ''),
       kpi('Peso (promedio semana)', lastAvg ? `${r1(lastAvg.avg)} kg` : '—', ''),
       kpi('Voleibol por semana', `${vb.days} ${vb.days === 1 ? 'día' : 'días'}`, '')),
     rate ? note(rateText(spec.goal, rate)) : null,
-    canEdit ? h('section', { class: 'panel stack' }, h('h3', {}, 'Hoy'),
-      h('div', { class: 'fit-quick' }, h('label', { class: 'field' }, h('span', { class: 'label' }, `Pasos (meta ${spec.stepsGoal.toLocaleString('es-MX')})`), stepsIn), h('button', { type: 'button', class: 'btn', onclick: saveSteps }, 'Guardar')),
-      h('div', { class: 'fit-quick' }, h('label', { class: 'field' }, h('span', { class: 'label' }, 'Peso en ayunas (kg)'), kgIn), h('button', { type: 'button', class: 'btn', onclick: saveKg }, 'Guardar')),
-      h('p', { class: 'row-sub', style: { margin: 0 } }, 'Los pasos los ves en tu reloj o en la app de salud de tu celular. El peso: por la mañana, después del baño y antes de desayunar.')) : null,
+    canEdit ? h('section', { class: 'panel stack' }, h('h3', {}, 'Pasos y peso'), daySeg,
+      already.length ? h('p', { class: 'row-sub', style: { margin: 0 } }, `Ya anotaste ${qLabel}: ${already.join(' · ')}.`) : null,
+      h('div', { class: 'fit-quick' }, h('label', { class: 'field' }, h('span', { class: 'label' }, `Pasos ${qDe} (meta ${spec.stepsGoal.toLocaleString('es-MX')})`), stepsIn), h('button', { type: 'button', class: 'btn', onclick: saveSteps }, 'Guardar')),
+      h('div', { class: 'fit-quick' }, h('label', { class: 'field' }, h('span', { class: 'label' }, `Peso ${qDe} en ayunas (kg)`), kgIn), h('button', { type: 'button', class: 'btn', onclick: saveKg }, 'Guardar')),
+      h('div', { class: 'cluster' },
+        h('button', { type: 'button', class: 'btn sm', onclick: () => readShotSheet({ onSave: saveShot, day: qday }) }, ic('camera', 16), 'Leer captura de mi báscula'),
+        h('button', { type: 'button', class: 'btn sm', onclick: () => readShotSheet({ onSave: saveShot, kind: 'pasos', day: qday, onSaveMany: saveMany, existing }) }, ic('camera', 16), 'Leer captura de pasos'),
+        h('button', { type: 'button', class: 'btn sm ghost', onclick: () => activitySheet({ day: qday, cur: existing, title: 'Cardio y pasos', onSave: (d, data) => { saveActivity(me.id, d, data); toast(`Guardado (${dayWord(d)})`); } }) }, ic('heart-pulse', 16), 'Cardio'),
+        h('button', { type: 'button', class: 'btn sm ghost', onclick: () => { const s2 = openSheet({ title: 'Datos de la báscula', body: entryForm({}, (d) => { saveShot(d); s2.close(); }, 'bascula', '', qday) }); } }, ic('plus', 16), 'Grasa y músculo'),
+        h('button', { type: 'button', class: 'btn sm ghost', onclick: dailyReminderSheet }, ic('calendar-plus', 16), 'Aviso diario')),
+      h('p', { class: 'row-sub', style: { margin: 0 } }, 'Los pasos los ves en tu reloj o en la app de salud de tu celular. El peso: por la mañana, después del baño y antes de desayunar. Con «Leer captura» tomas captura de pantalla de la app de tu báscula o de tus pasos y Remate lee los números. Con Google Fit en «Semana» se guardan los 7 días de una vez. Para corregir otro día, elige «Otro día» o entra a Progreso.')) : null,
     state.role === 'coach' ? null : note(prof?.share ? 'Compartes tu Remate Fit con tu entrenador: ve tu rutina y tu progreso. Lo cambias en «Perfil».' : 'Tu Remate Fit es privado: tu entrenador no lo ve. Si quieres que te ayude, actívalo en «Perfil».'),
     foodSummary(me, canEdit));
 }
 const kpi = (label, value, kind) => h('div', { class: `kpi ${kind || ''}` }, h('span', { class: 'n' }, value), h('span', { class: 'l' }, label));
+// v3.18: la semana de lunes a domingo: gym, voleibol, entrenos que das y descanso.
+const LEG_PATS = new Set(['sq', 'hinge', 'uni', 'glute', 'ham', 'quad']);
+const heavyLegs = (d) => d.items.filter((rx) => LEG_PATS.has(rx.pat) && (rx.role === 'main' || rx.role === 'sec')).length >= 2;
+function weekStrip(r, wkx, wdToday = null) {
+  return h('div', { class: 'fit-week', role: 'list', 'aria-label': 'Tu semana' }, WD_ORDER.map((wd) => {
+    const ds = r.days.filter((d) => d.wd === wd);
+    const tags = [wkx.vb.includes(wd) ? 'Voleibol' : null, wkx.coach.includes(wd) ? 'Das entreno' : null].filter(Boolean);
+    return h('div', { class: `fw-day${wd === wdToday ? ' today' : ''}${ds.length ? ' gym' : ''}`, role: 'listitem' }, h('b', {}, WD_SHORT[wd]),
+      ds.length ? ds.map((d) => h('span', {}, `${d.key}: ${d.name}`)) : !tags.length ? h('span', { class: 'fw-rest' }, 'Descanso') : null,
+      tags.map((t) => h('small', {}, t)));
+  }));
+}
+function weekWarnings(r, wkx) {
+  const out = [];
+  for (const d of r.days) {
+    if (!Number.isInteger(d.wd) || !heavyLegs(d)) continue;
+    const next = (d.wd + 1) % 7;
+    if (wkx.vb.includes(next)) out.push(`El ${WD_NAMES[d.wd].toLowerCase()} toca ${d.name.toLowerCase()} y al día siguiente tienes voleibol: hazla más ligera (una serie menos) o cámbiala de día.`);
+    if (wkx.vb.includes(d.wd)) out.push(`El ${WD_NAMES[d.wd].toLowerCase()} toca ${d.name.toLowerCase()} el mismo día del voleibol: sepáralos al menos 3 horas, o mejor otro día.`);
+  }
+  return out;
+}
 
 function firstTime(ctx, me) {
   return h('div', { class: 'stack' },
@@ -175,11 +285,14 @@ function routineTab(ctx, me, canEdit) {
       h('p', { class: 'row-sub', style: { margin: 0 } }, [`${spec.days} días`, `${spec.minutes} min`, FIT_EXP[spec.exp].name, PLACES[spec.place].name, `${vb.days} de voleibol${spec.vbAuto ? ' (de Remate)' : ' (a mano)'}`].join(' · ')),
       wk ? h('p', { class: 'row-sub', style: { margin: 0 } }, `Bloque ${wk.block}, semana ${wk.week} de 6. ${wk.light ? 'Esta es de descarga.' : `La semana 6 es de descarga (termina el ${fmtDate(wk.ends, { day: 'numeric', month: 'short' })}).`}`) : null,
       h('ul', { class: 'plain' }, r.notes.map((x) => h('li', {}, x))),
+      r.days.some((d) => Number.isInteger(d.wd)) || weekOf(spec).vb.length || weekOf(spec).coach.length ? weekStrip(r, weekOf(spec), wdOfDate(todayStr())) : null,
+      weekWarnings(r, weekOf(spec)).map((x) => note(x, 'warn')),
       canEdit ? h('div', { class: 'cluster' },
         h('a', { class: 'btn sm', href: '#/fit/editar' }, ic('list-checks', 16), r.custom ? 'Editar días y ejercicios' : 'Personalizar'),
-        h('a', { class: 'btn sm', href: '#/fit/registrar/libre' }, ic('plus', 16), 'Sesión libre')) : null),
+        h('a', { class: 'btn sm', href: '#/fit/registrar/libre' }, ic('plus', 16), 'Sesión libre'),
+        shareBtn(() => fitShare(me))) : null),
     r.days.map((d) => h('section', { class: 'panel stack gx-day' },
-      h('div', { class: 'split' }, h('h3', {}, `Día ${d.key}: ${d.name}`), h('span', { class: 'cluster' }, d.light ? h('span', { class: 'chip info' }, 'Pierna ligera') : null, h('span', { class: 'chip ball' }, `≈ ${d.min} min`))),
+      h('div', { class: 'split' }, h('h3', {}, `${Number.isInteger(d.wd) ? `${WD_NAMES[d.wd]} · ` : ''}Día ${d.key}: ${d.name}`), h('span', { class: 'cluster' }, d.light ? h('span', { class: 'chip info' }, 'Pierna ligera') : null, h('span', { class: 'chip ball' }, `≈ ${d.min} min`))),
       h('p', { class: 'row-sub', style: { margin: 0 } }, d.focus),
       h('details', { class: 'gx-sub' }, h('summary', {}, h('strong', {}, 'Calentamiento, 8 a 10 min')), h('ol', { class: 'plain' }, WARMUP.map((x) => h('li', {}, x)))),
       h('div', { class: 'rows' }, d.items.map((rx, i) => exItem(FIT_BY_ID[rx.ex], { rx, last: lastFor(me.id, rx.ex), n: i + 1 }))),
@@ -201,18 +314,86 @@ const sourcesPanel = () => h('details', { class: 'panel' }, h('summary', {}, h('
   h('ul', { class: 'plain' }, FIT_SOURCES.map(([t, u]) => h('li', {}, link(u, t)))),
   h('p', { class: 'row-sub' }, 'Las series, repeticiones y ajustes son propuestas de Remate basadas en estas fuentes. No sustituye a un médico ni a un entrenador certificado; si tienes una lesión o una enfermedad, consulta antes.'));
 
+// ---------- compartir o imprimir (v3.17) ----------
+const FIT_WARM = '8 a 10 min: cardio suave, movilidad de tobillo, cadera y espalda, y activación de glúteo y hombro.';
+const FIT_COOL = '3 a 5 min caminando y estiramiento suave.';
+function fitShare(me) {
+  const spec = specOf(me.id), vb = vbOf(me, spec), r = buildFit(spec, vb.days), who = firstName(me);
+  const code = packRoutine('fit', { goal: spec.goal, exp: spec.exp, days: spec.days, minutes: spec.minutes, place: spec.place }, r.custom ? r.days.map((d) => ({ name: d.name, wd: d.wd, items: d.items })) : null, who, cleanOwn(spec.myEx));
+  shareSheet({ title: 'Compartir o imprimir mi rutina', print: '#/imprimir/fit',
+    text: routineText({ title: 'Rutina de Remate Fit', who, summary: [FIT_GOALS[spec.goal].name, r.custom ? `personalizada, ${plural(r.days.length, 'día', 'días')}` : splitName(spec.days), `${spec.minutes} min`, FIT_EXP[spec.exp].name, PLACES[spec.place].name].join(' · '),
+      days: r.days, byId: FIT_BY_ID, warmup: FIT_WARM, cooldown: FIT_COOL, notes: ['Cada 6 semanas, una semana de descarga: una serie menos y sin subir peso.'] }),
+    link: routineLink('fit', code), linkText: `Te paso mi rutina de Remate Fit${who ? ` (${who})` : ''}. Ábrela en tu Remate Fit y toca «Usar esta rutina»:` });
+}
+// Abrir un enlace de rutina de Remate Fit: solo adultos con Remate Fit. Cambia sus respuestas de entrenamiento y sus días.
+function useFit(ctx) {
+  const code = ctx.args[1] || '', got = unpackRoutine(code, 'fit'), back = '#/fit';
+  const wrap = (...kids) => ({ title: 'Rutina', sub: 'Compartida · Remate Fit', back, el: h('div', { class: 'page fit' }, ...kids) });
+  if (!got) return wrap(empty('Este enlace no se pudo abrir', 'Puede estar incompleto (a veces WhatsApp corta los enlaces largos). Pide que te lo vuelvan a mandar desde Remate.'));
+  if (ctx.role === 'coach') {
+    const mine = myPlayer();
+    return wrap(note('Las rutinas de Remate Fit se usan desde tu perfil de jugador (Mi Remate Fit).'),
+      mine && fitOk(mine) ? h('button', { type: 'button', class: 'btn primary', onclick: () => { const here = location.hash; enterSelf(mine.id); setTimeout(() => { location.hash = here; }, 0); } }, ic('dumbbell', 18), 'Abrirla en Mi Remate Fit')
+        : note('Para usar Remate Fit tú: en Más → Mi perfil de jugador pon tu fecha de nacimiento y activa Remate Fit.'));
+  }
+  const me = ctx.me;
+  if (!me || !sql311Ready() || !fitOk(me)) return wrap(empty('Remate Fit es para adultos', 'Esta rutina es de Remate Fit, la zona de gym para mayores de 18 que activa tu entrenador.'));
+  if (got.own?.length) registerOwn(got.own);
+  const cur = specOf(me.id), spec = normFit({ ...cur, goal: got.s.goal, exp: got.s.exp, days: got.s.days, minutes: got.s.minutes, place: got.s.place, custom: got.custom ? cleanFitCustom(got.custom) : null });
+  const vb = vbOf(me, cur), r = buildFit(spec, vb.days);
+  const use = async () => {
+    if (ctx.readonly) { toast('Vista previa: aquí no se guarda'); return; }
+    if (profOf(me.id) && !(await confirmSheet({ title: '¿Usar esta rutina?', text: 'Cambia tu objetivo, experiencia, días, minutos, lugar y tus días y ejercicios por los de esta rutina. Tus registros, tu comida y tu peso no cambian.', ok: 'Usar esta rutina' }))) return;
+    const mine = cleanOwn(cur.myEx), add = cleanOwn(got.own).filter((o) => !mine.some((m) => m.id === o.id));
+    saveProf(me.id, { goal: spec.goal, exp: spec.exp, days: spec.days, minutes: spec.minutes, place: spec.place, custom: spec.custom?.length ? spec.custom : null, ...(add.length ? { myEx: [...mine, ...add] } : {}), ...(profOf(me.id) ? {} : { since: todayStr() }) });
+    toast('Listo: ya es tu rutina'); location.hash = '#/fit/rutina';
+  };
+  return wrap(
+    h('section', { class: 'band next fit-band' }, h('div', { class: 'when' }, 'Rutina compartida'), h('h2', {}, got.who ? `La rutina de ${got.who}` : 'Una rutina de Remate Fit'),
+      h('div', {}, [FIT_GOALS[spec.goal].name, r.custom ? `personalizada, ${plural(r.days.length, 'día', 'días')}` : splitName(spec.days), `${spec.minutes} min`, FIT_EXP[spec.exp].name, PLACES[spec.place].name].join(' · ')),
+      h('div', { class: 'cluster' }, h('button', { type: 'button', class: 'btn ball', onclick: use }, ic('check', 18), 'Usar esta rutina'))),
+    note(`${r.custom ? 'Es una rutina personalizada: se usa tal cual.' : `Remate la ajusta a tu voleibol (${vb.days} ${vb.days === 1 ? 'día' : 'días'} por semana).`} Revísala: la armó alguien con su objetivo y su experiencia.`),
+    r.days.map((d) => h('section', { class: 'panel stack gx-day' }, h('div', { class: 'split' }, h('h3', {}, `${Number.isInteger(d.wd) ? `${WD_NAMES[d.wd]} · ` : ''}Día ${d.key}: ${d.name}`), h('span', { class: 'chip ball' }, `≈ ${d.min} min`)),
+      h('div', { class: 'rows' }, d.items.map((rx, i) => exItem(FIT_BY_ID[rx.ex], { rx, n: i + 1 }))))));
+}
+
 // ---------- personalizar la rutina (v3.13) ----------
 function editRoutine(ctx, me) {
   const spec = specOf(me.id), vb = vbOf(me, spec);
   if (!profOf(me.id)) { location.hash = '#/fit'; return { title: 'Remate Fit', el: h('div') }; }
+  const lib = libFor(me, spec);
+  const wkx = weekOf(spec);
+  const ok = (id) => !!FIT_BY_ID[id] && fitAvailable(FIT_BY_ID[id], spec.place);
   return editorPage(ctx, { title: 'Mi rutina', back: '#/fit/rutina', days: buildFit(spec, vb.days).days, custom: Array.isArray(spec.custom) && spec.custom.length > 0,
-    lib: { ...FIT_LIB, defaultRx: (id) => fitDefaultRx(id, spec) },
-    onSave: (custom) => { saveProf(me.id, { custom: cleanFitCustom(custom) }); toast('Rutina guardada'); location.hash = '#/fit/rutina'; },
+    lib, weekdays: true, templates: TEMPLATES,
+    muscles: { propose: (keys, exclude) => proposeDay(keys, { ok, rx: (id) => fitDefaultRx(id, spec), minutes: dayMinutes, max: spec.minutes, exclude }) },
+    week: (wd) => [wkx.vb.includes(wd) ? 'Voleibol' : null, wkx.coach.includes(wd) ? 'Das entreno' : null].filter(Boolean),
+    onSave: (custom) => { const c = cleanFitCustom(custom); saveProf(me.id, { custom: c, days: Math.min(6, Math.max(2, c.length)) }); toast('Rutina guardada'); location.hash = '#/fit/rutina'; },
     onReset: () => { saveProf(me.id, { custom: null }); toast('Volviste a la rutina de Remate'); location.hash = '#/fit/rutina'; } });
 }
 
 // ---------- registrar una sesión ----------
 const DRAFT = (pid) => `remate.fit.draft.${pid}`;
+// v3.18: temporizador de descanso (abajo de la pantalla). Al terminar vibra (Android) y suena.
+let restT = null;
+function beep() { try { const A = window.AudioContext || window.webkitAudioContext; const a = new A(); [0, 0.35].forEach((t) => { const o = a.createOscillator(), g = a.createGain(); o.frequency.value = 880; g.gain.value = 0.25; o.connect(g); g.connect(a.destination); o.start(a.currentTime + t); o.stop(a.currentTime + t + 0.2); }); setTimeout(() => a.close?.(), 1200); } catch { /* sin sonido */ } }
+export function restTimer(sec, what = '') {
+  document.querySelector('.rest-timer')?.remove(); clearInterval(restT);
+  let left = Math.max(10, Number(sec) || 60);
+  const t = h('strong', { class: 'rt-t', 'aria-live': 'off' }), lbl = h('span', { class: 'rt-l' }, what ? `Descanso · ${what}` : 'Descanso');
+  const fmt = (x) => `${Math.floor(x / 60)}:${String(x % 60).padStart(2, '0')}`;
+  const box = h('div', { class: 'rest-timer', role: 'timer' }, h('span', { class: 'rt-main' }, lbl, t),
+    h('button', { type: 'button', class: 'btn sm', onclick: () => { left += 15; t.textContent = fmt(left); } }, '+15 s'),
+    h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Quitar el temporizador', onclick: () => { clearInterval(restT); box.remove(); } }, ic('x', 18)));
+  t.textContent = fmt(left);
+  document.body.append(box);
+  const here = location.hash;
+  restT = setInterval(() => {
+    if (location.hash !== here) { clearInterval(restT); box.remove(); return; }
+    left -= 1; t.textContent = fmt(Math.max(0, left));
+    if (left <= 0) { clearInterval(restT); box.classList.add('done'); lbl.textContent = '¡A la siguiente serie!'; try { navigator.vibrate?.([300, 150, 300]); } catch { /* iPhone no vibra */ } beep(); setTimeout(() => box.remove(), 6000); }
+  }, 1000);
+}
 function logPage(ctx, me) {
   const back = '#/fit';
   const { spec, r } = routineOf(me);
@@ -231,28 +412,45 @@ function logPage(ctx, me) {
   const persist = () => { dr.at = Date.now(); clearTimeout(timer); timer = setTimeout(() => ls.set(DRAFT(me.id), JSON.stringify(dr)), 300); };
   const err = h('div', { class: 'note bad', role: 'alert', hidden: true });
   const rxOf = (entry) => day.items.find((x) => x.ex === entry.ex) || entry.rx || fitDefaultRx(entry.ex, spec);
+  const autoRest = ls.get('remate.fit.autorest') !== '0';
   const exBlock = (entry, k) => {
     const rx = rxOf(entry), ex = FIT_BY_ID[entry.ex];
     if (!ex || !rx) return null;
     const last = lastFor(me.id, rx.ex), tip = nextFitStep(rx, last), kgOn = ex.unit === 'kg';
+    const sameAsLast = () => { entry.s = last.s.map((x) => [x[0] ?? '', x[1] ?? '']); persist(); paint(); toast('Igual que la vez pasada: ajusta lo que cambie'); };
+    // «Me molestó»: alternativas del mismo músculo, mejor en máquina o polea (más guiadas).
+    const alts = () => { const have = new Set(dr.entries.map((e) => e.ex)); const ids = [...new Set(musOf(entry.ex).flatMap((m) => MUS_BY[m].ids))]
+      .filter((id) => id !== entry.ex && !have.has(id) && FIT_BY_ID[id] && fitAvailable(FIT_BY_ID[id], spec.place));
+      return ids.sort((a, b) => Number(['maquina', 'polea'].includes(FIT_BY_ID[b].need)) - Number(['maquina', 'polea'].includes(FIT_BY_ID[a].need))).slice(0, 3); };
+    const painBox = h('div', { class: 'stack', hidden: !entry.pain });
+    const paintPain = () => { painBox.hidden = !entry.pain; const a = alts();
+      painBox.replaceChildren(note('Si duele la articulación (no es cansancio del músculo), no sigas con este ejercicio hoy. Prueba uno parecido que no cargue esa zona o baja el peso y el rango.', 'warn'),
+        a.length ? h('div', { class: 'cluster' }, a.map((id) => h('button', { type: 'button', class: 'btn sm', onclick: () => { const r2 = fitDefaultRx(id, spec), l2 = lastFor(me.id, id);
+          dr.entries[k] = { ex: id, rx: r2, s: Array.from({ length: r2.sets }, (_, i) => [l2?.s?.[i]?.[0] ?? '', '']) }; persist(); ctx.rerender(); toast(`Cambiado por ${FIT_BY_ID[id].name}`); } }, ic('refresh-cw', 14), FIT_BY_ID[id].name))) : null); };
+    paintPain();
     const repsLabel = ex.repsLabel || (ex.unit === 's' ? 'Segundos' : 'Reps');
     const list = h('div', { class: 'gx-sets' });
     const paint = () => list.replaceChildren(...entry.s.map((x, i) => h('div', { class: 'gx-set' }, h('span', { class: 'gx-sn' }, `Serie ${i + 1}`),
       kgOn ? h('label', { class: 'gx-in' }, h('input', { type: 'number', inputmode: 'decimal', min: 0, max: 500, step: 0.5, value: x[0] ?? '', 'aria-label': `${ex.name}, serie ${i + 1}: kilos`, oninput: (e) => { x[0] = e.target.value; persist(); } }), h('span', {}, ex.each ? 'kg c/u' : 'kg')) : null,
-      h('label', { class: 'gx-in' }, h('input', { type: 'number', inputmode: 'numeric', min: 0, max: 600, step: 1, value: x[1] ?? '', placeholder: String(rx.reps).replace(/\s*s$/, ''), 'aria-label': `${ex.name}, serie ${i + 1}: ${repsLabel.toLowerCase()}`, oninput: (e) => { x[1] = e.target.value; persist(); } }), h('span', {}, repsLabel.toLowerCase())))));
+      h('label', { class: 'gx-in' }, h('input', { type: 'number', inputmode: 'numeric', min: 0, max: 600, step: 1, value: x[1] ?? '', placeholder: String(rx.reps).replace(/\s*s$/, ''), 'aria-label': `${ex.name}, serie ${i + 1}: ${repsLabel.toLowerCase()}`, oninput: (e) => { x[1] = e.target.value; persist(); },
+        onchange: (e) => { if (autoRest && e.target.value && i < entry.s.length - 1 + (k < dr.entries.length - 1 ? 1 : 0)) restTimer(rx.rest, ex.name); } }), h('span', {}, repsLabel.toLowerCase())))));
     paint();
     const lf = lazyFig(figFor(ex), { size: 'sm' });
     return h('section', { class: 'panel stack' },
       h('div', { class: 'split' }, h('h3', {}, `${k + 1}. ${ex.name}`), h('span', { class: 'row-sub' }, rxText(rx))),
-      last ? h('p', { class: 'row-sub', style: { margin: 0 } }, `La vez pasada: ${last.s.map((x) => (x[0] ? `${x[0]} kg × ${x[1]}` : `${x[1]}`)).join(', ')}`) : null,
+      last ? h('div', { class: 'split gx-last' }, h('p', { class: 'row-sub', style: { margin: 0 } }, `La vez pasada: ${last.s.map((x) => (x[0] ? `${x[0]} kg × ${x[1]}` : `${x[1]}`)).join(', ')}`),
+        h('button', { type: 'button', class: 'btn sm ghost', onclick: sameAsLast }, ic('copy', 14), 'Igual')) : null,
       tip ? note(tip) : null, list,
       h('div', { class: 'cluster' },
         h('button', { class: 'btn sm', type: 'button', onclick: () => { if (entry.s.length >= 8) return; entry.s.push([entry.s[entry.s.length - 1]?.[0] ?? '', '']); persist(); paint(); } }, ic('plus', 16), 'Serie'),
         entry.s.length > 1 ? h('button', { class: 'btn sm ghost', type: 'button', onclick: () => { entry.s.pop(); persist(); paint(); } }, ic('minus', 16), 'Quitar la última') : null,
+        h('button', { class: 'btn sm ghost', type: 'button', onclick: () => restTimer(rx.rest, ex.name) }, ic('timer', 16), 'Descanso'),
+        h('button', { class: `btn sm ${entry.pain ? 'danger' : 'ghost'}`, type: 'button', 'aria-pressed': entry.pain ? 'true' : 'false', onclick: (e) => { entry.pain = !entry.pain; e.currentTarget.className = `btn sm ${entry.pain ? 'danger' : 'ghost'}`; persist(); paintPain(); } }, ic('triangle-alert', 16), 'Me molestó'),
         h('button', { class: 'btn sm ghost', type: 'button', onclick: () => { dr.entries.splice(k, 1); persist(); ctx.rerender(); } }, ic('x', 16), 'Hoy no lo hice'),
-        h('details', { class: 'gx-how', ontoggle: lf.ontoggle }, h('summary', {}, '¿Cómo se hace?'), lf.slot, h('ol', { class: 'plain' }, ex.how.map((x) => h('li', {}, x))))));
+        h('details', { class: 'gx-how', ontoggle: lf.ontoggle }, h('summary', {}, '¿Cómo se hace?'), lf.slot, h('ol', { class: 'plain' }, ex.how.map((x) => h('li', {}, x))))),
+      painBox);
   };
-  const addEx = () => pickExercise({ lib: FIT_LIB, exclude: dr.entries.map((e) => e.ex), title: 'Agregar a esta sesión', onPick: (id) => {
+  const addEx = () => pickExercise({ lib: libFor(me, spec, canSave), exclude: dr.entries.map((e) => e.ex), title: 'Agregar a esta sesión', onPick: (id) => {
     const rx = fitDefaultRx(id, spec), last = lastFor(me.id, id);
     dr.entries.push({ ex: id, rx, s: Array.from({ length: rx.sets }, (_, i) => [last?.s?.[i]?.[0] ?? last?.s?.[0]?.[0] ?? '', '']) }); persist(); ctx.rerender();
   } });
@@ -265,6 +463,11 @@ function logPage(ctx, me) {
   const painNote = note('Si te dolió una articulación (no son agujetas), no sigas con ese ejercicio. Si se repite, consulta a un profesional.', 'warn'); painNote.hidden = !dr.pain;
   const pain = h('input', { type: 'checkbox', checked: dr.pain ? true : null, onchange: (e) => { dr.pain = e.target.checked; painNote.hidden = !dr.pain; persist(); } });
   const text = h('input', { type: 'text', maxlength: 300, value: dr.note || '', placeholder: 'Opcional', oninput: (e) => { dr.note = e.target.value; persist(); } });
+  // v3.18: cardio al terminar (caminadora, bici…): se guarda como cardio del día.
+  const cmin = h('input', { type: 'number', inputmode: 'numeric', min: 0, max: 180, value: dr.cmin ?? '', placeholder: '0', 'aria-label': 'Minutos de cardio al terminar', oninput: (e) => { dr.cmin = e.target.value; persist(); } });
+  const ctipo = h('select', { 'aria-label': 'Tipo de cardio', onchange: (e) => { dr.ctipo = e.target.value; persist(); } }, options(CARDIO_TYPES, dr.ctipo || 'caminadora'));
+  const autoCb = h('input', { type: 'checkbox', checked: autoRest ? true : null, onchange: (e) => { ls.set('remate.fit.autorest', e.target.checked ? '1' : '0'); toast(e.target.checked ? 'El descanso arranca solo al anotar una serie' : 'Arranca el descanso con su botón'); } });
+  const fillAll = () => { let n = 0; for (const e of dr.entries) { const l = lastFor(me.id, e.ex); if (l) { e.s = l.s.map((x) => [x[0] ?? '', x[1] ?? '']); n++; } } persist(); ctx.rerender(); toast(n ? `Llené ${plural(n, 'ejercicio', 'ejercicios')} como la vez pasada` : 'Todavía no hay una vez pasada'); };
   const save = () => {
     err.hidden = true;
     const fail = (m) => { err.textContent = m; err.hidden = false; err.scrollIntoView({ block: 'center', behavior: 'smooth' }); };
@@ -279,12 +482,16 @@ function logPage(ctx, me) {
         if (kg != null && (kg < 0 || kg > 500)) return fail(`Revisa los kilos de ${ex.name}.`);
         rows.push([kg != null ? r1(kg) : null, Math.round(reps)]);
       }
-      if (rows.length) sets.push({ ex: e.ex, s: rows.slice(0, 8) });
+      if (rows.length) sets.push({ ex: e.ex, s: rows.slice(0, 8), ...(e.pain ? { pain: true } : {}) });
     }
     if (!sets.length) return fail('Anota por lo menos una serie.');
     const m = dr.minutes === '' || dr.minutes == null ? null : Math.round(Number(dr.minutes));
     if (m != null && !(m >= 1 && m <= 240)) return fail('Los minutos deben estar entre 1 y 240.');
-    add('fitLogs', { player_id: me.id, kind: 'gym', day: dr.date || todayStr(), data: { key: day.key, name: day.name, goal: spec.goal, minutes: m, rpe: dr.rpe || null, pain: !!dr.pain, note: (dr.note || '').trim().slice(0, 300), sets: sets.slice(0, 16) } });
+    const cm = dr.cmin === '' || dr.cmin == null ? 0 : Math.round(Number(dr.cmin));
+    if (!(cm >= 0 && cm <= 180)) return fail('El cardio va de 0 a 180 minutos.');
+    const when = dr.date || todayStr(), anyPain = !!dr.pain || sets.some((x) => x.pain);
+    add('fitLogs', { player_id: me.id, kind: 'gym', day: when, data: { key: day.key, name: day.name, goal: spec.goal, minutes: m, rpe: dr.rpe || null, pain: anyPain, note: (dr.note || '').trim().slice(0, 300), sets: sets.slice(0, 16), ...(cm ? { cardio: { min: cm, tipo: dr.ctipo || 'caminadora' } } : {}) } });
+    if (cm) { const a = activityOf(me.id, when); saveActivity(me.id, when, { cmin: (Number(a.cmin) || 0) + cm, ctipo: dr.ctipo || 'caminadora' }); }
     ls.del(DRAFT(me.id)); ui.draft = null;
     toast('¡Bien! Sesión guardada', 2800);
     location.hash = '#/fit/progreso';
@@ -292,10 +499,13 @@ function logPage(ctx, me) {
   const el = h('div', { class: 'page' },
     ui.recovered ? note('Recuperé lo que llevabas anotado de esta sesión.') : null,
     h('p', { style: { margin: 0 } }, 'Anota lo que vas haciendo. Lo que escribas se guarda en este celular hasta que toques «Guardar sesión».'),
+    dr.entries.some((e) => lastFor(me.id, e.ex)) ? h('div', { class: 'cluster' }, h('button', { type: 'button', class: 'btn sm', onclick: fillAll }, ic('copy', 16), 'Llenar todo como la vez pasada'),
+      h('label', { class: 'check' }, autoCb, h('span', {}, 'Descanso automático'))) : h('label', { class: 'check' }, autoCb, h('span', {}, 'Descanso automático al anotar una serie')),
     dr.entries.length ? dr.entries.map(exBlock) : note(day.key === 'L' ? 'Agrega los ejercicios que hiciste hoy: por ejemplo, press de banca y elevaciones laterales.' : 'Quitaste todos los ejercicios: agrega los que hiciste.'),
     canSave ? h('button', { class: 'btn', type: 'button', onclick: addEx }, ic('plus', 18), 'Agregar ejercicio') : null,
     h('section', { class: 'panel stack' }, h('h3', {}, 'Al terminar'),
-      h('div', { class: 'grid' }, field('Fecha', date), field('Minutos', mins)),
+      h('div', { class: 'grid' }, field('Fecha', date), field('Minutos de fuerza', mins)),
+      h('div', { class: 'grid' }, field('Cardio al terminar (min)', cmin, 'Se suma a tu cardio del día.'), field('Tipo', ctipo)),
       h('div', { class: 'field' }, h('span', { class: 'label' }, '¿Qué tan pesada fue la sesión?'), rpeSeg, rpeDesc),
       h('label', { class: 'check' }, pain, h('span', {}, 'Me dolió algo (no son agujetas)')), painNote, field('Nota', text)),
     err,
@@ -310,10 +520,7 @@ function logPage(ctx, me) {
 export function progressTab(ctx, me, canEdit) {
   const ui = ctx.ui;
   const spec = specOf(me.id);
-  const body = fitLogsOf(me.id, 'body'), gym = fitLogsOf(me.id, 'gym'), steps = fitLogsOf(me.id, 'steps');
-  // Peso: promedio de cada semana (un día suelto engaña: agua, sal, comida).
-  const avgs = weeklyAverages(body, 12).filter((a) => a.avg != null);
-  const wPts = avgs.map((a) => ({ x: a.end, y: r1(a.avg), tip: plural(a.n, 'pesada', 'pesadas') }));
+  const body = fitLogsOf(me.id, 'body'), gym = fitLogsOf(me.id, 'gym');
   const rate = weeklyRate(weeklyAverages(body, 3));
   // Medidas: la primera contra la última de cada una.
   const mRows = MEASURES.map(([k, name]) => {
@@ -323,23 +530,36 @@ export function progressTab(ctx, me, canEdit) {
     return h('div', { class: 'row' }, h('span', { class: 'row-main' }, h('strong', {}, name), h('span', { class: 'row-sub' }, `${z} cm el ${fmtDate(xs[xs.length - 1].day, { day: 'numeric', month: 'short' })}`)),
       xs.length > 1 ? h('span', { class: `chip ${d === 0 ? '' : 'info'}` }, `${d > 0 ? '+' : ''}${d} cm desde el ${fmtDate(xs[0].day, { day: 'numeric', month: 'short' })}`) : null);
   }).filter(Boolean);
-  // Pasos: últimos 14 días.
-  const last14 = Array.from({ length: 14 }, (_, i) => addDays(todayStr(), i - 13)).map((d) => ({ d, n: Number(steps.find((s) => s.day === d)?.data?.n) || 0 }));
-  const maxN = Math.max(spec.stepsGoal, ...last14.map((x) => x.n));
-  const with7 = last14.slice(7).filter((x) => x.n > 0);
-  // Gym: avance por ejercicio.
+  // Gym: avance por ejercicio (todo el historial).
   const seen = new Map();
   for (const l of [...gym].reverse()) for (const e of l.data?.sets || []) { if (!seen.has(e.ex)) seen.set(e.ex, []); seen.get(e.ex).push({ l, e }); }
   const exIds = [...seen.keys()].filter((id) => seen.get(id).length >= 2 && FIT_BY_ID[id]).sort((a, b) => Number(FIT_BY_ID[b].unit === 'kg') - Number(FIT_BY_ID[a].unit === 'kg'));
   ui.ex = exIds.includes(ui.ex) ? ui.ex : exIds[0];
   let exChart = null;
   if (ui.ex) {
-    const ex = FIT_BY_ID[ui.ex], useKg = ex.unit === 'kg';
-    const pts = seen.get(ui.ex).map(({ l, e }) => ({ x: l.day, y: Math.max(...(e.s || []).map((x) => Number(useKg ? x[0] : x[1]) || 0)), tip: `Día ${l.data?.key || ''}` })).filter((p) => p.y > 0);
+    const ex = FIT_BY_ID[ui.ex], useKg = ex.unit === 'kg', est = useKg && ui.e1 !== false;
+    const pts = seen.get(ui.ex).map(({ l, e }) => ({ x: l.day, y: est ? Math.max(...(e.s || []).map((x) => e1rm(Number(x[0]) || 0, Number(x[1]) || 0))) : Math.max(...(e.s || []).map((x) => Number(useKg ? x[0] : x[1]) || 0)),
+      tip: `${l.data?.key === 'L' ? 'Sesión libre' : `Día ${l.data?.key || ''}`}${est ? ` · ${(e.s || []).map((x) => `${x[0]}×${x[1]}`).join(', ')}` : ''}` })).filter((p) => p.y > 0);
     const pick = h('select', { 'aria-label': 'Ejercicio' }, options(exIds.map((id) => [id, fitName(id)]), ui.ex));
     pick.addEventListener('change', () => { ui.ex = pick.value; ctx.rerender(); });
-    exChart = h('div', { class: 'stack' }, pick, pts.length >= 2 ? lineChart(pts, { unit: useKg ? 'kg' : 'reps', label: ex.name, digits: useKg ? 1 : 0 }) : null);
+    const seg = useKg ? h('div', { class: 'seg', role: 'group', 'aria-label': 'Qué ver' }, [[true, 'Máximo estimado'], [false, 'Peso más alto']].map(([v, t]) => h('button', { type: 'button', 'aria-pressed': est === v ? 'true' : 'false', onclick: () => { ui.e1 = v; ctx.rerender(); } }, t))) : null;
+    exChart = h('div', { class: 'stack' }, pick, seg, pts.length >= 2 ? lineChart(pts, { unit: useKg ? 'kg' : 'reps', label: est ? `${ex.name}, máximo estimado a 1 repetición` : ex.name, digits: useKg ? 1 : 0, bestLabel: 'Récord' }) : null,
+      est ? h('p', { class: 'row-sub', style: { margin: 0 } }, 'Máximo estimado a 1 repetición: lo que podrías levantar una sola vez, calculado con tu peso y tus repeticiones (fórmula de Epley). Es aproximado; más confiable con series de 10 repeticiones o menos. No hace falta probarlo.') : null);
   }
+  // v3.18: récords por ejercicio (peso más alto y máximo estimado).
+  const recs = [...seen.entries()].filter(([id]) => FIT_BY_ID[id]?.unit === 'kg').map(([id, xs]) => {
+    let best = null, top = null;
+    for (const { l, e } of xs) for (const [kg, reps] of e.s || []) {
+      const k = Number(kg) || 0, r = Number(reps) || 0; if (!k || !r) continue;
+      const v = e1rm(k, r);
+      if (!best || v > best.v) best = { v, kg: k, reps: r, day: l.day };
+      if (!top || k > top.kg || (k === top.kg && r > top.reps)) top = { kg: k, reps: r, day: l.day };
+    }
+    return best ? { id, best, top } : null;
+  }).filter(Boolean).sort((a, b) => b.best.day.localeCompare(a.best.day));
+  const recSec = recs.length ? h('details', {}, h('summary', {}, `Tus récords (${recs.length})`), h('div', { class: 'rows' }, recs.slice(0, 40).map((x) => h('div', { class: 'row' },
+    h('span', { class: 'row-main' }, h('strong', {}, fitName(x.id)), h('span', { class: 'row-sub' }, `Más pesado: ${x.top.kg} kg × ${x.top.reps} (${fmtDate(x.top.day, { day: 'numeric', month: 'short' })}) · máximo estimado ${x.best.v} kg`)),
+    x.best.day >= addDays(todayStr(), -7) ? h('span', { class: 'chip ok' }, 'Nuevo') : null)))) : null;
   // Agregar medidas (un registro por día, junto con el peso si lo hay).
   const mIns = MEASURES.map(([k, name]) => [k, h('input', { type: 'number', inputmode: 'decimal', min: 20, max: 250, step: 0.1, 'aria-label': `${name} en cm`, placeholder: 'cm' })]);
   const saveM = () => {
@@ -349,31 +569,25 @@ export function progressTab(ctx, me, canEdit) {
     upsertDay(me.id, 'body', todayStr(), data); toast('Medidas guardadas'); ctx.rerender();
   };
   const del = async (l, what) => { if (await confirmSheet({ title: `¿Borrar ${what}?`, ok: 'Borrar', danger: true })) { remove('fitLogs', l.id); toast('Borrado'); } };
-  return h('div', { class: 'stack' },
-    h('section', { class: 'panel stack' }, h('h3', {}, 'Peso (promedio de cada semana)'),
-      wPts.length >= 2 ? lineChart(wPts, { unit: 'kg', label: 'Peso promedio semanal', digits: 1, bestLabel: 'Más alto' }) : note('Pésate 3 o más mañanas por semana: con 2 semanas aparece tu gráfica.'),
-      note(rateText(spec.goal, rate)),
-      body.filter((b) => b.data?.kg).length ? h('details', {}, h('summary', {}, 'Tus pesadas'), h('div', { class: 'rows' }, body.filter((b) => b.data?.kg).slice(0, 21).map((b) =>
-        h('div', { class: 'row' }, h('span', { class: 'row-main' }, h('strong', {}, `${b.data.kg} kg`), h('span', { class: 'row-sub' }, longDay(b.day))),
-          canEdit ? h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Borrar este registro', onclick: () => del(b, 'este registro') }, ic('trash-2', 18)) : null)))) : null),
-    h('section', { class: 'panel stack' }, h('h3', {}, 'Medidas'),
-      mRows.length ? h('div', { class: 'rows' }, mRows) : h('p', { class: 'row-sub', style: { margin: 0 } }, 'Todavía no hay medidas.'),
+  // v3.16: las gráficas de todo viven en fit-graficas.js; aquí van las listas y los formularios de cada sección.
+  return chartsTab(ctx, me, canEdit, {
+    weight: [note(rateText(spec.goal, rate)),
+      body.filter((b) => b.data?.kg).length ? h('details', {}, h('summary', {}, 'Tus pesadas'), h('div', { class: 'rows' }, body.filter((b) => b.data?.kg).slice(0, 30).map((b) =>
+        h('div', { class: 'row' }, h('span', { class: 'row-main' }, h('strong', {}, [`${b.data.kg} kg`, b.data.grasa ? `${b.data.grasa}% grasa` : null, b.data.musculo ? `${b.data.musculo} kg músculo` : b.data.musculoPct ? `${b.data.musculoPct}% músculo` : null].filter(Boolean).join(' · ')), h('span', { class: 'row-sub' }, longDay(b.day))),
+          canEdit ? h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Borrar este registro', onclick: () => del(b, 'este registro') }, ic('trash-2', 18)) : null)))) : null],
+    measures: [mRows.length ? h('div', { class: 'rows' }, mRows) : null,
       canEdit ? h('details', {}, h('summary', {}, 'Agregar medidas de hoy'),
         h('div', { class: 'grid' }, mIns.map(([k, inp]) => field(MEASURES.find((m) => m[0] === k)[1], inp, MEASURES.find((m) => m[0] === k)[2]))),
         h('ul', { class: 'plain' }, MEASURE_TIPS.map((x) => h('li', {}, x))),
-        h('button', { type: 'button', class: 'btn primary', onclick: saveM }, 'Guardar medidas')) : null),
-    h('section', { class: 'panel stack' }, h('h3', {}, 'Pasos'),
-      h('div', { class: 'fit-steps', role: 'img', 'aria-label': `Pasos de los últimos 14 días: ${last14.map((x) => x.n).join(', ')}` }, last14.map((x) => h('span', { class: x.n >= spec.stepsGoal ? 'ok' : '', title: `${fmtDate(x.d, { day: 'numeric', month: 'short' })}: ${x.n}` },
-        h('i', { style: { height: `${Math.round((x.n / maxN) * 100)}%` } }), h('b', {}, fmtDate(x.d, { day: 'numeric' }))))),
-      h('p', { class: 'row-sub', style: { margin: 0 } }, with7.length ? `Promedio de los últimos 7 días: ${Math.round(with7.reduce((a, x) => a + x.n, 0) / with7.length).toLocaleString('es-MX')} (meta ${spec.stepsGoal.toLocaleString('es-MX')}).` : 'Anota tus pasos en «Hoy».'),
-      h('p', { class: 'row-sub', style: { margin: 0 } }, STEP_NOTE)),
-    h('section', { class: 'panel stack' }, h('h3', {}, 'Gym'),
-      exChart || note('Registra un ejercicio dos veces para ver tu avance.'),
-      gym.length ? h('div', { class: 'rows' }, gym.slice(0, 20).map((l) => h('div', { class: 'row' },
+        h('button', { type: 'button', class: 'btn primary', onclick: saveM }, 'Guardar medidas')) : null],
+    gym: [h('h4', {}, 'Avance por ejercicio (todo tu historial)'), exChart || note('Registra un ejercicio dos veces para ver tu avance.'), recSec,
+      gym.length ? h('details', {}, h('summary', {}, 'Tus sesiones'), h('div', { class: 'rows' }, gym.slice(0, 30).map((l) => h('div', { class: 'row' },
         h('span', { class: 'row-main' }, h('strong', {}, l.data?.key === 'L' ? 'Sesión libre' : `Día ${l.data?.key || '?'}${l.data?.name ? `: ${l.data.name}` : ''}`),
           h('span', { class: 'row-sub' }, [longDay(l.day), l.data?.minutes ? `${l.data.minutes} min` : null, l.data?.rpe ? `esfuerzo ${l.data.rpe}` : null, plural((l.data?.sets || []).length, 'ejercicio', 'ejercicios')].filter(Boolean).join(' · '))),
         l.data?.pain ? h('span', { class: 'chip warn' }, 'Molestia') : null,
-        canEdit ? h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Borrar esta sesión', onclick: () => del(l, 'esta sesión') }, ic('trash-2', 18)) : null))) : null));
+        canEdit ? h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Borrar esta sesión', onclick: () => del(l, 'esta sesión') }, ic('trash-2', 18)) : null)))) : null],
+    steps: h('p', { class: 'row-sub', style: { margin: 0 } }, STEP_NOTE),
+  });
 }
 
 // ---------- mi perfil Fit ----------
@@ -405,6 +619,26 @@ function profileForm(me, spec, onSave, label = 'Guardar') {
       onSave({ goal: goal.value, exp: exp.value, days: Number(days.value), minutes: Number(mins.value), place: place.value, vbAuto: auto.checked, vbDays: Math.round(v) || 0, stepsGoal: Math.round(st) });
     } }, ic('check', 18), label));
 }
+// v3.18: tu semana: días de voleibol, entrenos que das (actividad ligera) y regreso gradual.
+function weekPanel(me, spec) {
+  const w = weekOf(spec), vb = new Set(w.vb), coach = new Set(w.coach);
+  const pick = (set, label) => { const box = h('div', { class: 'cluster', role: 'group', 'aria-label': label });
+    const paint = () => box.replaceChildren(...WD_ORDER.map((d) => h('button', { type: 'button', class: 'chipbtn', 'aria-pressed': set.has(d) ? 'true' : 'false', onclick: () => { if (set.has(d)) set.delete(d); else set.add(d); paint(); } }, WD_SHORT[d])));
+    paint(); return box; };
+  const cmin = h('input', { type: 'number', min: 30, max: 300, step: 15, inputmode: 'numeric', value: w.coachMin, 'aria-label': 'Minutos de cada entreno que das' });
+  const ramp = rampOf(spec);
+  const back = h('input', { type: 'checkbox', checked: ramp ? true : null });
+  return h('section', { class: 'panel stack' }, h('h3', {}, 'Tu semana'),
+    h('div', { class: 'field' }, h('span', { class: 'label' }, 'Días que juegas voleibol'), pick(vb, 'Días de voleibol'), h('span', { class: 'hint' }, 'Se marcan en tu semana y Remate te avisa si te toca pierna pesada el día antes.')),
+    h('div', { class: 'field' }, h('span', { class: 'label' }, 'Días que das entrenamiento (actividad ligera)'), pick(coach, 'Días que das entrenamiento'), h('span', { class: 'hint' }, 'Por ejemplo, si entrenas a un equipo. Cuenta como actividad ligera en tus calorías.')),
+    field('Minutos de cada entreno que das', cmin),
+    h('label', { class: 'check' }, back, h('span', {}, h('strong', {}, 'Vengo regresando después de una pausa'), h('br'), h('span', { class: 'row-sub' }, ramp ? `Activo hasta el ${fmtDate(addDays(spec.rampSince, 13), { day: 'numeric', month: 'long' })}: una serie menos y una repetición más de sobra.` : 'Las siguientes 2 semanas: una serie menos y una repetición más de sobra en cada ejercicio.'))),
+    h('button', { type: 'button', class: 'btn', onclick: () => {
+      const m = Math.round(Number(cmin.value)); if (!(m >= 30 && m <= 300)) { toast('Los minutos van de 30 a 300'); return; }
+      saveProf(me.id, { week: { vb: [...vb].sort(), coach: [...coach].sort(), coachMin: m }, rampSince: back.checked ? (ramp ? spec.rampSince : todayStr()) : null });
+      toast('Tu semana quedó guardada');
+    } }, ic('check', 18), 'Guardar mi semana'));
+}
 function profileTab(ctx, me, canEdit) {
   const prof = profOf(me.id), spec = specOf(me.id);
   if (!canEdit) return h('div', { class: 'stack' }, note('Vista del entrenador: solo lectura.'));
@@ -413,6 +647,7 @@ function profileTab(ctx, me, canEdit) {
   return h('div', { class: 'stack' },
     Array.isArray(spec.custom) && spec.custom.length ? note('Tu rutina está personalizada: estas respuestas cambian tus calorías, las dosis de los ejercicios nuevos que agregues y tu bloque, pero no tus días ni ejercicios. Para que Remate la vuelva a armar, en Rutina → Editar días y ejercicios → «Volver a la de Remate».') : null,
     profileForm(me, spec, (data) => { saveProf(me.id, data); toast('Guardado: tu rutina se actualizó'); location.hash = '#/fit/rutina'; }),
+    weekPanel(me, spec),
     h('section', { class: 'panel stack' }, h('h3', {}, 'Bloque de 6 semanas'),
       h('p', { style: { margin: 0 } }, spec.since ? `Empezaste el ${longDay(spec.since)}. La semana 6 de cada bloque es de descarga.` : 'Todavía no empiezas un bloque.'),
       h('button', { type: 'button', class: 'btn', onclick: () => { saveProf(me.id, { since: todayStr() }); toast('Bloque nuevo desde hoy'); } }, ic('refresh-cw', 18), 'Empezar un bloque nuevo hoy')),
@@ -467,6 +702,8 @@ function sharedView(ctx) {
       h('p', { class: 'row-sub', style: { margin: 0 } }, [splitName(spec.days), `${spec.minutes} min`, FIT_EXP[spec.exp].name, PLACES[spec.place].name, `${vb.days} días de voleibol`].join(' · ')),
       h('ul', { class: 'plain' }, r.days.map((d) => h('li', {}, `Día ${d.key}, ${d.name}: ${d.items.map((x) => fitName(x.ex)).join(', ')}`)))),
     foodShared(p),
+    h('div', { class: 'cluster' }, h('a', { class: 'btn sm', href: `#/imprimir/fit/${p.id}` }, ic('printer', 16), 'Imprimir su rutina'),
+      h('a', { class: 'btn sm', href: `#/imprimir/comida/${p.id}` }, ic('printer', 16), 'Imprimir su plan de comida')),
     note('Solo lectura: no puedes cambiar su rutina ni sus registros.'),
     progressTab(ctx, p, false)) };
 }

@@ -22,7 +22,7 @@ function loadTesseract() {
   return loading;
 }
 // Agranda, pasa a gris y sube el contraste: el lector acierta mucho más.
-async function prepare(file) {
+async function prepare(file, { dark = false } = {}) {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => bad(new Error('No pude abrir esa imagen.')); i.src = url; });
@@ -35,22 +35,26 @@ async function prepare(file) {
     for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc > n * 0.01) { lo = v; break; } }
     acc = 0; for (let v = 255; v >= 0; v--) { acc += hist[v]; if (acc > n * 0.01) { hi = v; break; } }
     const k = 255 / Math.max(1, hi - lo);
-    for (let i = 0; i < p.length; i += 4) { const g = Math.max(0, Math.min(255, (p[i] - lo) * k)); p[i] = p[i + 1] = p[i + 2] = g; }
+    // v3.15: si la imagen es oscura (app en modo oscuro), se invierte: el lector lee mejor letra oscura sobre fondo claro.
+    let mean = 0; for (let v = 0; v < 256; v++) mean += v * hist[v]; mean /= n;
+    const inv = dark && mean < 110;
+    for (let i = 0; i < p.length; i += 4) { let g = Math.max(0, Math.min(255, (p[i] - lo) * k)); if (inv) g = 255 - g; p[i] = p[i + 1] = p[i + 2] = g; }
     x.putImageData(d, 0, 0);
     return c;
   } finally { URL.revokeObjectURL(url); }
 }
 const STEP = { 'loading tesseract core': 'Descargando el lector', 'initializing tesseract': 'Preparando el lector', 'loading language traineddata': 'Descargando el idioma español', 'initializing api': 'Preparando el lector', 'recognizing text': 'Leyendo el texto' };
-export async function readImage(file, onProgress = () => {}) {
+// opts.dark: invierte capturas oscuras; opts.single: siempre lee de las dos formas (capturas de apps con números sueltos).
+export async function readImage(file, onProgress = () => {}, opts = {}) {
   onProgress('Preparando la imagen', 0);
-  const canvas = await prepare(file);
+  const canvas = await prepare(file, opts);
   const T = await loadTesseract();
   const worker = await T.createWorker('spa', 1, { workerPath: TESS.worker, corePath: TESS.core, langPath: TESS.lang, logger: (m) => onProgress(STEP[m.status] || 'Leyendo', m.progress || 0) });
   try {
     await worker.setParameters({ tessedit_pageseg_mode: '3', preserve_interword_spaces: '1' });
     let text = (await worker.recognize(canvas)).data.text;
     // Si casi no encontró partidos, intenta otra forma de leer (texto suelto, como en los carteles con recuadros).
-    if (parseSchedule(text).games.length < 2) {
+    if (opts.single || parseSchedule(text).games.length < 2) {
       await worker.setParameters({ tessedit_pageseg_mode: '11' });
       text += `\n${(await worker.recognize(canvas)).data.text}`;
     }

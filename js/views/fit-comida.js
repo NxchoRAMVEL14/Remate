@@ -10,6 +10,7 @@ import { EQ, GROUPS, GROUP_OF, GROUP_NAME, FOODS, macrosOf, targets, dailyEq, me
 import { RECIPES, RECIPE_BY_ID, MEAL_TAGS, DIET_TAGS, HIGH_PROTEIN, filterRecipes, shoppingList, shoppingText, amountText, qtyText } from '../content/recetas.js';
 import { note, field, options, empty } from './ui.js';
 import { profOf, saveProf, upsertDay, fitLogsOf, specOf, vbOf } from './fit.js';
+import { shareSheet, shareBtn, firstName } from './compartir.js';
 
 const link = (href, text) => h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, text);
 const fmtN = (n) => Math.round(n).toLocaleString('es-MX');
@@ -41,7 +42,9 @@ function stepsAvg(me) {
 export function planOf(me) {
   const n = nutriOf(me), spec = specOf(me.id), vb = vbOf(me, spec), kg = weightOf(me), age = ageFrom(me.birth_date);
   if (!n.set || !n.sex || !n.cm || !kg || !age) return null;
-  const sessions = spec.days + vb.days;
+  // v3.18: los entrenos que das cuentan como actividad ligera (medio entreno cada uno, si duran 2.5 h o más).
+  const coach = (spec.week?.coach || []).length * 0.5 * Math.min(1, (Number(spec.week?.coachMin) || 150) / 150);
+  const sessions = spec.days + vb.days + coach;
   const t = targets({ sex: n.sex, kg, cm: n.cm, age, goal: spec.goal, sessions, occupation: n.occupation, steps: stepsAvg(me), adj: n.adj });
   const eq = dailyEq(t, n.diet);
   return { n, spec, vb, kg, age, sessions, t, eq, got: macrosOf(eq), meals: mealPlan(eq, n.meals), mix: groupMix(eq) };
@@ -153,6 +156,7 @@ function planView(ctx, me, canEdit) {
       hide ? h('h2', {}, 'Tu plan en porciones') : h('h2', {}, `${fmtN(t.kcal)} kcal al día`),
       hide ? null : h('div', {}, `Proteína ${t.p} g · grasa ${t.f} g · carbohidratos ${t.c} g`),
       h('div', {}, `Al día: ${Object.entries(groupTotals(plan.eq)).map(([g, x]) => `${eqText(x)} ${gName(g, x)}`).join(', ')}.`)),
+    canEdit ? h('div', { class: 'cluster' }, shareBtn(() => foodShare(me, plan), 'Compartir o imprimir mi plan')) : null,
     sug && canEdit ? h('div', { class: 'note info stack' }, h('span', {}, `${sug.why} Sugerencia: ${sug.kcal > 0 ? 'sube' : 'baja'} ${Math.abs(sug.kcal)} kcal al día.`),
       h('button', { type: 'button', class: 'btn sm', onclick: () => { saveProf(me.id, { kcalAdj: n.adj + sug.kcal }); toast('Plan ajustado'); } }, `Ajustar ${sug.kcal > 0 ? '+' : ''}${sug.kcal} kcal`)) : null,
     t.floored ? note('Tu plan quedó en el mínimo seguro de calorías. Bajar más rápido te quitaría músculo y energía.', 'warn') : null,
@@ -168,6 +172,17 @@ function planView(ctx, me, canEdit) {
     canEdit ? h('details', { class: 'panel' }, h('summary', {}, h('strong', {}, 'Mis datos de comida')), setupForm(me, n, () => ctx.rerender()),
       n.adj ? h('button', { type: 'button', class: 'btn ghost', onclick: () => { saveProf(me.id, { kcalAdj: 0 }); toast('Ajuste quitado'); } }, `Quitar mi ajuste (${n.adj > 0 ? '+' : ''}${n.adj} kcal)`) : null) : null,
     sourcesPanel());
+}
+// v3.17: el plan como texto (WhatsApp) y la hoja para imprimir.
+function foodShare(me, plan) {
+  const { t, n } = plan, who = firstName(me);
+  const L = [`🍽️ *Plan de comida*${who ? ` de ${who}` : ''} (Remate Fit)`, `${FIT_GOALS[plan.spec.goal].name} · ${plural(n.meals, 'comida', 'comidas')} al día`];
+  if (!n.hide) L.push(`${fmtN(t.kcal)} kcal · proteína ${t.p} g · grasa ${t.f} g · carbohidratos ${t.c} g`);
+  for (const m of plan.meals) L.push('', `*${m.name}:* ${Object.entries(m.g).map(([g, x]) => `${eqText(x)} ${gName(g, x)}`).join(', ')}`);
+  L.push('', '*1 porción es, por ejemplo:*');
+  for (const g of Object.keys(groupTotals(plan.eq))) L.push(`• ${GROUP_NAME[g]}: ${examplesOf(g, n.diet)}`);
+  L.push('', 'Es una estimación con el Sistema Mexicano de Alimentos Equivalentes; no sustituye a un nutriólogo.', 'Hecho con Remate Fit');
+  shareSheet({ title: 'Compartir o imprimir mi plan', print: '#/imprimir/comida', text: L.join('\n'), printSub: 'Tus comidas en porciones, la lista de porciones y, si tienes, las recetas de la semana y la lista del súper. En el celular, «Imprimir» → «Guardar como PDF».' });
 }
 function ratesOf(me) {
   const avgs = weeklyAverages(fitLogsOf(me.id, 'body'), 4);
@@ -189,6 +204,9 @@ function examplesOf(g, d) {
     default: return '';
   }
 }
+export { eqText, gName, examplesOf };
+// v3.17: la lista de porciones (para imprimir) según cómo come cada quien.
+export const portionsOf = (diet) => GROUPS.map(([g, name, subs]) => [name, FOODS.filter((f) => subs.includes(f[0]) && !Object.entries(diet).some(([k, on]) => on && DIET_SKIP[k].test(f[1]))).map((f) => [f[1], f[2]])]);
 const DIET_SKIP = { veg: /pollo|pavo|res|cerdo|atún|pescado|camarón|jamón|chorizo/i, noDairy: /leche|yogur|queso|requesón|crema$/i, noGluten: /bolillo|pan de caja|pasta|avena|galletas/i };
 function portionsGuide(diet) {
   return h('div', { class: 'stack' },
@@ -237,7 +255,7 @@ function howPanel(plan) {
   return h('details', { class: 'panel' }, h('summary', {}, h('strong', {}, 'Cómo se calculó')),
     h('dl', { class: 'gx-dl' },
       h('dt', {}, 'En reposo'), h('dd', {}, `${fmtN(t.bmr)} kcal (Mifflin-St Jeor: ${plan.kg} kg, ${n.cm} cm, ${plan.age} años, ${n.sex === 'F' ? 'mujer' : 'hombre'}).`),
-      h('dt', {}, 'Con actividad'), h('dd', {}, `× ${t.pal} = ${fmtN(t.tdee)} kcal (${plural(plan.sessions, 'entreno', 'entrenos')} por semana: ${spec.days} de gym y ${plan.vb.days} de voleibol; ${OCCUPATIONS[n.occupation][0].toLowerCase()}).`),
+      h('dt', {}, 'Con actividad'), h('dd', {}, `× ${t.pal} = ${fmtN(t.tdee)} kcal (${String(Math.round(plan.sessions * 10) / 10)} entrenos por semana: ${spec.days} de gym y ${plan.vb.days} de voleibol${plan.sessions > spec.days + plan.vb.days ? `, más ${Math.round((plan.sessions - spec.days - plan.vb.days) * 10) / 10} por los entrenos que das` : ''}; ${OCCUPATIONS[n.occupation][0].toLowerCase()}).`),
       h('dt', {}, 'Tu objetivo'), h('dd', {}, `${FIT_GOALS[spec.goal].name}: ${spec.goal === 'grasa' ? 'unas 20% menos calorías (bajar 0.5 a 1% de tu peso por semana)' : spec.goal === 'musculo' ? 'unas 10% más calorías (subir 0.25 a 0.5% por semana)' : spec.goal === 'fuerza' ? 'un poco más para rendir' : 'las mismas calorías que gastas'}${n.adj ? `, con tu ajuste de ${n.adj > 0 ? '+' : ''}${n.adj} kcal` : ''}.`),
       h('dt', {}, 'Proteína'), h('dd', {}, `${PROTEIN[spec.goal]} g por kilo${t.pk < plan.kg ? ` de ${t.pk} kg (el peso de un IMC de 25; con todo tu peso saldría de más)` : ''} = ${t.p} g.`),
       h('dt', {}, 'Grasa'), h('dd', {}, `25% de las calorías = ${t.f} g.`),
@@ -327,7 +345,8 @@ function shopView(ctx, me, canEdit) {
           h('b', {}, String(picks[id])),
           h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Una ración más', onclick: () => setN(id, Math.min(14, picks[id] + 1)) }, ic('plus', 18))) : null)))),
     h('section', { class: 'panel stack' }, h('div', { class: 'split' }, h('h3', {}, 'Lista del súper'),
-      h('button', { type: 'button', class: 'btn sm ball', onclick: () => shareText(shoppingText(picks)) }, ic('share-2', 16), 'Compartir')),
+      h('span', { class: 'cluster' }, h('a', { class: 'btn sm', href: '#/imprimir/comida' }, ic('printer', 16), 'Imprimir'),
+        h('button', { type: 'button', class: 'btn sm ball', onclick: () => shareText(shoppingText(picks)) }, ic('share-2', 16), 'Compartir'))),
       list.map(([cat, xs]) => h('div', { class: 'stack fit-shop' }, h('h4', {}, cat), xs.map((x) => {
         const k = `${x.name}|${x.u}`;
         const box = h('input', { type: 'checkbox', checked: got[k] ? true : null, onchange: (e) => { if (e.target.checked) got[k] = 1; else delete got[k]; ls.set(SHOP_KEY(me.id), JSON.stringify(got)); e.target.closest('label').classList.toggle('done', e.target.checked); } });

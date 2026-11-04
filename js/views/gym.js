@@ -12,10 +12,13 @@ import { editorPage, pickExercise } from './rutina-editor.js';
 import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
 import { lineChart } from './chart.js';
 import { calItemSheet } from './sheets-session.js';
+import { shareSheet, shareBtn, packRoutine, unpackRoutine, routineLink, routineText, firstName } from './compartir.js';
 
 // ---------- datos ----------
 const KEY = { mine: (id) => `remate.gym.mine.${id}`, use: (id) => `remate.gym.use.${id}`, draft: (id) => `remate.gym.draft.${id}`, none: (id) => `remate.gym.none.${id}` };
 const GYM_LIB = { list: GYM_ALL, byId: GYM_BY_ID };
+// v3.18: en el buscador, primero los ejercicios que más usa ese jugador.
+const recentGym = (pid) => { const n = new Map(); gymLogsOf(pid).slice(0, 40).forEach((l, i) => (l.sets || []).forEach((e) => n.set(e.ex, (n.get(e.ex) || 0) + 1 + (40 - i) / 40))); return [...n].sort((a, b) => b[1] - a[1]).map(([id]) => id).slice(0, 12); };
 const readJSON = (k) => { try { return JSON.parse(ls.get(k) || 'null'); } catch { return null; } };
 export const gymVisible = () => settings().gym_players !== false;
 export const gymLogsOf = (pid) => (state.data.gymLogs || []).filter((l) => l.player_id === pid)
@@ -75,6 +78,22 @@ export function rxText(rx) {
   return parts.join(' · ');
 }
 export const specText = (s) => [GOALS[s.goal].name, plural(Math.min(s.days, maxDays(s)), 'día', 'días'), `${s.minutes} min`, EXP[s.exp].name, EQUIP[s.equip].name, PHASE[s.phase].name].join(' · ');
+// v3.17: compartir o imprimir una rutina de gym (la tuya, la que asignas o la que estás armando).
+const WARM_TXT = '10 min: cardio suave, movilidad de tobillo, cadera y espalda, y activación de glúteo y hombro.';
+const COOL_TXT = '3 a 5 min caminando y estiramiento suave de pantorrilla, cadera y pecho.';
+export function gymCode(spec, who = '') {
+  const r = buildRoutine(spec);
+  return packRoutine('gym', { goal: spec.goal, days: spec.days, minutes: spec.minutes, exp: spec.exp, equip: spec.equip, phase: spec.phase },
+    r.custom ? r.days.map((d) => ({ name: d.name, items: d.items })) : null, who);
+}
+export function gymShare(spec, { who = '', print = null, title = 'Compartir o imprimir la rutina' } = {}) {
+  const r = buildRoutine(spec), code = gymCode(spec, who);
+  const week = weekPlan(r.n, settings().days || []).map((x, i) => `${DAYS[x.wd]} día ${r.days[i]?.key || ''}`).join(', ');
+  shareSheet({ title, print: print || `#/imprimir/gym/s/${code}`,
+    text: routineText({ title: 'Rutina de gym', who, summary: specText(spec), days: r.days, byId: GYM_BY_ID, week, warmup: WARM_TXT, cooldown: COOL_TXT }),
+    link: routineLink('gym', code), linkText: `Te paso ${who ? `la rutina de gym de ${who}` : 'una rutina de gym'} en Remate. Ábrela y toca «Usar esta rutina»:` });
+}
+
 const RPE = { 1: 'Muy fácil', 2: 'Muy fácil', 3: 'Fácil', 4: 'Fácil', 5: 'Moderada', 6: 'Moderada', 7: 'Pesada', 8: 'Pesada', 9: 'Muy pesada', 10: 'Al máximo' };
 const longDay = (d) => fmtDate(d, { weekday: 'long', day: 'numeric', month: 'long' });
 const link = (href, text) => h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, text);
@@ -286,6 +305,7 @@ function routineTab(ctx, me, canLog) {
         h('button', { class: 'btn sm', type: 'button', onclick: () => { location.hash = '#/gym/editar'; } }, ic('list-checks', 16), r.custom ? 'Editar días y ejercicios' : 'Personalizar'),
         canLog ? h('a', { class: 'btn sm', href: '#/gym/registrar/libre' }, ic('plus', 16), 'Sesión libre') : null,
         h('button', { class: 'btn sm', type: 'button', onclick: () => gymCalSheet(me) }, ic('calendar-plus', 16), 'Agregar al calendario'),
+        shareBtn(() => gymShare(s, { who: firstName(me), print: '#/imprimir/gym', title: 'Compartir o imprimir mi rutina' })),
         act.src === 'mine' ? h('button', { class: 'btn sm ghost', type: 'button', onclick: async () => {
           if (!(await confirmSheet({ title: '¿Borrar mi rutina?', text: act.coachSpec ? 'Se borra la que armaste tú; te queda la de tu entrenador. Tus sesiones guardadas no se borran.' : 'Se borra tu rutina de este celular. Tus sesiones guardadas no se borran. Luego puedes armar otra.', ok: 'Borrar', danger: true }))) return;
           ls.del(KEY.mine(me.id)); ls.set(KEY.none(me.id), '1'); ls.del(KEY.use(me.id)); toast('Rutina borrada'); ctx.rerender();
@@ -388,7 +408,7 @@ function logPage(ctx) {
         h('button', { class: 'btn sm ghost', type: 'button', onclick: () => { dr.entries.splice(k, 1); persist(); ctx.rerender(); } }, ic('x', 16), 'Hoy no lo hice'),
         (() => { const lf = lazyFig(figFor(ex), { size: 'sm' }); return h('details', { class: 'gx-how', ontoggle: lf.ontoggle }, h('summary', {}, '¿Cómo se hace?'), lf.slot, h('ol', { class: 'plain' }, ex.how.map((x) => h('li', {}, x)))); })()));
   };
-  const addEx = () => pickExercise({ lib: GYM_LIB, exclude: dr.entries.map((e) => e.ex), title: 'Agregar a esta sesión', onPick: (id) => {
+  const addEx = () => pickExercise({ lib: { ...GYM_LIB, recent: me ? recentGym(me.id) : [] }, exclude: dr.entries.map((e) => e.ex), title: 'Agregar a esta sesión', onPick: (id) => {
     const rx = gymDefaultRx(id, act.spec || {}), last = lastFor(me.id, id);
     dr.entries.push({ ex: id, rx, s: Array.from({ length: rx.sets }, (_, i) => [last?.s?.[i]?.[0] ?? last?.s?.[0]?.[0] ?? '', '']) }); persist(); ctx.rerender();
   } });
@@ -493,6 +513,7 @@ export function playerGymSheet(p) {
   actions: [{ label: 'Cerrar' },
     plan ? { label: 'Quitar rutina', kind: 'danger', onClick: () => { patch('players', p.id, { gym_plan: {} }); toast('Rutina quitada'); } } : null,
     plan && gymReady() ? { label: 'Personalizar', onClick: () => { setTimeout(() => { location.hash = `#/gym/editar/${p.id}`; }, 0); } } : null,
+    plan ? { label: 'Compartir o imprimir', onClick: () => { setTimeout(() => gymShare(plan, { who: p.name, print: `#/imprimir/gym/${p.id}` }), 50); } } : null,
     gymReady() ? { label: plan ? 'Cambiar rutina' : 'Asignar rutina', kind: 'primary', onClick: () => { setTimeout(() => gymPlanSheet([p]), 50); } } : null].filter(Boolean) });
 }
 
@@ -539,7 +560,8 @@ function buildTab(ctx) {
   return h('div', { class: 'stack' },
     h('p', { style: { margin: 0 } }, 'Prueba combinaciones para ver qué rutina recibe cada jugador. Para dejarle una a alguien, tócala en «Asignar».'),
     specForm(ui.spec, paint),
-    h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', disabled: gymReady() ? null : true, onclick: () => assignSheet(normSpec(ui.spec)) }, ic('user-plus', 18), 'Asignar a jugadores')),
+    h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', disabled: gymReady() ? null : true, onclick: () => assignSheet(normSpec(ui.spec)) }, ic('user-plus', 18), 'Asignar a jugadores'),
+      shareBtn(() => gymShare(normSpec(ui.spec)), 'Compartir o imprimir', 'btn')),
     preview);
 }
 
@@ -551,7 +573,7 @@ function editPage(ctx) {
     const p = players().find((x) => x.id === ctx.args[1]), plan = p ? coachPlanOf(p) : null;
     if (!plan) return { title: 'Personalizar', back, el: h('div', { class: 'page' }, empty('Sin rutina asignada', 'Primero asígnale una rutina a ese jugador.')) };
     return editorPage(ctx, { title: `Rutina de ${p.name}`, back, days: buildRoutine(plan).days, custom: Array.isArray(plan.custom) && plan.custom.length > 0,
-      lib: { ...GYM_LIB, defaultRx: (id) => gymDefaultRx(id, plan) },
+      lib: { ...GYM_LIB, recent: recentGym(p.id), defaultRx: (id) => gymDefaultRx(id, plan) },
       onSave: (custom) => { patch('players', p.id, { gym_plan: { ...plan, custom: cleanCustom(custom, GYM_BY_ID) } }); toast(`Rutina de ${p.name} guardada`); location.hash = back; },
       onReset: () => { const { custom, ...rest } = plan; patch('players', p.id, { gym_plan: rest }); toast('Volvió a la rutina de Remate'); location.hash = back; } });
   }
@@ -559,7 +581,7 @@ function editPage(ctx) {
   if (!act?.spec) return { title: 'Personalizar', back, el: h('div', { class: 'page' }, empty('Todavía no tienes rutina', 'Primero arma tu rutina con las preguntas; luego la personalizas.', h('a', { class: 'btn', href: back }, 'Armar mi rutina'))) };
   const s = act.spec;
   return editorPage(ctx, { title: 'Mi rutina de gym', back, days: buildRoutine(s).days, custom: Array.isArray(s.custom) && s.custom.length > 0,
-    lib: { ...GYM_LIB, defaultRx: (id) => gymDefaultRx(id, s) },
+    lib: { ...GYM_LIB, recent: recentGym(me.id), defaultRx: (id) => gymDefaultRx(id, s) },
     onSave: (custom) => {
       const { note: _n, ...base } = s;
       ls.set(KEY.mine(me.id), JSON.stringify({ ...base, custom: cleanCustom(custom, GYM_BY_ID), since: s.since || todayStr() }));
@@ -569,7 +591,37 @@ function editPage(ctx) {
     onReset: act.src === 'mine' ? () => { const { custom, ...rest } = s; ls.set(KEY.mine(me.id), JSON.stringify(rest)); toast('Volviste a la rutina de Remate'); location.hash = back; } : null });
 }
 
+// v3.17: abrir un enlace de rutina que alguien compartió. Jugador: «Usar esta rutina» (se guarda como la suya, en su celular).
+// Entrenador: asignarla a jugadores.
+function usePage(ctx) {
+  const back = '#/gym', code = ctx.args[1] || '';
+  const got = unpackRoutine(code, 'gym');
+  if (!got) return { title: 'Rutina compartida', back, el: h('div', { class: 'page' }, empty('Este enlace no se pudo abrir', 'Puede estar incompleto (a veces WhatsApp corta los enlaces largos). Pide que te lo vuelvan a mandar desde Remate.')) };
+  const spec = normSpec({ ...got.s, custom: got.custom ? cleanCustom(got.custom, GYM_BY_ID) : undefined });
+  if (!spec.custom?.length) delete spec.custom;
+  const r = buildRoutine(spec), coach = ctx.role === 'coach', me = ctx.me;
+  if (!coach && !gymVisible() && !ctx.self) return { title: 'Rutina compartida', back: '#/inicio', el: h('div', { class: 'page' }, empty('Gym no está activado', 'Tu entrenador decide si esta sección está disponible para el equipo.')) };
+  const use = async () => {
+    if (ctx.readonly || !me) { toast('Vista previa: aquí no se guarda'); return; }
+    const act = activeSpec(me);
+    if (act.own && !(await confirmSheet({ title: '¿Usar esta rutina?', text: `Reemplaza la rutina que armaste tú en este celular. Tus sesiones guardadas no se borran.${act.coachSpec ? ' La de tu entrenador sigue ahí.' : ''}`, ok: 'Usar esta rutina' }))) return;
+    ls.set(KEY.mine(me.id), JSON.stringify({ ...spec, since: todayStr() })); ls.set(KEY.use(me.id), 'mine'); ls.del(KEY.none(me.id));
+    toast('Listo: ya es tu rutina'); location.hash = '#/gym';
+  };
+  const el = h('div', { class: 'page' },
+    h('section', { class: 'band next stack' }, h('div', { class: 'when' }, 'Rutina compartida'), h('h2', {}, got.who ? `La rutina de ${got.who}` : 'Una rutina de gym'),
+      h('p', { style: { margin: 0 } }, specText(spec) + (r.custom ? ' · personalizada' : '')),
+      h('div', { class: 'cluster' },
+        coach ? h('button', { class: 'btn ball', type: 'button', disabled: gymReady() ? null : true, onclick: () => assignSheet(spec) }, ic('user-plus', 18), 'Asignar a jugadores')
+          : h('button', { class: 'btn ball', type: 'button', onclick: use }, ic('check', 18), 'Usar esta rutina'),
+        h('a', { class: 'btn', href: `#/imprimir/gym/s/${code}` }, ic('printer', 18), 'Imprimir'))),
+    coach ? null : note('Se guarda como tu rutina en este celular. Si tu entrenador te asignó una, sigue ahí y eliges cuál usar. Revísala: la armó alguien con su objetivo, sus días y su experiencia.'),
+    routineBlock(r, { canLog: false }));
+  return { title: 'Rutina', sub: 'Compartida', back, el };
+}
+
 export default function gym(ctx) {
+  if (ctx.args[0] === 'usar') return usePage(ctx);
   if (ctx.args[0] === 'registrar') return logPage(ctx);
   if (ctx.args[0] === 'editar') return editPage(ctx);
   return ctx.role === 'coach' ? coachView(ctx) : playerView(ctx);

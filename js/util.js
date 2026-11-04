@@ -222,7 +222,8 @@ export function buildICS(events, calName = 'Remate') {
     if (e.location) L.push(`LOCATION:${icsEsc(e.location)}`);
     if (e.desc) L.push(`DESCRIPTION:${icsEsc(e.desc)}`);
     // Avisos: los de hora, X minutos antes; los de todo el día, a las 9 de la mañana del día anterior.
-    if (e.alarm !== null) L.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsEsc(e.summary)}`, `TRIGGER:${e.time ? `-PT${e.alarm || 60}M` : '-PT15H'}`, 'END:VALARM');
+    // alarm 0 = avisa justo a la hora (los recordatorios diarios de Remate Fit).
+    if (e.alarm !== null) L.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsEsc(e.summary)}`, `TRIGGER:${e.time ? (e.alarm === 0 ? 'PT0M' : `-PT${e.alarm || 60}M`) : '-PT15H'}`, 'END:VALARM');
     L.push('END:VEVENT');
   }
   L.push('END:VCALENDAR');

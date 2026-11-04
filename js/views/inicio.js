@@ -16,6 +16,7 @@ import { retoCard } from './reto.js';
 import { rpeCard, myLoadLine } from './carga.js';
 import { videoCardFor } from './tecnica.js';
 import { fitCard } from './fit.js';
+import { fraseCard } from './frase.js';
 import { PTESTS, testTrend } from '../content/gym.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
@@ -111,5 +112,6 @@ export default function inicio(ctx) {
       h('div', { class: 'rows' }, recent.map(({ session: s, status }) => h('div', { class: 'row' },
         h('span', { class: 'row-main' }, h('strong', {}, s.title || 'Entrenamiento'), h('span', { class: 'row-sub' }, fmtDate(s.session_date))), h('span', { class: 'row-end' }, statusChip(status)))))));
   }
+  el.append(fraseCard());   // v3.16: la frase del día
   return { title: 'Inicio', el };
 }

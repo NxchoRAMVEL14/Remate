@@ -1,5 +1,5 @@
 // Arranque de Remate: entrada, rutas, encabezado, navegación y re-dibujo cuando cambian los datos.
-import { h, ic, $, applyTheme, iosBrowser, INSTALL_STEPS, openSheet } from './util.js';
+import { h, ic, $, applyTheme, iosBrowser, INSTALL_STEPS, openSheet, todayStr } from './util.js';
 import { state, onChange, getPlayer, pendingCount } from './store.js';
 import { boot } from './auth.js';
 import { renderGate } from './views/gate.js';
@@ -14,9 +14,9 @@ const ROUTES = { hoy: R('hoy'), jugadores: R('jugadores'), jugador: R('jugador')
   ruta: R('ruta'), ajustes: R('ajustes'), ayuda: R('ayuda'), novedades: R('ayuda', 'novedades'), partidos: R('partidos'), partido: R('partidos', 'partido'), lab: R('lab'), reportes: R('reportes'),
   mas: R('mas'), casa: R('casa'), mejoras: R('mejoras'), pruebas: R('pruebas'), temporada: R('temporada'), avisos: R('avisos'), radar: R('radar-guia'), comparar: R('radar-guia', 'comparar'),
   teoria: R('teoria'), torneo: R('torneos'), alineacion: R('partido-capture', 'alineacion'), rivales: R('rivales'), rival: R('rivales'), gym: R('gym'), medir: R('medir'),
-  'lista-qr': R('asistir', 'listaQr'), llegue: R('asistir', 'llegue'), asistir: R('asistir'), inicio: R('inicio'), entrenos: R('entrenos'), carga: R('carga'), tecnica: R('tecnica'), azar: R('azar'), fit: R('fit') };
-const COACH = new Set(['hoy', 'jugadores', 'jugador', 'sesiones', 'sesion', 'ejercicios', 'ejercicio', 'ruta', 'ajustes', 'ayuda', 'partidos', 'partido', 'lab', 'reportes', 'mas', 'casa', 'mejoras', 'pruebas', 'temporada', 'avisos', 'radar', 'novedades', 'teoria', 'comparar', 'torneo', 'alineacion', 'rivales', 'rival', 'gym', 'medir', 'lista-qr', 'llegue', 'carga', 'tecnica', 'azar', 'fit']);
-const PLAYER = new Set(['inicio', 'ruta', 'entrenos', 'partidos', 'partido', 'ejercicios', 'ejercicio', 'casa', 'pruebas', 'avisos', 'asistir', 'ajustes', 'ayuda', 'radar', 'novedades', 'teoria', 'torneo', 'gym', 'medir', 'llegue', 'lista-qr', 'tecnica', 'fit']);
+  'lista-qr': R('asistir', 'listaQr'), llegue: R('asistir', 'llegue'), asistir: R('asistir'), inicio: R('inicio'), entrenos: R('entrenos'), carga: R('carga'), tecnica: R('tecnica'), azar: R('azar'), fit: R('fit'), imprimir: R('imprimir') };
+const COACH = new Set(['hoy', 'jugadores', 'jugador', 'sesiones', 'sesion', 'ejercicios', 'ejercicio', 'ruta', 'ajustes', 'ayuda', 'partidos', 'partido', 'lab', 'reportes', 'mas', 'casa', 'mejoras', 'pruebas', 'temporada', 'avisos', 'radar', 'novedades', 'teoria', 'comparar', 'torneo', 'alineacion', 'rivales', 'rival', 'gym', 'medir', 'lista-qr', 'llegue', 'carga', 'tecnica', 'azar', 'fit', 'imprimir']);
+const PLAYER = new Set(['inicio', 'ruta', 'entrenos', 'partidos', 'partido', 'ejercicios', 'ejercicio', 'casa', 'pruebas', 'avisos', 'asistir', 'ajustes', 'ayuda', 'radar', 'novedades', 'teoria', 'torneo', 'gym', 'medir', 'llegue', 'lista-qr', 'tecnica', 'fit', 'imprimir']);
 const ASSISTANT = new Set(['asistir', 'partidos', 'partido', 'avisos', 'ejercicios', 'ejercicio', 'ajustes', 'ayuda', 'novedades', 'torneo', 'alineacion', 'lista-qr']);
 const MODS = new Map();
 const loadView = (file) => (MODS.has(file) ? Promise.resolve(MODS.get(file)) : import(`./views/${file}.js`).then((m) => { MODS.set(file, m); return m; }));
@@ -120,6 +120,8 @@ function render({ fresh = false } = {}) {
   document.title = `${view.title} · Remate`;
   if (fresh) { window.scrollTo(0, 0); main.focus({ preventScroll: true }); } else window.scrollTo(0, y);
   prefetchAll();
+  // v3.16: la frase del día, la primera vez que abres Remate cada día (si no está apagada en Ajustes).
+  if (fresh && ls.get('remate.frase.visto') !== todayStr() && ls.get('remate.frase.off') !== '1') loadView('frase').then((m) => m.maybeFrase(name)).catch(() => {});
 }
 
 // iPhone en Safari (o abierto desde WhatsApp): aquí la sesión se guarda aparte de la app instalada.
@@ -150,12 +152,16 @@ function mountApp() {
 function mountGate() {
   mounted = false;
   if (firstRun()) markSeen();   // celular nuevo: no hay "actualización" que avisar
-  root.replaceChildren(renderGate(() => { location.hash = ''; mountApp(); }));
+  // v3.17: si llegó con un enlace para usar una rutina, después de poner su código lo abre.
+  const pending = /^#\/(gym|fit)\/usar\//.test(location.hash) ? location.hash : '';
+  root.replaceChildren(renderGate(() => { location.hash = pending; mountApp(); }));
   document.title = 'Remate';
 }
 
 onChange(schedule);
 addEventListener('hashchange', () => render({ fresh: true }));
+// La app instalada se queda abierta días: al volver a ella en un día nuevo, también sale la frase.
+document.addEventListener('visibilitychange', () => { if (mounted && document.visibilityState === 'visible' && ls.get('remate.frase.visto') !== todayStr() && ls.get('remate.frase.off') !== '1') render({ fresh: true }); });
 
 (async function start() {
   applyTheme();

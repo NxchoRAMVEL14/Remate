@@ -359,28 +359,35 @@ function makeDemoFit(players, today) {
     p.fit = p.id === 'demo-p2';
   });
   const pid = 'demo-p2', since = addDays(today, -26);
-  const data = { goal: 'fuerza', exp: 'medio', days: 3, minutes: 60, place: 'completo', vbAuto: true, vbDays: 2, stepsGoal: 9000, since,
+  const data = { goal: 'fuerza', exp: 'medio', days: 3, minutes: 60, place: 'completo', vbAuto: true, vbDays: 2, stepsGoal: 9000, since, week: { vb: [2, 4], coach: [], coachMin: 150 },
     nutri: true, sex: 'M', cm: 181, meals: 4, occupation: 'sentado', diet: { veg: false, noDairy: false, noGluten: false }, picks: { 'bowl-pollo': 4, 'huevos-mexicana': 3, 'lentejas': 4, 'licuado-recuperacion': 3 } };
   const fitProfiles = [{ id: 'demo-fp1', owner_id: 'demo', player_id: pid, data, share: true, created_at: since, updated_at: since }];
   const fitLogs = [];
   const r = buildFit(data, 2);
   let n = 0;
-  for (let dd = -25; dd <= -1; dd += 2.5) {
+  for (let dd = -88; dd <= -1; dd += 2.5) {    // v3.16: 3 meses de historia para las gráficas
     const d = Math.round(dd), day = r.days[n % r.days.length], k = Math.floor(n / r.days.length);
     const sets = day.items.map((rx) => {
       const ex = FIT_BY_ID[rx.ex];
       const base = ex.need === 'barra' ? 60 : ex.need === 'maquina' || ex.need === 'polea' ? 35 : ex.each ? 14 : 20;
-      const kg = ex.unit === 'kg' ? base + (ex.need === 'barra' ? 2.5 : 1) * k : null;
+      const kg = ex.unit === 'kg' ? base + (ex.need === 'barra' ? 2.5 : 1) * Math.floor(k * 0.6) : null;
       const reps = ex.unit === 's' ? 30 : ex.unit === 'saltos' ? 4 : Math.min(Number(String(rx.reps).split('-').pop()), Number(String(rx.reps).split('-')[0]) + (n % 2));
       return { ex: rx.ex, s: Array.from({ length: rx.sets }, () => [kg, reps]) };
     });
-    fitLogs.push({ id: `demo-fg-${n}`, owner_id: 'demo', player_id: pid, kind: 'gym', day: addDays(today, d), data: { key: day.key, name: day.name, goal: data.goal, minutes: day.min, rpe: 7, pain: false, note: '', sets }, created_at: new Date(Date.now() + d * 864e5).toISOString() });
+    fitLogs.push({ id: `demo-fg-${n}`, owner_id: 'demo', player_id: pid, kind: 'gym', day: addDays(today, d), data: { key: day.key, name: day.name, goal: data.goal, minutes: day.min + ((n * 7) % 11) - 5, rpe: 6 + (n % 3), pain: false, note: '', sets }, created_at: new Date(Date.now() + d * 864e5).toISOString() });
     n++;
   }
-  for (let d = -27; d <= 0; d++) {
-    const date = addDays(today, d);
-    if (d % 3 !== 1) fitLogs.push({ id: `demo-fb-${d}`, owner_id: 'demo', player_id: pid, kind: 'body', day: date, data: { kg: Math.round((78.4 + d * 0.035 + ((d * 7) % 5) * 0.12) * 10) / 10, ...(d === -27 ? { cintura: 82.5, cadera: 96, brazo: 33.5, muslo: 56 } : d === -1 ? { cintura: 81.5, cadera: 95.5, brazo: 34, muslo: 56.5 } : {}) }, created_at: new Date(Date.now() + d * 864e5).toISOString() });
-    if (d > -14) fitLogs.push({ id: `demo-fs-${d}`, owner_id: 'demo', player_id: pid, kind: 'steps', day: date, data: { n: 6500 + ((d * 1373) % 4800 + 4800) % 4800 }, created_at: new Date(Date.now() + d * 864e5).toISOString() });
+  const MEAS = { [-85]: { cintura: 83.5, cadera: 96.5, brazo: 33, muslo: 55.5 }, [-55]: { cintura: 83, cadera: 96, brazo: 33.5, muslo: 56 }, [-27]: { cintura: 82.5, cadera: 96, brazo: 33.5, muslo: 56 }, [-1]: { cintura: 81.5, cadera: 95.5, brazo: 34, muslo: 56.5 } };
+  for (let d = -120; d <= 0; d++) {
+    const date = addDays(today, d), at = new Date(Date.now() + d * 864e5).toISOString(), wob = ((d * 7) % 5 + 5) % 5;
+    // Peso, y cada 4 días la grasa y el músculo de la báscula (v3.16: 3 meses).
+    if (d >= -90 && d % 3 !== 1) fitLogs.push({ id: `demo-fb-${d}`, owner_id: 'demo', player_id: pid, kind: 'body', day: date, data: { kg: Math.round((78.4 + d * 0.035 + wob * 0.12) * 10) / 10,
+      ...(d % 4 === 0 ? { grasa: Math.round((16.4 - (d + 90) * 0.012 + wob * 0.15) * 10) / 10, musculo: Math.round((35.2 + (d + 90) * 0.011 + wob * 0.05) * 10) / 10 } : {}), ...(MEAS[d] || {}) }, created_at: at });
+    // Pasos casi diario; puntos cardio (Google Fit) en los últimos 2 meses; algo de cardio a mano.
+    const wd = new Date(Date.now() + d * 864e5).getDay();
+    if (d !== -40 && d !== -41 && (d > -14 || d % 9 !== 0)) fitLogs.push({ id: `demo-fs-${d}`, owner_id: 'demo', player_id: pid, kind: 'steps', day: date, created_at: at,
+      data: { n: Math.round(5800 + (d + 120) * 18 + ((d * 1373) % 4800 + 4800) % 4800 - (wd === 0 ? 1500 : 0)),
+        ...(d > -60 ? { pc: 8 + ((d * 37) % 40 + 40) % 40 } : {}), ...(wd === 6 && d > -70 ? { cmin: 25 + (((d * 3) % 4) + 4) % 4 * 5, ctipo: 'bici' } : {}) } });
   }
   // Comidas de los últimos 10 días: casi todo el plan palomeado; algunos días con una receta o un alimento extra.
   const plan = mealPlan(dailyEq(targets({ sex: 'M', kg: 78, cm: 181, age: 19, goal: 'fuerza', sessions: 5, occupation: 'sentado' })), 4);
