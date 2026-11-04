@@ -22,6 +22,7 @@
   --link: #1B4FA8;
   --ball: #F7C600;           /* amarillo del balón: lo que hay que mirar */
   --ball-on: #0C2340;
+  --trend: #946E00;          /* línea de tendencia en gráficas (validada con el azul de cancha) */
   --ok: #16794D;   --ok-bg: #DDF1E6;
   --warn: #8A5A00; --warn-bg: #FBEFC8;
   --bad: #B3321B;  --bad-bg: #FBE0DA;
@@ -45,7 +46,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0A1626; --surface: #12233A; --surface-2: #1B3250; --ink: #E8EEF6; --ink-2: #A9BAD0; --line: #2A4263;
-    --court: #2F6BDB; --court-deep: #0F2A55; --link: #8DB4FF;
+    --court: #2F6BDB; --court-deep: #0F2A55; --link: #8DB4FF; --trend: #B88A00;
     --ok: #55C98F; --ok-bg: #123A2A; --warn: #F2C45A; --warn-bg: #3B2F0E; --bad: #FF8F78; --bad-bg: #44201A;
     --info: #8DB4FF; --info-bg: #17315C;
     --floor: #2A62C4; --floor-free: #1A4A9C;
@@ -55,7 +56,7 @@
 }
 :root[data-theme="dark"] {
   --bg: #0A1626; --surface: #12233A; --surface-2: #1B3250; --ink: #E8EEF6; --ink-2: #A9BAD0; --line: #2A4263;
-  --court: #2F6BDB; --court-deep: #0F2A55; --link: #8DB4FF;
+  --court: #2F6BDB; --court-deep: #0F2A55; --link: #8DB4FF; --trend: #B88A00;
   --ok: #55C98F; --ok-bg: #123A2A; --warn: #F2C45A; --warn-bg: #3B2F0E; --bad: #FF8F78; --bad-bg: #44201A;
   --info: #8DB4FF; --info-bg: #17315C;
   --floor: #2A62C4; --floor-free: #1A4A9C;
