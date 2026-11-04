@@ -305,12 +305,50 @@ const cleanRx = (rx) => {
   if (Number.isNaN(rir)) rir = null;
   return { ex: ex.id, pat: SLOT_OF[ex.id] || ex.slot || ex.pat, role: ROLE[rx.role] ? rx.role : fitRole(ex), sets, reps, rir, rest };
 };
+// v3.18: cada día puede ir en un día de la semana (wd: 0 domingo … 6 sábado) y recuerda sus músculos (mus).
+const wdOf = (x) => (x === null || x === undefined || x === '' ? null : Number.isInteger(Number(x)) && Number(x) >= 0 && Number(x) <= 6 ? Number(x) : null);
 export const cleanFitCustom = (custom) => (Array.isArray(custom) ? custom : []).slice(0, 7)
-  .map((d, i) => ({ name: String(d?.name || `Día ${String.fromCharCode(65 + i)}`).trim().slice(0, 40), items: (d?.items || []).map(cleanRx).filter(Boolean).slice(0, 16) }))
+  .map((d, i) => ({ name: String(d?.name || `Día ${String.fromCharCode(65 + i)}`).trim().slice(0, 40), wd: wdOf(d?.wd), mus: Array.isArray(d?.mus) ? d.mus.filter((m) => typeof m === 'string').slice(0, 8) : [],
+    items: (d?.items || []).map(cleanRx).filter(Boolean).slice(0, 16) }))
   .filter((d) => d.items.length);
 export function customFitDays(custom) {
-  return cleanFitCustom(custom).map((d, i) => ({ key: String.fromCharCode(65 + i), name: d.name, focus: 'Personalizado', kind: 'custom', light: false, items: d.items, min: dayMinutes(d.items), custom: true }));
+  return cleanFitCustom(custom).map((d, i) => ({ key: String.fromCharCode(65 + i), name: d.name, wd: d.wd, mus: d.mus, focus: 'Personalizado', kind: 'custom', light: false, items: d.items, min: dayMinutes(d.items), custom: true }));
 }
+
+// ---------- v3.18: ejercicios propios («Agregar mi propio ejercicio») ----------
+// Se guardan en el perfil (data.myEx) y se registran aquí para que la rutina, el registro y las gráficas los encuentren.
+export const OWN_MUS = { pecho: ['Pecho', 'hpush'], pechoAlto: ['Pecho alto', 'ipush'], hombro: ['Hombro', 'vpush'], hombroPost: ['Hombro de atrás', 'rear'], triceps: ['Tríceps', 'tri'],
+  espalda: ['Espalda', 'vpull'], espaldaAlta: ['Espalda media y alta', 'row'], biceps: ['Bíceps', 'bi'], pierna: ['Piernas', 'sq'], cuadriceps: ['Cuádriceps', 'quad'],
+  femoral: ['Parte de atrás del muslo', 'ham'], gluteo: ['Glúteos', 'glute'], cadera: ['Cadera', 'glute'], pantorrilla: ['Pantorrilla', 'calf'], abdomen: ['Abdomen', 'core'] };
+export function cleanOwn(list) {
+  return (Array.isArray(list) ? list : []).filter((x) => x && /^u-[a-z0-9-]{3,40}$/.test(x.id) && OWN_MUS[x.mus]).slice(0, 40)
+    .map((x) => ({ id: x.id, name: String(x.name || 'Mi ejercicio').trim().slice(0, 50), mus: x.mus, need: ['maquina', 'polea', 'barra', 'mancuerna', 'nada', 'liga'].includes(x.need) ? x.need : 'maquina', unit: ['kg', 'reps', 's'].includes(x.unit) ? x.unit : 'kg' }));
+}
+export function registerOwn(list) {
+  for (const x of cleanOwn(list)) {
+    if (FIT_BY_ID[x.id]?.name === x.name) continue;
+    const [body, pat] = OWN_MUS[x.mus];
+    const ex = { id: x.id, name: x.name, own: true, mus: x.mus, body, pat, slot: pat, need: x.need, unit: x.unit, tier: 1, role: ['hpush', 'ipush', 'vpush', 'vpull', 'row', 'sq'].includes(pat) ? 'sec' : pat === 'core' ? 'core' : 'acc',
+      why: 'Ejercicio que agregaste tú.', how: ['Ajusta la máquina o el lugar a tu medida antes de empezar.', 'Haz las primeras repeticiones con poco peso para revisar la técnica.', 'Muévete controlado, sin rebotes, en todo tu rango cómodo.'],
+      cues: ['Controla la bajada', 'Sin dolor de articulación'], err: 'Subir el peso antes de dominar el movimiento.', easier: 'Menos peso o menos rango.', harder: 'Más peso o una pausa en la parte difícil.' };
+    if (FIT_BY_ID[x.id]) Object.assign(FIT_BY_ID[x.id], ex); else { FIT_BY_ID[x.id] = ex; ALL_EX.push(ex); }
+    SLOT_OF[x.id] = pat;
+  }
+}
+
+// ---------- v3.18: regreso gradual ----------
+// Las primeras 2 semanas después de una pausa: una serie menos (mínimo 2) y una repetición más de sobra.
+export function rampOf(spec, today = todayStr()) {
+  const since = spec?.rampSince; if (!since) return null;
+  const d = Math.round((new Date(`${today}T12:00:00`) - new Date(`${since}T12:00:00`)) / 864e5);
+  return d >= 0 && d < 14 ? { week: d < 7 ? 1 : 2, ends: since } : null;
+}
+export function applyRamp(days) {
+  for (const d of days) d.items = d.items.map((rx) => ({ ...rx, sets: rx.sets > 2 ? rx.sets - 1 : rx.sets, rir: rx.rir != null ? Math.min(5, rx.rir + 1) : rx.rir }));
+  return days;
+}
+// Máximo estimado a 1 repetición (fórmula de Epley; aproximado, mejor con 10 repeticiones o menos).
+export const e1rm = (kg, reps) => (kg > 0 && reps > 0 ? Math.round(kg * (1 + Math.min(reps, 12) / 30) * 10) / 10 : 0);
 export function fitRole(ex) {
   if (ex.role) return ex.role;
   if (ex.unit === 'saltos' || ex.pat === 'salto' || ex.pat === 'lanzamiento') return 'pow';
@@ -433,6 +471,7 @@ export const FIT_SOURCES = [
   ['Helms y cols. (2014): ritmo de 0.5 a 1% del peso por semana para conservar músculo', 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4033492/'],
   ['OMS (2020): actividad física para adultos (150 a 300 minutos y fuerza 2 días por semana)', 'https://www.ncbi.nlm.nih.gov/books/NBK566048/'],
   ['Paluch y cols. (2022): pasos al día y mortalidad (15 cohortes)', 'https://doi.org/10.1016/S2468-2667(21)00302-9'],
+  ['Google Fit: cómo se ganan los puntos cardio (1 por minuto moderado, 2 por minuto intenso; 150 minutos por semana)', 'https://support.google.com/fit/answer/7619539'],
   ['OMS (2008): cómo medir la cintura y la cadera', 'https://www.who.int/publications/i/item/9789241501491'],
   ['Silva y cols. (2019): pliometría en jugadores de voleibol', 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6720263/'],
 ];
