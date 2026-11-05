@@ -360,7 +360,7 @@ function makeDemoFit(players, today) {
   });
   const pid = 'demo-p2', since = addDays(today, -26);
   const data = { goal: 'fuerza', exp: 'medio', days: 3, minutes: 60, place: 'completo', vbAuto: true, vbDays: 2, stepsGoal: 9000, since, week: { vb: [2, 4], coach: [], coachMin: 150 },
-    nutri: true, sex: 'M', cm: 181, meals: 4, occupation: 'sentado', diet: { veg: false, noDairy: false, noGluten: false }, picks: { 'bowl-pollo': 4, 'huevos-mexicana': 3, 'lentejas': 4, 'licuado-recuperacion': 3 } };
+    nutri: true, sex: 'M', cm: 181, meals: 4, occupation: 'sentado', diet: { veg: false, noDairy: false, noGluten: false }, rate: 'normal', likes: 'pollo, huevo, frijoles', dislikes: 'pescado, atún', eco: true, batch: true, picks: { 'bowl-pollo': 4, 'huevos-mexicana': 3, 'lentejas': 4, 'licuado-recuperacion': 3 } };
   const fitProfiles = [{ id: 'demo-fp1', owner_id: 'demo', player_id: pid, data, share: true, created_at: since, updated_at: since }];
   const fitLogs = [];
   const r = buildFit(data, 2);
@@ -382,7 +382,9 @@ function makeDemoFit(players, today) {
     const date = addDays(today, d), at = new Date(Date.now() + d * 864e5).toISOString(), wob = ((d * 7) % 5 + 5) % 5;
     // Peso, y cada 4 días la grasa y el músculo de la báscula (v3.16: 3 meses).
     if (d >= -90 && d % 3 !== 1) fitLogs.push({ id: `demo-fb-${d}`, owner_id: 'demo', player_id: pid, kind: 'body', day: date, data: { kg: Math.round((78.4 + d * 0.035 + wob * 0.12) * 10) / 10,
-      ...(d % 4 === 0 ? { grasa: Math.round((16.4 - (d + 90) * 0.012 + wob * 0.15) * 10) / 10, musculo: Math.round((35.2 + (d + 90) * 0.011 + wob * 0.05) * 10) / 10 } : {}), ...(MEAS[d] || {}) }, created_at: at });
+      ...(d % 4 === 0 ? (() => { const kg = Math.round((78.4 + d * 0.035 + wob * 0.12) * 10) / 10, g = Math.round((16.4 - (d + 90) * 0.012 + wob * 0.15) * 10) / 10;
+        // v3.19: la báscula de Dani también da peso sin grasa, grasa visceral, músculo esquelético y metabolismo.
+        return { grasa: g, musculo: Math.round((35.2 + (d + 90) * 0.011 + wob * 0.05) * 10) / 10, ffm: Math.round(kg * (1 - g / 100) * 100) / 100, visc: Math.round((7.5 - (d + 90) * 0.012) * 2) / 2, smm: Math.round((36.1 + (d + 90) * 0.009) * 10) / 10, bmr: Math.round(1720 + (d + 90) * 0.6) }; })() : {}), ...(MEAS[d] || {}) }, created_at: at });
     // Pasos casi diario; puntos cardio (Google Fit) en los últimos 2 meses; algo de cardio a mano.
     const wd = new Date(Date.now() + d * 864e5).getDay();
     if (d !== -40 && d !== -41 && (d > -14 || d % 9 !== 0)) fitLogs.push({ id: `demo-fs-${d}`, owner_id: 'demo', player_id: pid, kind: 'steps', day: date, created_at: at,

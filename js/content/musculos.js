@@ -16,7 +16,7 @@ export const MUS = [
   ['cadera', 'Cadera (abductores y aductores)', 'glute', ['m-abductores', 'm-aductores', 'g-hex', 'm-extension-espalda', 'g-copenhague']],
   ['pantorrilla', 'Pantorrilla', 'calf', ['m-talones-maquina', 'g-talones-pie', 'm-talones-sentado-maq', 'm-talones-prensa', 'g-talones-sentado']],
   ['abdomen', 'Abdomen', 'core', ['m-crunch-polea', 'm-crunch-maquina', 'm-silla-romana', 'g-pallof', 'g-lenador', 'g-plancha-lat', 'g-deadbug']],
-  ['salto', 'Salto y potencia', 'pow', ['g-salto-cajon', 'g-lanz-arriba', 'g-salto-cargado', 'g-slam']],
+  ['salto', 'Salto y potencia', 'pow', ['g-salto-cajon', 'g-lanz-arriba', 'g-salto-cargado', 'g-slam', 'f-trineo']],
 ];
 export const MUS_BY = Object.fromEntries(MUS.map(([k, name, pat, ids]) => [k, { k, name, pat, ids }]));
 // Músculos grandes: les tocan 2 ejercicios cuando se eligen pocos músculos en el día.
@@ -89,6 +89,7 @@ export const TEMPLATES = [
 
 // Nombres que se usan en el gym (para el buscador). Se suman al nombre y la zona de cada ejercicio.
 export const ALIAS = {
+  'f-trineo': 'trineo sled push empuje de trineo prowler',
   'g-press-banca': 'bench press press plano banca plana', 'g-press-mancuernas': 'press plano mancuernas', 'm-press-pecho': 'maquina de pecho chest press press sentado',
   'm-press-inclinado': 'press inclinado maquina incline', 'f-press-inclinado': 'press inclinado mancuernas incline', 'm-pec-deck': 'pec deck peck deck peckdeck mariposa butterfly aperturas maquina',
   'm-cruce-poleas': 'crossover cruces cable aperturas polea', 'm-cruce-bajo': 'crossover bajo cruces cable', 'f-apertura': 'aperturas flyes', 'm-smith-banca': 'smith multipower banca press',

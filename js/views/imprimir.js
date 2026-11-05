@@ -9,7 +9,8 @@ import { buildRoutine, normSpec, GYM_BY_ID, WARMUP, COOLDOWN, weekPlan, cleanCus
 import { profOf, specOf, vbOf } from './fit.js';
 import { buildFit, FIT_BY_ID, FIT_GOALS, FIT_EXP, PLACES, splitName, ROLE as FROLE } from '../content/fit.js';
 import { fitOk } from '../calc.js';
-import { planOf, nutriOf, eqText, gName, examplesOf, portionsOf } from './fit-comida.js';
+import { planOf, nutriOf, eqText, gName, examplesOf, portionsOf, menuOf, slotInfo, servText } from './fit-comida.js';
+import { WEEKDAYS } from '../content/menu.js';
 import { TIMING, groupTotals } from '../content/nutricion.js';
 import { RECIPE_BY_ID, shoppingList } from '../content/recetas.js';
 import { rxLine, unpackRoutine } from './compartir.js';
@@ -117,13 +118,20 @@ function foodPrint(ctx) {
   const picks = Object.fromEntries(Object.entries(n.picks || {}).filter(([id, x]) => RECIPE_BY_ID[id] && x > 0));
   const hasPicks = Object.keys(picks).length > 0;
   const diet = [n.diet.veg && 'vegetariana', n.diet.noDairy && 'sin lácteos', n.diet.noGluten && 'sin gluten'].filter(Boolean).join(', ');
-  const tools = [h('div', { class: 'cluster' }, check(ui, 'por', 'Lista de porciones', true), check(ui, 'tim', 'Antes y después de entrenar', true),
+  const menu = menuOf(me, plan);
+  const tools = [h('div', { class: 'cluster' }, menu ? check(ui, 'men', 'Menú de la semana', true) : null, check(ui, 'por', 'Lista de porciones', true), check(ui, 'tim', 'Antes y después de entrenar', true),
     hasPicks ? check(ui, 'sup', 'Recetas de la semana y lista del súper', true) : null)];
   const sheet = h('article', { class: 'pr' },
     head('Plan de comida', me.name, [`${FIT_GOALS[plan.spec.goal].name} · ${plural(n.meals, 'comida', 'comidas')} al día${diet ? ` · ${diet}` : ''}`,
       hide ? null : `${fmtN(t.kcal)} kcal al día · proteína ${t.p} g · grasa ${t.f} g · carbohidratos ${t.c} g`,
       `Al día: ${Object.entries(groupTotals(plan.eq)).map(([g, x]) => `${eqText(x)} ${gName(g, x)}`).join(', ')}.`]),
-    h('section', { class: 'pr-sec' }, h('h2', {}, 'Tus comidas'),
+    menu && ui.men ? h('section', { class: 'pr-sec' }, h('h2', {}, 'Menú de la semana'),
+      h('div', { class: 'pr-scroll' }, h('table', { class: 'pr-tbl pr-menu' },
+        h('thead', {}, h('tr', {}, h('th', {}, 'Día'), plan.meals.map((m) => h('th', {}, m.name)))),
+        h('tbody', {}, menu.days.map((d, i) => h('tr', { class: 'pr-end' }, h('td', {}, h('strong', {}, WEEKDAYS[i])),
+          plan.meals.map((m) => { const x = slotInfo(plan, m.key, d[m.key]); return h('td', {}, h('strong', {}, x.title), x.r ? ` (${servText(d[m.key].n)})` : h('span', {}, `: ${x.sub}`), x.add.length ? h('div', { class: 'pr-add' }, `+ ${x.add.join('; ')}`) : null); })))))),
+      h('p', { class: 'pr-sum' }, 'Verdura cruda y agua natural, las que quieras. Las recetas vienen en Remate Fit → Comida → Recetas.')) : null,
+    h('section', { class: 'pr-sec' }, h('h2', {}, 'Tus comidas en porciones'),
       h('div', { class: 'pr-scroll' }, h('table', { class: 'pr-tbl' },
         h('thead', {}, h('tr', {}, h('th', {}, 'Comida'), h('th', {}, 'Porciones'), h('th', {}, '1 porción es, por ejemplo'))),
         h('tbody', {}, plan.meals.flatMap((m) => Object.entries(m.g).map(([g, x], i, all) => h('tr', { class: i === all.length - 1 ? 'pr-end' : null },
@@ -131,7 +139,7 @@ function foodPrint(ctx) {
           h('td', {}, `${eqText(x)} ${gName(g, x)}`), h('td', {}, examplesOf(g, n.diet))))))))),
     h('p', { class: 'pr-sum' }, 'Puedes cambiar un alimento por otro del mismo grupo. No tiene que ser exacto: con acercarte basta.'),
     ui.por ? h('section', { class: 'pr-sec pr-cols' }, h('h2', {}, '¿Qué es una porción?'),
-      portionsOf(n.diet).map(([name, foods]) => h('div', { class: 'pr-grp' }, h('h3', {}, name), h('ul', {}, foods.map(([f, q]) => h('li', {}, `${f}: ${q}`)))))) : null,
+      portionsOf(n.diet, n.dislikes).map(([name, foods]) => h('div', { class: 'pr-grp' }, h('h3', {}, name), h('ul', {}, foods.map(([f, q]) => h('li', {}, `${f}: ${q}`)))))) : null,
     ui.tim ? h('section', { class: 'pr-sec' }, h('h2', {}, 'Antes y después de entrenar'), h('dl', {}, TIMING.map(([a, b]) => [h('dt', {}, a), h('dd', {}, b)]))) : null,
     hasPicks && ui.sup ? h('section', { class: 'pr-sec' }, h('h2', {}, 'Recetas de la semana'),
       h('ul', {}, Object.entries(picks).map(([id, x]) => h('li', {}, `${RECIPE_BY_ID[id].name}: ${plural(x, 'ración', 'raciones')}`))),

@@ -159,11 +159,17 @@ export function chartsTab(ctx, me, canEdit, extra = {}) {
   const weightSec = section('peso', 'Peso', daily ? 'Cada punto es una pesada; la línea dorada es el promedio de 7 días.' : `Promedio de ${each}.`,
     nKg ? periodChart(kgB, { type: 'line', unit: 'kg', label: 'Peso', digits: 1, trend: daily ? rolling(D.body, 'kg', bk) : null, trendLabel: 'Promedio de 7 días', seriesLabel: 'Pesada' }) : note('Sin pesadas en este periodo.'),
     extra.weight || null);
-  const fatB = bodyB('grasa'), musB = bodyB('musculo'), musPB = bodyB('musculoPct');
+  const fatB = bodyB('grasa'), musB = bodyB('musculo'), musPB = bodyB('musculoPct'), ffmB = bodyB('ffm'), viscB = bodyB('visc'), smmB = bodyB('smm');
   const has = (xs) => xs.some((x) => x.y != null);
-  const compSec = has(fatB) || has(musB) || has(musPB) ? section('grasa', 'Grasa y músculo (báscula)', null,
+  const compSec = has(fatB) || has(musB) || has(musPB) || has(ffmB) ? section('grasa', 'Grasa y músculo (báscula)', null,
     has(fatB) ? [h('h4', {}, 'Grasa corporal'), periodChart(fatB, { type: 'line', unit: '%', label: 'Grasa corporal', digits: 1 })] : null,
     has(musB) ? [h('h4', {}, 'Masa muscular'), periodChart(musB, { type: 'line', unit: 'kg', label: 'Masa muscular', digits: 1 })] : has(musPB) ? [h('h4', {}, 'Masa muscular'), periodChart(musPB, { type: 'line', unit: '%', label: 'Masa muscular', digits: 1 })] : null,
+    // v3.19: peso sin grasa (lo que quieres conservar al bajar), músculo esquelético y grasa visceral.
+    has(ffmB) ? [h('h4', {}, 'Peso sin grasa'), periodChart(ffmB, { type: 'line', unit: 'kg', label: 'Peso sin grasa', digits: 1 }),
+      h('p', { class: 'row-sub', style: { margin: 0 } }, 'Músculo, huesos, órganos y agua. Al bajar de peso, lo ideal es que esta línea se quede plana mientras baja el peso.')] : null,
+    has(smmB) ? [h('h4', {}, 'Músculo esquelético'), periodChart(smmB, { type: 'line', unit: 'kg', label: 'Músculo esquelético', digits: 1 })] : null,
+    has(viscB) ? [h('h4', {}, 'Grasa visceral'), periodChart(viscB, { type: 'line', unit: '', label: 'Grasa visceral', digits: 1 }),
+      h('p', { class: 'row-sub', style: { margin: 0 } }, 'Es un índice de la báscula, no kilos. Cada marca usa su propia escala; lo que importa es que baje.')] : null,
     note('La báscula calcula grasa y músculo con bioimpedancia: el número de un día puede estar varios puntos arriba o abajo y cambia con el agua. Mira la tendencia de semanas.')) : null;
 
   // ----- medidas -----

@@ -65,25 +65,46 @@ export function activity(sessions, occupation = 'sentado', steps = null) {
   if (steps != null && steps >= 10000 && sessions <= 5) f += 0.05;
   return Math.round(Math.min(2.1, f) * 1000) / 1000;
 }
+// v3.19: Katch-McArdle (con la masa libre de grasa de la báscula). En personas con mucha grasa o mucho músculo,
+// las ecuaciones con masa libre de grasa se acercan más; como la báscula de bioimpedancia también se equivoca, se usa el promedio de las dos.
+export const katch = (ffm) => Math.round(370 + 21.6 * ffm);
+// v3.19: horas de ejercicio a la semana (lo que de verdad se mueve): fuerza al 60% del tiempo (descansos entre series),
+// cardio completo, voleibol al 70% y los entrenos que das al 30%.
+export function weeklyHours({ gymDays = 0, gymMin = 60, cardioWk = 0, vbDays = 0, vbMin = 90, coachDays = 0, coachMin = 150 }) {
+  const min = gymDays * gymMin * 0.6 + cardioWk + vbDays * vbMin * 0.7 + coachDays * coachMin * 0.3;
+  return Math.round((min / 60) * 10) / 10;
+}
+export function palOf(hours, occupation = 'sentado', steps = null) {
+  // Escala conservadora: los factores clásicos (1.375 a 1.9) suelen pasarse en personas con mucho peso.
+  let f = hours <= 0 ? 1.2 : hours <= 1.5 ? 1.3 : hours <= 3 ? 1.375 : hours <= 5 ? 1.45 : hours <= 7.5 ? 1.55 : hours <= 10 ? 1.65 : 1.75;
+  f += OCCUPATIONS[occupation]?.[1] || 0;
+  if (steps != null && steps >= 10000 && hours <= 5) f += 0.05;
+  return Math.round(Math.min(2.1, f) * 1000) / 1000;
+}
+// v3.19: qué tan rápido. Bajar: déficit de 15/20/25% (tope 500/750/1000 kcal). Subir: superávit de 5/10/15% (tope 200/350/500).
+export const RATES = { suave: ['Suave', 0.15, 500, 0.05, 200], normal: ['Normal', 0.2, 750, 0.1, 350], rapido: ['Rápido', 0.25, 1000, 0.15, 500] };
 export const GOAL_KCAL = { musculo: 1.1, grasa: 0.8, fuerza: 1.05, salud: 1 };
 export const PROTEIN = { musculo: 1.8, grasa: 2.0, fuerza: 1.8, salud: 1.4 };   // g por kg (ISSN 2017: 1.4 a 2.0; en déficit, hacia arriba)
 // Con IMC arriba de 25 la proteína se calcula con el peso que daría IMC 25: con el peso total sale de más.
 export const refKg = (kg, cm) => Math.min(kg, Math.round(25 * (cm / 100) ** 2 * 10) / 10);
 const floorKcal = (sex, bmr) => Math.max(Math.round(bmr * 1.1), sex === 'F' ? 1300 : 1600);
 
-export function targets({ sex, kg, cm, age, goal, sessions, occupation, steps, adj = 0 }) {
-  const bmr = mifflin({ sex, kg, cm, age });
-  const pal = activity(sessions, occupation, steps);
+export function targets({ sex, kg, cm, age, goal, sessions, occupation, steps, adj = 0, hours = null, ffm = null, rate = 'normal' }) {
+  const mif = mifflin({ sex, kg, cm, age });
+  const kat = ffm > 20 && ffm < kg ? katch(ffm) : null;
+  const bmr = kat ? Math.round((mif + kat) / 2) : mif;
+  const pal = hours != null ? palOf(hours, occupation, steps) : activity(sessions, occupation, steps);
   const tdee = Math.round(bmr * pal);
-  // Superávit de 10% con tope de 350 kcal; déficit de 20% con tope de 750 kcal (para no bajar más de ~1% por semana).
-  const g = GOAL_KCAL[goal] || 1, delta = g > 1 ? Math.min(tdee * (g - 1), 350) : g < 1 ? -Math.min(tdee * (1 - g), 750) : 0;
+  const R = RATES[rate] || RATES.normal;
+  // Bajar: déficit según el ritmo (normal: 20%, tope 750 kcal, para no bajar más de ~1% por semana). Subir: superávit chico.
+  const g = GOAL_KCAL[goal] || 1, delta = g > 1 ? (goal === 'musculo' ? Math.min(tdee * R[3], R[4]) : Math.min(tdee * (g - 1), 350)) : g < 1 ? -Math.min(tdee * R[1], R[2]) : 0;
   let kcal = Math.round(tdee + delta + (Number(adj) || 0));
   const floor = floorKcal(sex, bmr), floored = kcal < floor;
   if (floored) kcal = floor;
   const pk = refKg(kg, cm), p = Math.round(pk * (PROTEIN[goal] || 1.6));
   const f = Math.max(Math.round(kg * 0.6), Math.round((kcal * 0.25) / 9));
   const c = Math.max(0, Math.round((kcal - p * 4 - f * 9) / 4));
-  return { bmr, pal, tdee, kcal, p, f, c, floored, pk, cPerKg: Math.round((c / kg) * 10) / 10 };
+  return { bmr, mif, kat, pal, tdee, kcal, p, f, c, floored, pk, delta: Math.round(delta), rate: RATES[rate] ? rate : 'normal', cPerKg: Math.round((c / kg) * 10) / 10 };
 }
 
 // ---------- de macros a porciones SMAE ----------
@@ -206,6 +227,9 @@ export const NUTRI_SOURCES = [
   ['IMSS: tabla de grupos de alimentos y cantidad por ración', 'https://www.imss.gob.mx/sites/all/statics/salud/guias_salud/alimentacion-saludable-2019.pdf'],
   ['Mifflin y cols. (1990): ecuación del gasto en reposo', 'https://doi.org/10.1093/ajcn/51.2.241'],
   ['Frankenfield y cols. (2005): Mifflin-St Jeor, la más precisa (±10%)', 'https://doi.org/10.1016/j.jada.2005.02.005'],
+  ['Marra y cols. (2017): en 1,851 adultos con obesidad, todas las ecuaciones aciertan a ±10% solo en ~55% de las personas', 'https://pubmed.ncbi.nlm.nih.gov/28163316/'],
+  ['Carrasco y cols. (2002): corregido por masa libre de grasa, el gasto en reposo de personas con y sin obesidad es igual (base de usar Katch-McArdle)', 'https://www.scielo.cl/scielo.php?script=sci_arttext&pid=S0034-98872002000100007'],
+  ['Bosy-Westphal y cols. (2008): las básculas de bioimpedancia sirven para ver tendencias, no para un dato exacto de una persona', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC6452160/'],
   ['ISSN (2017): proteína y ejercicio (1.4 a 2.0 g/kg; 0.25 g/kg por toma)', 'https://doi.org/10.1186/s12970-017-0177-8'],
   ['Thomas, Erdman y Burke (2016): nutrición y rendimiento (carbohidratos según el entrenamiento; 1 a 4 g/kg antes)', 'https://doi.org/10.1249/MSS.0000000000000852'],
   ['Helms y cols. (2014): bajar 0.5 a 1% del peso por semana; grasa 15 a 30% de las calorías', 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4033492/'],

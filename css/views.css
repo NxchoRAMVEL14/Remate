@@ -1026,3 +1026,16 @@ dialog.frase::backdrop { background: #081A33; }
 .rest-timer.done .iconbtn, .rest-timer.done .btn { color: var(--ball-on); }
 @media print { .rest-timer { display: none !important; } }
 body:has(.rest-timer) .main { padding-bottom: 170px; }
+
+/* v3.19 · Menú de la semana */
+.menu-days button { min-width: 0; padding-inline: 4px; }
+.menu-days button.is-today { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 2px; }
+.menu-dish { display: inline-flex; align-items: center; gap: 4px; color: inherit; text-decoration: none; font-size: 1.05rem; }
+.menu-dish:hover strong { text-decoration: underline; }
+.menu-slot.done { border-color: var(--ok, #2E7D32); }
+.menu-slot .row-sub .ic, .menu-slot .row-sub svg { vertical-align: -2px; }
+.menu-alt { font: inherit; }
+.pr-menu td { min-width: 120px; font-size: .82rem; }
+.pr-menu td:first-child { min-width: 0; width: 1%; white-space: nowrap; }
+.pr-add { font-size: .78rem; color: #45556A; margin-top: 2px; }
+.fit-more summary { cursor: pointer; }

@@ -85,6 +85,11 @@ export const FIT_EX = [
     why: 'Velocidad y potencia de piernas. En la cancha cuentan como trabajo de alta intensidad.',
     how: ['Calienta bien antes (5 a 10 minutos y aceleraciones suaves).', 'Corre 10 a 20 metros a máxima velocidad.', 'Regresa caminando y descansa hasta sentirte fresco (1 a 2 minutos).'],
     cues: ['Inclínate al arrancar', 'Calidad, no cansancio'], err: 'Hacerlos cansado: ya no son de velocidad.', easier: 'Al 80% de tu velocidad.', harder: 'Arranques desde el piso o en subida.', safety: 'Nada de sprints si traes molestia en el muslo de atrás.' }),
+  // v3.19
+  X({ id: 'f-trineo', name: 'Empuje de trineo', pat: 'sprint', need: 'maquina', tier: 1, unit: 'kg', role: 'pow', repsLabel: 'Tramos', body: 'Piernas, glúteos y tronco',
+    why: 'Fuerza y potencia de piernas casi sin impacto en las rodillas ni la espalda. También sube el pulso como un buen cardio.',
+    how: ['Carga el trineo con un peso que puedas mover sin frenarte (empieza con el trineo solo o 10 a 20 kg).', 'Manos en los postes altos o bajos, brazos firmes y cuerpo inclinado como en un arranque.', 'Empuja con pasos cortos y rápidos, todo el pie en el piso, 15 a 20 metros.', 'Descansa caminando de regreso, 1.5 a 2 minutos, y repite.'],
+    cues: ['Pasos cortos y rápidos', 'Espalda recta, cadera abajo'], err: 'Cargar tanto que caminas despacio: ya no es potencia.', easier: 'Menos peso o postes altos (más erguido).', harder: 'Más peso o jalar el trineo de espaldas con correa.', safety: 'Si te duele la espalda baja, sube los brazos a los postes altos y quita peso.' }),
 ];
 
 export const ALL_EX = [...GYM, ...FIT_EX, ...MAQ];   // v3.14: más máquinas y poleas
@@ -135,7 +140,7 @@ const ORDER = {
   core: ['g-pallof', 'g-lenador', 'g-deadbug', 'g-plancha-lat'],
   pow: ['g-salto-cajon', 'g-salto-cargado', 'g-skater'],
   throw: ['g-lanz-arriba', 'g-slam', 'g-lanz-giro'],
-  sprint: ['f-sprint'],
+  sprint: ['f-sprint', 'f-trineo'],
 };
 // Músculo de cada patrón para contar series por semana: 1 directa, 0.5 indirecta (como Pelland y cols., 2024).
 export const MUSCLES = { pecho: 'Pecho', espalda: 'Espalda', hombro: 'Hombro', biceps: 'Bíceps', triceps: 'Tríceps', cuadriceps: 'Cuádriceps', isquios: 'Isquiotibiales', gluteo: 'Glúteo', pantorrilla: 'Pantorrilla', abdomen: 'Tronco' };
@@ -197,7 +202,7 @@ export const ROLE = { pow: 'Potencia', main: 'Básico pesado', sec: 'Básico', a
 function prescribe(ex, role, spec, light) {
   let [sets, reps, rir, rest] = role === 'pow' ? POW[spec.exp] : role === 'core' ? CORE[spec.exp] : DOSE[spec.goal][role][spec.exp];
   if (ex.unit === 's') { reps = HOLD[spec.exp]; rir = null; }
-  if (role === 'pow' || ex.unit === 'saltos') { rir = null; if (ex.pat === 'lanzamiento') reps = '5'; if (ex.id === 'f-sprint') { reps = '4'; sets = 1; rest = 90; } }
+  if (role === 'pow' || ex.unit === 'saltos') { rir = null; if (ex.pat === 'lanzamiento') reps = '5'; if (ex.id === 'f-sprint') { reps = '4'; sets = 1; rest = 90; } if (ex.id === 'f-trineo') { reps = '1'; sets = spec.exp === 'nuevo' ? 3 : 4; rest = 120; } }
   // Ejercicios con tu peso: si no hay cómo subir peso, se buscan más repeticiones.
   if (ex.unit === 'pc' && role !== 'core' && role !== 'pow') { reps = role === 'main' || role === 'sec' ? '8-15' : '12-20'; }
   if (light) { if (role === 'main' || role === 'sec') { sets = Math.max(2, sets - 1); if (rir != null) rir = Math.max(rir, 3); } }

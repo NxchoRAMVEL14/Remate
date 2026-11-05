@@ -143,7 +143,7 @@ function exItem(ex, { rx = null, last, n } = {}) {
 
 // ---------- pestañas ----------
 const TABS = [['hoy', 'Hoy'], ['rutina', 'Rutina'], ['comida', 'Comida'], ['progreso', 'Progreso'], ['ajustes', 'Perfil']];
-const FOOD = ['comida', 'recetas', 'super'];
+const FOOD = ['comida', 'menu', 'recetas', 'super'];
 const tabKey = (a) => (FOOD.includes(a) ? 'comida' : TABS.some(([k]) => k === a) ? a : 'hoy');
 function tabsEl(ctx, base = '#/fit') {
   const cur = tabKey(ctx.args[0]);

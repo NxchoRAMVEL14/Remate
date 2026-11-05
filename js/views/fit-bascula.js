@@ -17,7 +17,7 @@ function near(lines, label, { unit = null, min, max, avoid = null, above = false
     if (!label.test(lines[i]) || (avoid && avoid.test(lines[i]))) continue;
     // Algunas apps ponen el número grande arriba y la etiqueta abajo («78.4 kg» y luego «Peso»).
     if (above) for (const k of [1, 2]) {
-      const ln = lines[i - k]; if (!ln || /[a-z]{3,}/.test(ln.replace(/kg|lb/g, ''))) continue;
+      const ln = lines[i - k]; if (!ln || /[a-z]{3,}/.test(ln.replace(/kg|lb/g, '')) || /\d{4}[/-]\d{1,2}|\d{1,2}:\d{2}/.test(ln)) continue;
       const m = ln.match(/(\d{1,3}(?:\.\d{1,2})?)\s*(?:kg)?/); if (m && Number(m[1]) >= min && Number(m[1]) <= max) return Number(m[1]);
     }
     for (let k = 0; k <= 2 && i + k < lines.length; k++) {
@@ -41,10 +41,84 @@ export function parseScale(text) {
     for (let i = 0; i < lines.length; i++) { const ln = lines[i]; if (busy.test(ln) || busy.test(lines[i - 1] || '')) continue; const m = ln.match(/(\d{2,3}(?:\.\d{1,2})?)\s*kg/); if (m && Number(m[1]) >= 30 && Number(m[1]) <= 250) { out.kg = Number(m[1]); break; } }
   }
   out.grasa = near(lines, /grasa corporal|% ?grasa|grasa\b|body ?fat|\bfat\b/, { unit: '%', min: 3, max: 70, avoid: /visceral|subcut|masa grasa/ });
-  const musKg = near(lines, /masa muscular|musculo|muscle/, { unit: 'kg', min: 15, max: 120, avoid: /esquelet|skeletal|tasa/ });
-  const musPct = musKg == null ? near(lines, /masa muscular|musculo|muscle/, { unit: '%', min: 15, max: 90, avoid: /esquelet|skeletal/ }) : null;
+  const musKg = near(lines, /masa muscular|musculo|muscle mass|muscle/, { unit: 'kg', min: 15, max: 120, avoid: /esquelet|skeletal|tasa/ });
+  const musPct = musKg == null ? near(lines, /masa muscular|musculo|muscle mass|muscle/, { unit: '%', min: 15, max: 90, avoid: /esquelet|skeletal/ }) : null;
   if (musKg != null) out.musculo = musKg; else if (musPct != null) out.musculoPct = musPct;
   const st = parseSteps(text); if (st != null) out.pasos = st;
+  // v3.19: apps con composición completa (OKOK y parecidas): peso sin grasa, grasa visceral, metabolismo y músculo esquelético.
+  if (/peso sin grasa|grado de obesidad|edad metabolica|esqueletic|fat.?free|visceral/.test(lines.join(' '))) Object.assign(out, parseFull(lines, out));
+  return out;
+}
+
+// v3.19: el lector a veces confunde 3 con 2 en las letras redondas de algunas apps. Se prueban esas
+// variantes y se queda la que cuadra con las cuentas: grasa en kg = peso × % / 100, peso sin grasa = peso − grasa, etc.
+const SWAP = { 2: ['3'], 3: ['2'] };
+function variants(v) {
+  const t = String(v), out = new Set([v]);
+  for (let i = 0; i < t.length; i++) for (const c of SWAP[t[i]] || []) out.add(Number(t.slice(0, i) + c + t.slice(i + 1)));
+  return [...out];
+}
+const NUM_RE = /(?<![\d/:.])(\d{1,4}(?:\.\d{1,2})?)(?![\d/:])/g;
+const numsOf = (ln) => [...ln.matchAll(NUM_RE)].map((m) => Number(m[1]));
+// El número que va con una etiqueta: en la misma línea, o en una línea solo con número justo abajo o arriba.
+function labeled(lines, label, ok, avoid = null) {
+  for (let i = 0; i < lines.length; i++) {
+    if (!label.test(lines[i]) || (avoid && avoid.test(lines[i]))) continue;
+    const same = numsOf(lines[i].slice(lines[i].search(label))).filter(ok);
+    if (same.length) return same[0];
+    for (const k of [1, -1, 2, -2]) {
+      const ln = lines[i + k]; if (!ln || /[a-z]/.test(ln.replace(/kg|obese|obeso|saludable|perfecto|bajo|alto|grave|normal|bueno/g, ''))) continue;
+      const xs = numsOf(ln).filter(ok); if (xs.length) return xs[0];
+    }
+  }
+  return null;
+}
+function parseFull(lines, got) {
+  const out = {}, all = lines.filter((l) => !/\d{4}[/-]\d{1,2}|\d{1,2}:\d{2}/.test(l)).flatMap(numsOf);
+  // El peso sale grande arriba y otra vez en la lista: si un número de peso se repite, ese es.
+  const freq = {}; for (const v of all) if (v >= 30 && v <= 250) freq[v] = (freq[v] || 0) + 1;
+  const rep = Object.entries(freq).filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1])[0];
+  if (rep && Number(rep[0]) !== got.kg) out.kg = Number(rep[0]);
+  const kg = out.kg ?? got.kg;
+  if (!(kg > 0)) return out;
+  // Peso sin grasa: con 2 decimales casi siempre; entre 40% y 95% del peso.
+  const ffOk = (v) => v > kg * 0.4 && v < kg * 0.95;
+  let ffm = labeled(lines, /peso sin grasa|masa libre de grasa|fat.?free|lean body/, ffOk);
+  if (ffm == null) {   // sin etiqueta legible: un número con 2 decimales que cuadre con el % de grasa leído
+    const c = all.find((v) => ffOk(v) && /\.\d\d$/.test(String(v)));
+    if (c != null && (got.grasa == null || variants(got.grasa).some((g) => Math.abs(g - (1 - c / kg) * 100) < 0.6))) ffm = c;
+  }
+  if (ffm != null) {
+    out.ffm = Math.round(ffm * 100) / 100;
+    out.grasa = r1((1 - ffm / kg) * 100);   // el % de grasa sale exacto del peso y el peso sin grasa
+  }
+  const visc = labeled(lines, /visceral/, (v) => v >= 1 && v <= 59);
+  if (visc != null) out.visc = visc;
+  const bmr = labeled(lines, /metabolismo|metabolismo basal|\bbmr\b|tasa metabolica/, (v) => v >= 800 && v <= 4500, /edad/)
+    ?? all.find((v) => v >= 900 && v <= 4500 && !(v >= 1990 && v <= 2099 && Number.isInteger(v) && !lines.some((l) => l.includes(`${v}.0`)))) ?? null;
+  if (bmr != null) out.bmr = Math.round(bmr);
+  // Pares % ↔ kg que cuadran con el peso (con las variantes 2↔3): músculo total y músculo esquelético.
+  const pairs = [];
+  const nums = [...new Set(all)].filter((v) => v >= 10 && v <= 150);
+  for (const a of nums) for (const pa of variants(a)) {
+    if (!(pa >= 15 && pa <= 90)) continue;
+    for (const b of nums) for (const kb of variants(b)) {
+      if (kb === pa || !(kb >= 8 && kb <= 150)) continue;
+      const err = Math.abs((kg * pa) / 100 - kb);
+      if (err <= 0.08) pairs.push({ pa, kb, err });
+    }
+  }
+  const best = (lo, hi) => pairs.filter((p) => p.pa >= lo && p.pa <= hi && (out.grasa == null || Math.abs(p.pa - out.grasa) > 1)).sort((x, y) => x.err - y.err)[0];
+  const mus = best(55, 90);              // músculo total (incluye el del corazón y los órganos): 55 a 90%
+  if (mus && got.musculo == null) { out.musculo = r1(mus.kb); delete out.musculoPct; }
+  if (/esquelet|skeletal/.test(lines.join(' '))) {
+    // El agua (45 a 65%) y el músculo esquelético (25 a 50%) se enciman: si hay los dos, el esquelético es el de % más bajo.
+    const cand = pairs.filter((p) => p.pa >= 25 && p.pa <= 60 && p.err <= 0.06 && p.kb !== out.visc && (out.grasa == null || Math.abs(p.pa - out.grasa) > 1) && p.kb < (out.musculo ?? got.musculo ?? 999));
+    const pcts = [...new Set(cand.map((p) => p.pa))].sort((a, b) => a - b);
+    const pick = /agua|water/.test(lines.join(' ')) && pcts.length >= 2 ? pcts[0] : cand.sort((x, y) => x.err - y.err)[0]?.pa;
+    const smm = cand.filter((p) => p.pa === pick).sort((x, y) => x.err - y.err)[0];
+    if (smm) out.smm = r1(smm.kb);
+  }
   return out;
 }
 // Pasos (Samsung Health, Google Fit, el reloj): «8,532 pasos», «Pasos 8532».
@@ -151,7 +225,7 @@ export function readShotSheet({ onSave, kind = 'bascula', day = todayStr(), onSa
   sheet = openSheet({ title: kind === 'pasos' ? 'Leer captura de pasos' : 'Leer captura de mi báscula', body: h('div', { class: 'stack' },
     h('p', { style: { margin: 0 } }, kind === 'pasos'
       ? 'Toma captura de pantalla de tus pasos (Google Fit, Samsung Health o la app de tu reloj) y elígela aquí. En Google Fit usa «Mi actividad → Semana»: abajo vienen los días con sus pasos y Remate los guarda todos de una vez. Si cambias a «Puntos cardio», también los lee.'
-      : 'Pésate, abre la app de tu báscula (por ejemplo OKOK), toma captura de pantalla del resultado y elígela aquí. Remate busca peso, % de grasa y masa muscular.'),
+      : 'Pésate, abre la app de tu báscula (por ejemplo OKOK), toma captura de pantalla del resultado y elígela aquí. Remate busca peso, % de grasa, masa muscular y, si vienen, peso sin grasa, grasa visceral, músculo esquelético y metabolismo. Usa la captura original (las que pasan por WhatsApp salen chiquitas y se leen peor).'),
     pick, fileIn, bar, status, form,
     note('La imagen se lee en tu celular y no se guarda ni se manda a ningún lado. La primera vez descarga el lector (unos 5 MB).')) });
 }
@@ -165,6 +239,13 @@ export function entryForm(got = {}, onSave, kind = 'bascula', rawText = '', day0
   const mus = inp(got.musculo ?? got.musculoPct, 0.1, 'Masa muscular', 10, 120);
   const musUnit = h('select', { 'aria-label': 'Unidad de la masa muscular' }, options([['kg', 'kg'], ['%', '%']], got.musculoPct != null && got.musculo == null ? '%' : 'kg'));
   const pasos = h('input', { type: 'number', inputmode: 'numeric', step: 100, min: 0, max: 80000, value: got.pasos ?? '', 'aria-label': 'Pasos' });
+  // v3.19: lo que dan las básculas con composición completa (OKOK y parecidas).
+  const ffm = inp(got.ffm, 0.01, 'Peso sin grasa en kg', 20, 150), visc = inp(got.visc, 0.5, 'Grasa visceral', 1, 59);
+  const smm = inp(got.smm, 0.1, 'Músculo esquelético en kg', 8, 80), bmr = inp(got.bmr, 1, 'Metabolismo basal en kcal', 800, 4500);
+  const moreOn = [got.ffm, got.visc, got.smm, got.bmr].some((v) => v != null);
+  // El % de grasa sale exacto del peso y el peso sin grasa: si cambias uno, Remate ajusta el otro.
+  const sync = () => { const k = num(kg.value), f = num(ffm.value); if (k > 0 && f > 0 && f < k) grasa.value = r1((1 - f / k) * 100); };
+  ffm.addEventListener('change', sync);
   const err = h('div', { class: 'note bad', role: 'alert', hidden: true });
   const save = () => {
     err.hidden = true;
@@ -176,6 +257,11 @@ export function entryForm(got = {}, onSave, kind = 'bascula', rawText = '', day0
     if (g != null) { if (!(g >= 3 && g <= 70)) return fail('El % de grasa va de 3 a 70.'); out.grasa = r1(g); }
     if (m != null) { if (musUnit.value === '%') { if (!(m >= 15 && m <= 90)) return fail('La masa muscular en % va de 15 a 90.'); out.musculoPct = r1(m); } else { if (!(m >= 10 && m <= 120)) return fail('La masa muscular va de 10 a 120 kg.'); out.musculo = r1(m); } }
     if (p != null) { if (!(p >= 0 && p <= 80000)) return fail('Los pasos van de 0 a 80,000.'); out.pasos = Math.round(p); }
+    const ff = v(ffm), vi = v(visc), sm = v(smm), bm = v(bmr);
+    if (ff != null) { if (!(ff >= 20 && ff <= 150) || (k != null && ff >= k)) return fail('El peso sin grasa va de 20 a 150 kg y es menor que tu peso.'); out.ffm = Math.round(ff * 100) / 100; }
+    if (vi != null) { if (!(vi >= 1 && vi <= 59)) return fail('La grasa visceral va de 1 a 59.'); out.visc = r1(vi); }
+    if (sm != null) { if (!(sm >= 8 && sm <= 80)) return fail('El músculo esquelético va de 8 a 80 kg.'); out.smm = r1(sm); }
+    if (bm != null) { if (!(bm >= 800 && bm <= 4500)) return fail('El metabolismo va de 800 a 4,500 kcal.'); out.bmr = Math.round(bm); }
     if (Object.keys(out).length === 1) return fail('Escribe por lo menos un dato.');
     onSave(out);
   };
@@ -184,6 +270,10 @@ export function entryForm(got = {}, onSave, kind = 'bascula', rawText = '', day0
     kind === 'pasos' ? field('Pasos', pasos) : [
       h('div', { class: 'grid' }, field('Peso (kg)', kg), field('Grasa corporal (%)', grasa)),
       h('div', { class: 'grid' }, field('Masa muscular', mus), field('Unidad', musUnit)),
+      h('details', { class: 'fit-more', open: moreOn ? true : null }, h('summary', {}, 'Más datos de tu báscula (opcional)'),
+        h('div', { class: 'stack', style: { marginTop: '10px' } },
+          h('div', { class: 'grid' }, field('Peso sin grasa (kg)', ffm, 'Afina tus calorías.'), field('Grasa visceral', visc, 'La de adentro del abdomen.')),
+          h('div', { class: 'grid' }, field('Músculo esquelético (kg)', smm), field('Metabolismo (kcal)', bmr, 'El que calcula tu báscula.')))),
       got.pasos != null ? field('Pasos', pasos) : null],
     rawText ? h('details', {}, h('summary', {}, 'Ver lo que leyó'), h('pre', { class: 'fit-raw' }, rawText.slice(0, 1500))) : null,
     err,
@@ -226,7 +316,7 @@ function manyForm(rows, existing, onSave, rawText = '') {
 }
 
 // v3.16: la actividad de un día: pasos, puntos cardio (Google Fit) y minutos de cardio.
-export const CARDIO_TYPES = [['caminadora', 'Caminadora'], ['caminar', 'Caminar rápido'], ['correr', 'Correr'], ['bici', 'Bici o spinning'], ['eliptica', 'Elíptica o escaladora'], ['nadar', 'Nadar'], ['clase', 'Clase o baile'], ['cuerda', 'Cuerda o circuito'], ['otro', 'Otro']];
+export const CARDIO_TYPES = [['caminadora', 'Caminadora'], ['caminar', 'Caminar rápido'], ['correr', 'Correr'], ['bici', 'Bici o spinning'], ['eliptica', 'Elíptica o escaladora'], ['nadar', 'Nadar'], ['clase', 'Clase o baile'], ['cuerda', 'Cuerda o circuito'], ['trineo', 'Trineo (empujar o jalar)'], ['box', 'Saco de box'], ['otro', 'Otro']];
 export function activitySheet({ day = todayStr(), cur = () => ({}), onSave, onDelete = null, title = 'Actividad del día' }) {
   const inp = (step, label, min, max) => h('input', { type: 'number', inputmode: 'numeric', step, min, max, 'aria-label': label });
   const n = inp(1, 'Pasos', 0, 80000), pc = inp(1, 'Puntos cardio', 0, 500), cmin = inp(1, 'Minutos de cardio', 0, 600);
