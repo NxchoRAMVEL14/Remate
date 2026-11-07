@@ -5,7 +5,7 @@ import { spikes } from './carga.js';
 import { unseenVideos } from './tecnica.js';
 import { azarButton } from './azar.js';
 import { matchTime } from '../horarios.js';
-import { state, players, sessions, pendingClaims, getPlayer, settings, resolveClaim, teamReady, torneosReady } from '../store.js';
+import { state, players, sessions, pendingClaims, getPlayer, settings, resolveClaim, teamReady, torneosReady, isApart, convocados, hasConv } from '../store.js';
 import { levelGap, attendanceFor, nextSession, planMinutes, focusOf, levelCounts, hasRatings, doneSessions } from '../calc.js';
 import { SKILL_BY_ID } from '../content/skills.js';
 import { LEVELS } from '../content/levels.js';
@@ -26,6 +26,7 @@ const getEx = (id) => getExercise(id, state.data.customEx);
 
 export default function hoy() {
   const list = players();
+  const team = list.filter((p) => !isApart(p));   // v3.20: sin los que entrenan contigo aparte
   const st = settings();
   const all = sessions();
   const el = h('div', { class: 'page' });
@@ -56,7 +57,7 @@ export default function hoy() {
     el.append(h('section', { class: 'band next' },
       h('div', { class: 'when' }, sessionWhen(next)),
       h('h2', {}, next.title || 'Entrenamiento'),
-      h('div', {}, `${next.minutes} min`, blocks ? `, plan de ${planMinutes(next)} min en ${plural(blocks, 'bloque', 'bloques')}` : ', todavía sin plan'),
+      h('div', {}, `${next.minutes} min`, blocks ? `, plan de ${planMinutes(next)} min en ${plural(blocks, 'bloque', 'bloques')}` : ', todavía sin plan', ` · ${hasConv(next) ? `${convocados(next).length} convocados` : `convocados: ${convocados(next).length === list.length ? 'todo el equipo' : convocados(next).length}`}`),
       focus.length ? h('div', { class: 'cluster', style: { marginTop: '10px' } }, focus.map((k) => h('span', { class: 'chip' }, SKILL_BY_ID[k].name))) : null,
       h('div', { class: 'cluster' },
         h('button', { class: 'btn ball', type: 'button', onclick: () => attendanceSheet(next) }, ic('clipboard-check', 18), 'Pasar lista'),
@@ -87,7 +88,7 @@ export default function hoy() {
 
   // ---- cifras del grupo ----
   const done = doneSessions(all);
-  const pcts = list.map((p) => attendanceFor(p.id, all, state.data.attendance, st).pct).filter((x) => x != null);
+  const pcts = team.map((p) => attendanceFor(p.id, all, state.data.attendance, st).pct).filter((x) => x != null);
   const avg = pcts.length ? Math.round(sum(pcts) / pcts.length) : null;
   el.append(h('div', { class: 'kpis', role: 'group', 'aria-label': 'Cifras del grupo' },
     kpi(list.length, plural(list.length, 'jugador', 'jugadores').replace(/^\d+ /, '')),
@@ -99,7 +100,7 @@ export default function hoy() {
 
   // ---- por resolver ----
   const claims = pendingClaims();
-  const faltas = list.map((p) => ({ p, a: attendanceFor(p.id, all, state.data.attendance, st) })).filter((x) => x.a.faltasSeguidas >= 2);
+  const faltas = team.map((p) => ({ p, a: attendanceFor(p.id, all, state.data.attendance, st) })).filter((x) => x.a.faltasSeguidas >= 2);
   const ready = list.filter((p) => levelGap(p, state.data.ratings).ready);
   const unrated = list.filter((p) => !hasRatings(p.id, state.data.ratings));
   const todo = h('div', { class: 'stack' });
@@ -151,7 +152,8 @@ export default function hoy() {
   }
   if (faltas.length) {
     todo.append(h('div', { class: 'rows', 'aria-label': 'Faltas seguidas' }, faltas.map(({ p, a }) =>
-      playerRow(p, { href: `#/jugador/${p.id}`, end: h('span', { class: 'chip bad' }, `${a.faltasSeguidas} faltas`) }))));
+      playerRow(p, { href: `#/jugador/${p.id}`, end: h('span', { class: 'chip bad' }, `${a.faltasSeguidas} faltas`) }))),
+      h('p', { class: 'row-sub', style: { margin: 0 } }, '¿Alguien entrena contigo aparte y no va a los entrenos? Abre su perfil y activa «Entrena conmigo aparte»: deja de salir aquí y ya no se le pone falta. Para un entreno en especial, elige a los convocados en el entrenamiento.'));
   }
   if (unrated.length) {
     todo.append(note(`${plural(unrated.length, 'jugador no tiene', 'jugadores no tienen')} evaluación todavía. Sin ella no se dibuja su radar ni se sabe qué le falta para subir.`),

@@ -1,22 +1,23 @@
 // Remate Fit (v3.18): armar un día por músculos, plantillas de semana y nombres del gym para el buscador.
 // MUS: [clave, nombre, patrón para contar series, ejercicios en orden de preferencia (básicos y máquinas primero)]
 export const MUS = [
-  ['pecho', 'Pecho', 'hpush', ['m-press-pecho', 'g-press-banca', 'g-press-mancuernas', 'm-smith-banca', 'm-pec-deck', 'm-cruce-poleas', 'f-apertura', 'm-fondos-asistidos', 'g-lagartija']],
+  ['pecho', 'Pecho', 'hpush', ['m-press-pecho', 'g-press-banca', 'g-press-mancuernas', 'm-smith-banca', 'm-pec-deck', 'm-cruce-poleas', 'f-apertura', 'm-fondos-asistidos', 'g-lagartija', 'g-lagartija-rodillas', 'g-lagartija-diamante']],
   ['pechoAlto', 'Pecho alto', 'ipush', ['m-press-inclinado', 'f-press-inclinado', 'm-cruce-bajo', 'f-flexion-pies', 'g-landmine']],
-  ['hombro', 'Hombro', 'vpush', ['m-press-hombro', 'g-press-hombro-m', 'm-lateral-maquina', 'f-elev-lateral', 'm-lateral-polea', 'f-press-liga', 'f-elev-lateral-liga']],
+  ['hombro', 'Hombro', 'vpush', ['m-press-hombro', 'g-press-hombro-m', 'm-lateral-maquina', 'f-elev-lateral', 'm-lateral-polea', 'f-press-liga', 'f-elev-lateral-liga', 'g-pike']],
   ['hombroPost', 'Hombro posterior', 'rear', ['m-deltoide-post', 'g-face-pull', 'g-ytw']],
-  ['triceps', 'Tríceps', 'tri', ['m-triceps-cuerda-arriba', 'f-ext-triceps-polea', 'm-triceps-maquina', 'f-ext-triceps-m', 'm-fondos-asistidos', 'f-fondos-banco']],
-  ['espalda', 'Espalda', 'vpull', ['m-jalon-maquina', 'g-jalon-polea', 'm-dominada-asistida', 'g-dominada', 'm-jalon-cerrado', 'm-pullover-polea', 'g-remo-1', 'f-jalon-liga']],
-  ['espaldaAlta', 'Remo y espalda alta', 'row', ['m-remo-maquina', 'm-remo-t', 'f-remo-polea', 'f-remo-barra', 'm-remo-1-polea', 'g-remo-invertido', 'm-encogimientos', 'f-remo-liga']],
+  ['triceps', 'Tríceps', 'tri', ['m-triceps-cuerda-arriba', 'f-ext-triceps-polea', 'm-triceps-maquina', 'f-ext-triceps-m', 'm-fondos-asistidos', 'f-fondos-banco', 'g-lagartija-diamante']],
+  ['espalda', 'Espalda', 'vpull', ['m-jalon-maquina', 'g-jalon-polea', 'm-dominada-asistida', 'g-dominada', 'm-jalon-cerrado', 'm-pullover-polea', 'g-remo-1', 'f-jalon-liga', 'g-dominada-neg', 'g-remo-mesa']],
+  ['espaldaAlta', 'Remo y espalda alta', 'row', ['m-remo-maquina', 'm-remo-t', 'f-remo-polea', 'f-remo-barra', 'm-remo-1-polea', 'g-remo-invertido', 'm-encogimientos', 'f-remo-liga', 'g-remo-mesa']],
   ['biceps', 'Bíceps', 'bi', ['f-curl-m', 'm-curl-maquina', 'm-curl-polea', 'm-martillo-cuerda', 'f-curl-liga']],
-  ['pierna', 'Pierna completa', 'sq', ['m-hack', 'g-prensa', 'g-sent-trasera', 'm-smith-sentadilla', 'g-goblet', 'g-bulgara', 'g-zancada', 'm-prensa-1', 'f-sent-pc', 'f-zancada-atras']],
-  ['cuadriceps', 'Cuádriceps', 'quad', ['f-ext-cuad', 'm-hack', 'g-prensa', 'g-sent-frontal', 'g-subida']],
+  ['pierna', 'Pierna completa', 'sq', ['m-hack', 'g-prensa', 'g-sent-trasera', 'm-smith-sentadilla', 'g-goblet', 'g-bulgara', 'g-zancada', 'm-prensa-1', 'f-sent-pc', 'f-zancada-atras', 'g-pared']],
+  ['cuadriceps', 'Cuádriceps', 'quad', ['f-ext-cuad', 'm-hack', 'g-prensa', 'g-sent-frontal', 'g-subida', 'g-pared', 'f-sent-pc']],
   ['femoral', 'Femoral', 'ham', ['m-curl-fem-sentado', 'g-curl-femoral', 'g-rumano-barra', 'g-rumano-mancuernas', 'g-nordico', 'g-puente-1']],
-  ['gluteo', 'Glúteo', 'glute', ['g-hipthrust', 'm-hip-thrust-maq', 'm-patada-gluteo', 'g-bulgara', 'g-hipthrust-m', 'g-rumano-1']],
+  ['gluteo', 'Glúteo', 'glute', ['g-hipthrust', 'm-hip-thrust-maq', 'm-patada-gluteo', 'g-bulgara', 'g-hipthrust-m', 'g-rumano-1', 'g-puente']],
   ['cadera', 'Cadera (abductores y aductores)', 'glute', ['m-abductores', 'm-aductores', 'g-hex', 'm-extension-espalda', 'g-copenhague']],
-  ['pantorrilla', 'Pantorrilla', 'calf', ['m-talones-maquina', 'g-talones-pie', 'm-talones-sentado-maq', 'm-talones-prensa', 'g-talones-sentado']],
-  ['abdomen', 'Abdomen', 'core', ['m-crunch-polea', 'm-crunch-maquina', 'm-silla-romana', 'g-pallof', 'g-lenador', 'g-plancha-lat', 'g-deadbug']],
-  ['salto', 'Salto y potencia', 'pow', ['g-salto-cajon', 'g-lanz-arriba', 'g-salto-cargado', 'g-slam', 'f-trineo']],
+  ['pantorrilla', 'Pantorrilla', 'calf', ['m-talones-maquina', 'g-talones-pie', 'm-talones-sentado-maq', 'm-talones-prensa', 'g-talones-sentado', 'g-talones-1']],
+  ['abdomen', 'Abdomen', 'core', ['m-crunch-polea', 'm-crunch-maquina', 'm-silla-romana', 'g-pallof', 'g-lenador', 'g-plancha-lat', 'g-deadbug', 'g-plancha', 'g-hueco', 'g-toques-hombro', 'g-superman']],
+  ['salto', 'Salto y potencia', 'pow', ['g-salto-cajon', 'g-lanz-arriba', 'g-salto-cargado', 'g-slam', 'f-trineo', 'g-sentadilla-salto']],
+  ['resistencia', 'Resistencia (cardio con tu peso)', 'core', ['g-escalador', 'g-burpee', 'g-tijera', 'g-rodillas', 'g-oso']],
 ];
 export const MUS_BY = Object.fromEntries(MUS.map(([k, name, pat, ids]) => [k, { k, name, pat, ids }]));
 // Músculos grandes: les tocan 2 ejercicios cuando se eligen pocos músculos en el día.
@@ -89,6 +90,11 @@ export const TEMPLATES = [
 
 // Nombres que se usan en el gym (para el buscador). Se suman al nombre y la zona de cada ejercicio.
 export const ALIAS = {
+  'g-burpee': 'burpee burpees', 'g-escalador': 'mountain climber escaladores', 'g-tijera': 'jumping jacks tijeras saltos de tijera', 'g-rodillas': 'high knees rodillas al pecho',
+  'g-oso': 'bear crawl oso', 'g-hueco': 'hollow hold hollow body cuerpo hueco', 'g-superman': 'superman espalda baja', 'g-pike': 'pike push up pica hombro',
+  'g-lagartija-diamante': 'diamond push up diamante flexiones cerradas', 'g-lagartija-rodillas': 'flexiones de rodillas lagartijas rodillas', 'g-remo-mesa': 'remo invertido mesa australian row',
+  'g-dominada-neg': 'negativas dominadas excentricas pull up', 'g-pared': 'wall sit sentadilla isometrica pared', 'g-puente': 'glute bridge puente', 'g-plancha': 'plank plancha',
+  'g-toques-hombro': 'shoulder taps toques', 'g-sentadilla-salto': 'jump squat sentadilla salto', 'g-talones-1': 'calf raise pantorrilla una pierna', 'f-sent-pc': 'air squat sentadilla libre',
   'f-trineo': 'trineo sled push empuje de trineo prowler',
   'g-press-banca': 'bench press press plano banca plana', 'g-press-mancuernas': 'press plano mancuernas', 'm-press-pecho': 'maquina de pecho chest press press sentado',
   'm-press-inclinado': 'press inclinado maquina incline', 'f-press-inclinado': 'press inclinado mancuernas incline', 'm-pec-deck': 'pec deck peck deck peckdeck mariposa butterfly aperturas maquina',

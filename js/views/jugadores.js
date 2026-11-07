@@ -1,6 +1,6 @@
 // Lista de jugadores con búsqueda, filtros y orden.
 import { h, ic, plural } from '../util.js';
-import { state, players, settings, multiTeam, teams, teamOf, teamsOf, inTeam, teamName, isMine, myPlayer } from '../store.js';
+import { state, players, settings, multiTeam, teams, teamOf, teamsOf, inTeam, teamName, isMine, myPlayer, isApart } from '../store.js';
 import { levelGap, attendanceFor, positionsOf } from '../calc.js';
 import { POSITIONS } from '../content/skills.js';
 import { sectionTitle, empty, playerRow, playerSub, options } from './ui.js';
@@ -50,7 +50,8 @@ export default function jugadores(ctx) {
       if (isMine(p)) end.push(h('span', { class: 'chip ball', title: 'Tu perfil de jugador' }, 'Tú'));
       if (p.captain) end.push(h('span', { class: 'chip info', title: 'Capitán: puede pasar lista y capturar partidos' }, 'Capitán'));
       if (i.gap.ready) end.push(h('span', { class: 'chip ball', title: 'Cumple las fases para el examen' }, 'Listo'));
-      if (i.att.faltasSeguidas >= 2) end.push(h('span', { class: 'chip bad' }, `${i.att.faltasSeguidas} faltas`));
+      if (isApart(p)) end.push(h('span', { class: 'chip', title: 'Entrena contigo aparte: no se convoca ni se le pone falta' }, 'Aparte'));
+      else if (i.att.faltasSeguidas >= 2) end.push(h('span', { class: 'chip bad' }, `${i.att.faltasSeguidas} faltas`));
       else if (i.att.pct != null) end.push(h('span', { class: `chip ${i.att.pct >= 85 ? 'ok' : i.att.pct >= 70 ? 'warn' : 'bad'}`, title: 'Asistencia' }, `${i.att.pct}%`));
       return playerRow(p, { href: `#/jugador/${p.id}`, end, sub: c ? `${playerSub(p)} · ${c.name}` : undefined });
     }) : [h('div', { class: 'empty' }, all.length ? 'Ningún jugador coincide con esos filtros.' : '')]));

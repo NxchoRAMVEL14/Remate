@@ -3,6 +3,7 @@
 // propuestas de Remate basadas en las fuentes de FIT_SOURCES, no cifras de un estudio en particular.
 import { GYM, NEED, TIER, topReps, lowReps } from './gym.js';
 import { MAQ } from './maquinas.js';
+import { musOf, MUS_BY } from './musculos.js';
 import { todayStr, addDays, diffDays } from '../util.js';
 
 const X = (o) => ({ safety: '', side: false, each: false, adult: true, ...o });
@@ -73,14 +74,6 @@ export const FIT_EX = [
     why: 'Aísla el cuádriceps, el músculo que más trabaja en el despegue y la frenada.',
     how: ['Sentado en la máquina, el rodillo sobre los tobillos y la espalda pegada al respaldo.', 'Estira las rodillas por completo.', 'Baja en 2 o 3 segundos.'],
     cues: ['Estira completo', 'Baja lento'], err: 'Patear el peso hacia arriba.', easier: 'Menos peso.', harder: 'Pausa de 1 segundo arriba.' }),
-  X({ id: 'f-sent-pc', name: 'Sentadilla con peso corporal o tus polainas', pat: 'rodilla', need: 'nada', tier: 1, unit: 'pc', body: 'Piernas completas',
-    why: 'La sentadilla sin pesas. Con las polainas en las manos o en una mochila se vuelve más pesada.',
-    how: ['Pies a la anchura de los hombros, puntas un poco hacia afuera.', 'Baja la cadera atrás y abajo hasta que los muslos queden paralelos al piso o más.', 'Sube empujando el piso.'],
-    cues: ['Rodillas sobre las puntas', 'Pecho alto'], err: 'Que las rodillas se vayan hacia adentro.', easier: 'Siéntate y párate de una silla.', harder: 'Baja en 3 segundos, pausa abajo o carga una mochila con peso.' }),
-  X({ id: 'f-zancada-atras', name: 'Zancada hacia atrás', pat: 'unipodal', need: 'nada', tier: 1, unit: 'pc', side: true, body: 'Cuádriceps y glúteo',
-    why: 'Pierna a pierna, más amable con la rodilla que la zancada al frente.',
-    how: ['De pie, da un paso largo hacia atrás.', 'Baja hasta que la rodilla de atrás casi toque el piso.', 'Empuja con la pierna de adelante para regresar.'],
-    cues: ['Tronco alto', 'Rodilla de adelante sobre el pie'], err: 'Dar el paso muy corto y cargar la rodilla de adelante.', easier: 'Apóyate en una pared.', harder: 'Con mancuernas, polainas o una mochila.' }),
   X({ id: 'f-sprint', name: 'Sprints cortos', pat: 'sprint', need: 'nada', tier: 1, unit: 'saltos', repsLabel: 'Sprints', body: 'Piernas y velocidad',
     why: 'Velocidad y potencia de piernas. En la cancha cuentan como trabajo de alta intensidad.',
     how: ['Calienta bien antes (5 a 10 minutos y aceleraciones suaves).', 'Corre 10 a 20 metros a máxima velocidad.', 'Regresa caminando y descansa hasta sentirte fresco (1 a 2 minutos).'],
@@ -101,6 +94,7 @@ export const PLACES = {
   completo: { name: 'Gym completo', desc: 'Máquinas, poleas, barra, rack y mancuernas.', has: new Set(Object.keys(NEED)) },
   basico: { name: 'Gym básico', desc: 'Barra, rack, banco y mancuernas, sin máquinas ni poleas.', has: new Set(['barra', 'mancuerna', 'cajon', 'balon', 'liga', 'nada']) },
   casa: { name: 'En casa', desc: 'Mancuernas o ligas, una silla o banco, tu peso y tus polainas.', has: new Set(['mancuerna', 'liga', 'cajon', 'nada']) },
+  peso: { name: 'Solo tu peso', desc: 'Sin nada más: el piso, una silla o banco firme y una mesa pesada.', has: new Set(['nada', 'cajon']) },   // v3.20
   cancha: { name: 'Cancha o al aire libre', desc: 'Tu peso, ligas, una banca y balón medicinal si hay.', has: new Set(['nada', 'liga', 'cajon', 'balon']) },
 };
 export const fitAvailable = (ex, place) => !!PLACES[place]?.has.has(ex.need);
@@ -481,3 +475,22 @@ export const FIT_SOURCES = [
   ['Silva y cols. (2019): pliometría en jugadores de voleibol', 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6720263/'],
 ];
 export { NEED, TIER };
+
+// ---------- v3.20: entrenar donde estés ----------
+// Un ejercicio equivalente que sí se pueda hacer en ese lugar: mismo músculo (o el mismo lugar de la rutina), primero el
+// de la misma unidad, y hasta tu nivel. null si no hay ninguno.
+export function fitSwap(exId, place, spec = {}, { slot = null, exclude = [] } = {}) {
+  const ex = FIT_BY_ID[exId];
+  if (!ex) return null;
+  if (fitAvailable(ex, place)) return exId;
+  const tierMax = (FIT_EXP[normFit(spec).exp]?.tier || 2) + 1, skip = new Set(exclude);
+  const mus = musOf(exId), score = new Map();
+  const bump = (id, n) => score.set(id, (score.get(id) || 0) + n);
+  mus.forEach((m) => MUS_BY[m].ids.forEach((id, i) => bump(id, 3 - i * 0.05)));
+  (ORDER[slot || SLOT_OF[exId] || ex.slot] || []).forEach((id, i) => bump(id, 2.5 - i * 0.05));
+  ALL_EX.filter((e) => e.pat === ex.pat).forEach((e) => bump(e.id, 1.5));
+  const best = [...score].map(([id, n]) => [FIT_BY_ID[id], n + (FIT_BY_ID[id]?.unit === ex.unit ? 0.5 : 0)])
+    .filter(([e]) => e && e.id !== exId && !skip.has(e.id) && fitAvailable(e, place) && e.tier <= tierMax)
+    .sort((a, b) => b[1] - a[1])[0];
+  return best ? best[0].id : null;
+}

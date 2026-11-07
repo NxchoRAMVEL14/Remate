@@ -1,6 +1,6 @@
 // Ficha de un jugador (vista del entrenador): tarjeta, acciones y cuatro pestañas.
 import { h, ic, toast, fmtDate, plural, confirmSheet } from '../util.js';
-import { state, getPlayer, settings, remove, resolveClaim, patch, teamReady, isMine, gymReady } from '../store.js';
+import { state, getPlayer, settings, remove, resolveClaim, patch, teamReady, isMine, gymReady, isApart, setApart, setAttendance } from '../store.js';
 import { testsPanel } from './pruebas.js';
 import { loadSection } from './carga.js';
 import { videosOf } from './tecnica.js';
@@ -41,6 +41,15 @@ export default function jugador(ctx) {
         h('input', { type: 'checkbox', checked: p.captain ? true : null, disabled: teamReady() ? null : true,
           onchange: (e) => { patch('players', p.id, { captain: e.target.checked }); toast(e.target.checked ? `${p.name} ahora es capitán: puede pasar lista y capturar partidos` : `${p.name} ya no es capitán`, 3200); } }),
         h('span', {}, 'Capitán (ayudante)')),
+      // v3.20: entrena contigo aparte (no va a los entrenos del equipo).
+      isMine(p) ? null : h('label', { class: 'check captain', title: 'No se convoca a los entrenos, no se le pone falta ni cuenta en el promedio del grupo' },
+        h('input', { type: 'checkbox', checked: isApart(p) ? true : null, onchange: (e) => { setApart(p.id, e.target.checked); toast(e.target.checked ? `${p.name} entrena contigo aparte: ya no se le convoca ni se le pone falta` : `${p.name} vuelve a ir a los entrenos del equipo`, 3200); } }),
+        h('span', {}, 'Entrena conmigo aparte')),
+      isApart(p) && att.falta > 0 ? h('button', { class: 'btn sm', type: 'button', onclick: async () => {
+        const fs = state.data.attendance.filter((a) => a.player_id === p.id && a.status === 'falta');
+        if (!(await confirmSheet({ title: `¿Quitar las faltas de ${p.name}?`, text: `Se borran sus ${fs.length} faltas; sus asistencias y justificadas se quedan. Como entrena contigo aparte, no deberían contar.`, ok: 'Quitar faltas', danger: true }))) return;
+        fs.forEach((a) => setAttendance(a.session_id, p.id, null)); toast('Faltas quitadas');
+      } }, ic('undo-2', 16), `Quitar sus faltas (${att.falta})`) : null,
       h('button', { class: 'btn sm danger', type: 'button', onclick: async () => { if (await deletePlayer(p)) location.hash = '#/jugadores'; } }, ic('trash-2', 16), 'Eliminar')));
 
   const panel = h('div', { class: 'stack', role: 'tabpanel' });

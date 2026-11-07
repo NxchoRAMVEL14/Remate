@@ -194,6 +194,30 @@ const byName = (a, b) => a.name.localeCompare(b.name, 'es');
 export const isStaff = () => state.role === 'assistant' || (state.role === 'player' && !!state.me?.captain && !state.viewAs);
 export const players = () => (state.role === 'coach' ? state.data.players : state.data.roster).filter((p) => p.active !== false).sort(byName);
 export const getPlayer = (id) => find('players', id);
+// v3.20: convocados. settings().apart = jugadores que entrenan contigo aparte (no van a los entrenos del equipo:
+// no se convocan solos, no se les pone falta y no cuentan en las faltas ni en el promedio del grupo).
+// settings().conv = { [id del entreno]: [ids] }: a quiénes convocaste a ese entreno (sin entrada = todos menos los de aparte).
+// Todo va en los ajustes del grupo, que ya existen: no hace falta SQL.
+export const apartIds = () => new Set(Array.isArray(settings().apart) ? settings().apart : []);
+export const isApart = (p) => !!p && apartIds().has(p.id);
+export const teamPlayers = () => players().filter((p) => !isApart(p));
+export const hasConv = (s) => !!s && Array.isArray(settings().conv?.[s.id]);
+export function convocados(s) {
+  const c = s ? settings().conv?.[s.id] : null;
+  return Array.isArray(c) ? players().filter((p) => c.includes(p.id)) : teamPlayers();
+}
+export const isConvocado = (s, p) => convocados(s).some((x) => x.id === p?.id);
+export function saveConv(s, ids) {
+  const keep = new Set((state.data.sessions || []).filter((x) => x.session_date >= addDaysISO(-90)).map((x) => x.id));
+  const conv = Object.fromEntries(Object.entries(settings().conv || {}).filter(([id]) => keep.has(id) && id !== s.id));
+  if (Array.isArray(ids)) conv[s.id] = [...new Set(ids)];
+  saveSettings({ conv });
+}
+export function setApart(pid, on) {
+  const a = apartIds(); if (on) a.add(pid); else a.delete(pid);
+  saveSettings({ apart: [...a] });
+}
+const addDaysISO = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 // Perfil de jugador del propio entrenador (por si juega con ellos, por ejemplo en un equipo mixto).
 export const myPlayerId = () => (state.role === 'coach' ? settings().me_player || null : null);
 export const myPlayer = () => { const id = myPlayerId(); return id ? getPlayer(id) : null; };

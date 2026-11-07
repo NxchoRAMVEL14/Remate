@@ -7,7 +7,8 @@ import { figFor } from '../content/movimientos.js';
 import { state, add, remove, patch, players, settings, gymReady, ls, multiTeam, teamOf, inTeam } from '../store.js';
 import { weekStart, num } from '../lab-calc.js';
 import { GYM, GYM_BY_ID, GROUPS, NEED, EQUIP, EXP, TIER, PHASE, MINUTES, GOALS, buildRoutine, normSpec, isSpec, maxDays, heavyMax, weekPlan,
-  nextStep, blockWeek, topReps, lowReps, available, groupOf, gymName, WARMUP, COOLDOWN, READ, RULES, ARRIVE, GYM_SOURCES, gymDefaultRx, cleanCustom, GYM_ALL } from '../content/gym.js';
+  nextStep, blockWeek, topReps, lowReps, available, groupOf, gymName, WARMUP, COOLDOWN, READ, RULES, ARRIVE, GYM_SOURCES, gymDefaultRx, cleanCustom, GYM_ALL, swapForEquip, HOME_EQUIP } from '../content/gym.js';
+import { openActive, activeButton, circuitSheet, circuitDraft } from './activo.js';
 import { editorPage, pickExercise } from './rutina-editor.js';
 import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
 import { lineChart } from './chart.js';
@@ -122,7 +123,8 @@ function dayCard(day, { pid, canLog }) {
     h('details', { class: 'gx-sub' }, h('summary', {}, h('strong', {}, 'Calentamiento, 10 min')), h('ol', { class: 'plain' }, WARMUP.map((x) => h('li', {}, x)))),
     h('div', { class: 'rows' }, day.items.map((rx, i) => exItem(GYM_BY_ID[rx.ex], { rx, last: pid ? lastFor(pid, rx.ex) : undefined, n: i + 1 }))),
     h('details', { class: 'gx-sub' }, h('summary', {}, h('strong', {}, 'Para terminar, 5 min')), h('ul', { class: 'plain' }, COOLDOWN.map((x) => h('li', {}, x)))),
-    canLog ? h('a', { class: 'btn primary', href: `#/gym/registrar/${day.key}` }, ic('check', 18), `Registrar el día ${day.key}`) : null);
+    canLog ? h('div', { class: 'cluster' }, h('a', { class: 'btn ball', href: `#/gym/registrar/${day.key}/activo` }, ic('play', 18), 'Modo activo'),
+      h('a', { class: 'btn primary', href: `#/gym/registrar/${day.key}` }, ic('check', 18), `Registrar el día ${day.key}`)) : null);
 }
 
 // Próximo partido o torneo en los siguientes 7 días.
@@ -304,6 +306,7 @@ function routineTab(ctx, me, canLog) {
         ic('pencil', 16), act.src === 'coach' && !act.own ? 'Armar la mía' : 'Cambiar mis respuestas'),
         h('button', { class: 'btn sm', type: 'button', onclick: () => { location.hash = '#/gym/editar'; } }, ic('list-checks', 16), r.custom ? 'Editar días y ejercicios' : 'Personalizar'),
         canLog ? h('a', { class: 'btn sm', href: '#/gym/registrar/libre' }, ic('plus', 16), 'Sesión libre') : null,
+        canLog ? h('button', { class: 'btn sm', type: 'button', onclick: () => kidCircuit(me, act) }, ic('zap', 16), 'Circuito exprés') : null,
         h('button', { class: 'btn sm', type: 'button', onclick: () => gymCalSheet(me) }, ic('calendar-plus', 16), 'Agregar al calendario'),
         shareBtn(() => gymShare(s, { who: firstName(me), print: '#/imprimir/gym', title: 'Compartir o imprimir mi rutina' })),
         act.src === 'mine' ? h('button', { class: 'btn sm ghost', type: 'button', onclick: async () => {
@@ -373,16 +376,45 @@ function logPage(ctx) {
   const goal = act.spec?.goal || 'salto';
   if (!ui.draft) {
     const saved = readJSON(KEY.draft(me.id));
-    if (saved && saved.key === day.key && saved.goal === goal && saved.at && Date.now() - saved.at < 12 * 3600e3) { ui.draft = saved; ui.recovered = true; }
+    if (saved && saved.key === day.key && saved.goal === goal && saved.at && Date.now() - saved.at < 12 * 3600e3) { ui.draft = saved; ui.recovered = !saved.circuit; }
     else ui.draft = { key: day.key, goal, date: todayStr(), minutes: day.min, rpe: null, pain: false, note: '', at: Date.now(),
       entries: day.items.map((rx) => { const last = lastFor(me.id, rx.ex); return { ex: rx.ex, s: Array.from({ length: rx.sets }, (_, i) => [last?.s?.[i]?.[0] ?? last?.s?.[0]?.[0] ?? '', '']) }; }) };
   }
   const dr = ui.draft;
   let timer;
   const persist = () => { dr.at = Date.now(); clearTimeout(timer); timer = setTimeout(() => ls.set(KEY.draft(me.id), JSON.stringify(dr)), 300); };
+  const persistNow = () => { dr.at = Date.now(); clearTimeout(timer); ls.set(KEY.draft(me.id), JSON.stringify(dr)); };
   const err = h('div', { class: 'note bad', role: 'alert', hidden: true });
 
   const rxOf = (entry) => day.items.find((x) => x.ex === entry.ex) || entry.rx || gymDefaultRx(entry.ex, act.spec || {});
+  // v3.20: dónde entrenas hoy (gym, casa o cancha). Lo que no se puede hacer ahí se cambia por uno equivalente.
+  const sp = normSpec(act.spec || {}), gymEq = HOME_EQUIP.has(sp.equip) ? 'completo' : sp.equip;
+  dr.place = EQUIP[dr.place] ? dr.place : sp.equip;
+  const swapAll = (place) => {
+    const changed = [], missing = [], used = new Set(), tierMax = EXP[sp.exp]?.tier || 1;
+    for (const e of dr.entries) {
+      const orig = e.orig || e.ex, want = swapForEquip(orig, place, { tierMax: tierMax + 1, exclude: [...used] });
+      if (!want) { missing.push(gymName(orig)); if (e.orig) { e.ex = e.orig; delete e.orig; delete e.rx; } used.add(e.ex); continue; }
+      if (want !== e.ex) {
+        const n = e.s.length, was = e.ex;
+        if (want === orig) { delete e.orig; delete e.rx; } else { e.orig = orig; e.rx = { ...gymDefaultRx(want, sp), sets: n }; }
+        e.ex = want; e.s = Array.from({ length: n }, () => ['', '']);
+        changed.push([gymName(was), gymName(want)]);
+      }
+      used.add(e.ex);
+    }
+    dr.place = place; persistNow();
+    return { changed, missing };
+  };
+  const placeSeg = h('div', { class: 'seg act-place', role: 'group', 'aria-label': '¿Dónde entrenas hoy?' },
+    [[gymEq, 'Gym'], ['casa', 'Casa'], ['cancha', 'Cancha']].map(([k, t]) => h('button', { type: 'button', 'aria-pressed': dr.place === k ? 'true' : 'false', onclick: () => { ui.placeMsg = swapAll(k); ctx.rerender(); } }, t)));
+  const pm = ui.placeMsg;
+  const placeMsg = pm ? (pm.changed.length || pm.missing.length ? h('div', { class: 'note info' },
+    pm.changed.length ? `Cambié ${plural(pm.changed.length, 'ejercicio', 'ejercicios')} para entrenar ${EQUIP[dr.place].where || 'en el gym'}: ${pm.changed.map(([a, b]) => `${a} → ${b}`).join('; ')}.` : '',
+    pm.missing.length ? ` Sin equivalente aquí: ${pm.missing.join(', ')}.` : '') : note(`Todo se puede hacer ${EQUIP[dr.place].where || 'en tu gym'}.`)) : null;
+  const goActive = () => openActive({ title: day.key === 'L' ? (dr.name || 'Sesión libre') : `Día ${day.key}: ${day.name}`, entries: dr.entries, byId: GYM_BY_ID, rxOf, persist: persistNow,
+    circuit: dr.circuit || null, onClose: ({ secs, quiet }) => { if ((dr.minutes === '' || dr.minutes == null || dr.circuit) && secs > 60) dr.minutes = Math.max(1, Math.round(secs / 60)); persistNow(); if (!quiet) ctx.rerender(); } });
+  if (ctx.args[2] === 'activo' && !ui.autoAct && dr.entries.length) { ui.autoAct = true; setTimeout(goActive, 60); }
   const exBlock = (entry, k) => {
     const rx = rxOf(entry), ex = GYM_BY_ID[entry.ex];
     if (!ex || !rx) return null;
@@ -455,6 +487,9 @@ function logPage(ctx) {
     !canSave ? note(ctx.readonly ? 'Vista previa: aquí no se guarda.' : 'Por ahora no se pueden guardar sesiones. Tu entrenador tiene que actualizar Remate.', 'warn') : null,
     ui.recovered ? note('Recuperé lo que llevabas anotado de esta sesión.') : null,
     gameNote(me),
+    dr.circuit ? null : h('section', { class: 'panel stack' }, h('h3', {}, '¿Dónde entrenas hoy?'), placeSeg, placeMsg),
+    dr.entries.length ? h('section', { class: 'panel stack act-cta' }, h('div', { class: 'split' }, h('div', {}, h('h3', {}, 'Modo activo'),
+      h('p', { class: 'row-sub', style: { margin: 0 } }, 'A pantalla completa: el ejercicio en grande, el tiempo y el descanso. Pasa solo de uno a otro y lo va anotando.')), activeButton(goActive, 'Empezar'))) : null,
     h('p', { style: { margin: 0 } }, 'Anota lo que vas haciendo. Si no hiciste una serie, déjala vacía. Lo que escribas se guarda en este celular hasta que toques «Guardar sesión».'),
     dr.entries.length ? dr.entries.map(exBlock) : note(day.key === 'L' ? 'Agrega los ejercicios que hiciste hoy.' : 'Quitaste todos los ejercicios: agrega los que hiciste.'),
     canSave || ctx.readonly ? h('button', { class: 'btn', type: 'button', onclick: addEx }, ic('plus', 18), 'Agregar ejercicio') : null,
@@ -468,7 +503,17 @@ function logPage(ctx) {
       h('button', { class: 'btn ghost', type: 'button', onclick: async () => {
         if (await confirmSheet({ title: '¿Descartar lo anotado?', text: 'Se borra lo que llevas de esta sesión.', ok: 'Descartar', danger: true })) { ls.del(KEY.draft(me.id)); ui.draft = null; location.hash = back; }
       } }, 'Descartar')));
-  return { title: day.key === 'L' ? 'Sesión libre' : `Día ${day.key}`, sub: day.key === 'L' ? 'Lo que hiciste hoy' : day.name, back, el };
+  return { title: day.key === 'L' ? (dr.name || 'Sesión libre') : `Día ${day.key}`, sub: day.key === 'L' ? (dr.circuit ? `${plural(dr.circuit.rounds, 'ronda', 'rondas')} · ${dr.circuit.work} s / ${dr.circuit.rest} s` : 'Lo que hiciste hoy') : day.name, back, el };
+}
+// v3.20: circuito exprés con tu peso.
+function kidCircuit(me, act) {
+  const sp = normSpec(act.spec || {});
+  circuitSheet({ tierMax: Math.min(2, (EXP[sp.exp]?.tier || 1) + (sp.exp === 'nuevo' ? 0 : 0)), byId: GYM_BY_ID, defPlace: 'casa', places: [['casa', 'Casa'], ['cancha', 'Cancha']],
+    ok: (id, place) => available(GYM_BY_ID[id], place),
+    onStart: (c, place) => {
+      const dr = circuitDraft(c, { goal: act.spec?.goal || 'salto', date: todayStr(), minutes: null, rpe: null, pain: false, at: Date.now(), place });
+      ls.set(KEY.draft(me.id), JSON.stringify(dr)); location.hash = '#/gym/registrar/libre/activo';
+    } });
 }
 
 // ---------- entrenador ----------

@@ -1,15 +1,16 @@
 // v3.10: Azar y equipos de entrenamiento. Un dado para elegir a un jugador al azar (sin repetir hasta que
-// pasen todos) y equipos para entrenar: 6 vs 6 con posiciones, o cascaritas de 2, 3 o 4 por equipo.
+// pasen todos) y equipos para entrenar: 6 vs 6 con posiciones, 5 vs 5, cascaritas de 2, 3 o 4 por equipo,
+// o duelos de 1 vs 1 (v3.20).
 // Se arman parejos por posición y nivel, solo por nivel o al azar total; y por rama (mezcladas parejo,
 // cada rama por su lado, o solo una). Todo se queda en este celular: no usa tablas nuevas.
 import { h, ic, toast, todayStr, plural, shareText, confirmSheet } from '../util.js';
-import { state, players, patch, getSession, sessions, multiTeam, teams, inTeam } from '../store.js';
+import { state, players, patch, getSession, sessions, multiTeam, teams, inTeam, convocados, teamPlayers } from '../store.js';
 import { currentRatings, positionsOf } from '../calc.js';
 import { POSITION_NAME, BRANCHES } from '../content/skills.js';
 import { note, jersey, longDate } from './ui.js';
 
 const KEY = 'remate.azar.v1';
-const SIZES = [[6, '6 vs 6'], [4, '4 vs 4'], [3, '3 vs 3'], [2, '2 vs 2']];
+const SIZES = [[6, '6 vs 6'], [5, '5 vs 5'], [4, '4 vs 4'], [3, '3 vs 3'], [2, '2 vs 2'], [1, '1 vs 1']];
 const MODES = [['pos', 'Parejos: posición y nivel'], ['nivel', 'Parejos: solo nivel'], ['azar', 'Al azar total']];
 const RAMAS = [['mix', 'Todas, mezcladas parejo'], ['sep', 'Cada rama por su lado'], ['M', 'Solo varonil'], ['F', 'Solo femenil']];
 const ROLE_ORDER = ['colocador', 'libero', 'opuesto', 'central', 'punta', 'sin_definir'];
@@ -38,7 +39,8 @@ function sessionFor(sid) {
 }
 const branchOk = (p, r) => r === 'mix' || r === 'sep' || !p.branch || p.branch === r;
 export function poolFor(sess, o = load()) {
-  let ps = players().filter((p) => p.active !== false);
+  // v3.20: en un entreno, sus convocados; sin entreno, el equipo sin los que entrenan contigo aparte.
+  let ps = (sess ? convocados(sess) : teamPlayers()).filter((p) => p.active !== false);
   if (o.team && multiTeam()) ps = ps.filter((p) => inTeam(p, o.team));
   ps = ps.filter((p) => branchOk(p, o.rama));
   const marks = sess ? state.data.attendance.filter((a) => a.session_id === sess.id) : [];
@@ -142,6 +144,15 @@ function build(o, list) {
     ? [['M', list.filter((p) => p.branch === 'M')], ['F', list.filter((p) => p.branch === 'F')], ['', list.filter((p) => !p.branch)]].filter(([, l]) => l.length)
     : [['', list]];
   const out = [];
+  if (o.size === 1) {   // v3.20: duelos de 1 vs 1 entre los de nivel más parecido (al azar total: revueltos)
+    for (const [b, l] of groups) {
+      const xs = o.mode === 'azar' ? shuffle(l) : [...l].map((p) => [p, strength(p) + Math.random() * 0.8]).sort((a, c) => c[1] - a[1]).map(([p]) => p);
+      const pre = b ? `${BRANCHES[b]} ` : '';
+      for (let i = 0; i + 1 < xs.length; i += 2) out.push({ name: `${pre}${i / 2 + 1}`, ids: [xs[i].id, xs[i + 1].id] });
+      if (xs.length % 2) out.push({ name: `${pre}espera`, ids: [xs[xs.length - 1].id], wait: true });
+    }
+    return { d: todayStr(), at: Date.now(), size: 1, mode: o.mode, rama: o.rama, probar: false, teams: out, roles: {} };
+  }
   for (const [b, l] of groups) {
     const k = o.rama === 'sep' || !o.k ? autoK(l.length, o.size) : o.k;
     if (k < 1) continue;
@@ -151,7 +162,7 @@ function build(o, list) {
   if (o.size === 6) out.forEach((t) => Object.assign(roles, courtRoles(t.ids.map(byId).filter(Boolean), o.probar)));
   return { d: todayStr(), at: Date.now(), size: o.size, mode: o.mode, rama: o.rama, probar: o.probar, teams: out, roles };
 }
-export const autoK = (n, size) => (n < 4 ? (n >= 2 ? 1 : 0) : Math.max(2, Math.floor(n / size)));
+export const autoK = (n, size) => (size === 1 ? Math.floor(n / 2) : n < 4 ? (n >= 2 ? 1 : 0) : Math.max(2, Math.floor(n / size)));
 const byId = (id) => players().find((p) => p.id === id) || null;
 
 // ---------- pantalla ----------
@@ -239,7 +250,8 @@ function equiposView(o, pool, sess, set) {
   const n = pool.list.length, k = o.k || autoK(n, o.size);
   const res = o.res && o.res.d === todayStr() ? o.res : null;
   const sizeSeg = seg('Tamaño', SIZES, o.size, (v) => set({ size: Number(v), k: 0, res: null }));
-  const kNum = o.rama === 'sep' ? null : h('div', { class: 'az-k' }, h('span', {}, 'Equipos'),
+  const kNum = o.size === 1 ? h('p', { class: 'row-sub', style: { margin: 0 } }, n >= 2 ? `${plural(Math.floor(n / 2), 'duelo', 'duelos')} de ${n} jugadores${n % 2 ? '; uno espera y entra contra el que gane' : ''}.` : '')
+    : o.rama === 'sep' ? null : h('div', { class: 'az-k' }, h('span', {}, 'Equipos'),
     h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Un equipo menos', disabled: k <= 2 ? true : null, onclick: () => set({ k: Math.max(2, k - 1), res: null }) }, ic('minus', 18)),
     h('strong', {}, String(k)),
     h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Un equipo más', disabled: k >= Math.min(12, Math.floor(n / 2)) ? true : null, onclick: () => set({ k: Math.min(12, k + 1), res: null }) }, ic('plus', 18)),
@@ -266,7 +278,7 @@ function perTeam(n, k, size) {
   if (k < 1) return '';
   const a = Math.floor(n / k), b = a + (n % k ? 1 : 0);
   const per = a === b ? `${a}` : `${a} o ${b}`;
-  return size === 6 && a > 6 ? `de ${per}: 6 en la cancha y el resto entra de cambio` : `de ${per} cada uno`;
+  return size >= 5 && a > size ? `de ${per}: ${size} en la cancha y el resto entra de cambio` : `de ${per} cada uno`;
 }
 function howText(o) {
   const m = { pos: 'Parejos por posición y nivel: reparte a los colocadores, centrales, puntas, opuestos y líberos entre los equipos y deja el nivel lo más igual posible (nivel de la Ruta y su radar).',
@@ -291,8 +303,11 @@ function resultView(o, res, sess, set, arm) {
     const names = [byId(SEL)?.name, byId(id)?.name];
     SEL = null; set({ res: { ...res, teams: teamsNew, roles } }); toast(`Cambiaste a ${names[0]} por ${names[1]}`);
   };
+  const duel = res.size === 1;
   const lv = live.map((t) => teamLevel(t.ids));
-  const gap = lv.length > 1 ? Math.max(...lv) - Math.min(...lv) : 0;
+  // En duelos, lo parejo es dentro de cada duelo (la diferencia entre los dos).
+  const dgap = (t) => { const ps = t.ids.map(byId).filter(Boolean); return ps.length === 2 ? Math.abs(strength(ps[0]) - strength(ps[1])) : 0; };
+  const gap = duel ? Math.max(0, ...live.map(dgap)) : lv.length > 1 ? Math.max(...lv) - Math.min(...lv) : 0;
   const cards = live.map((t, i) => {
     const ps = t.ids.map(byId).filter(Boolean);
     const court = res.size === 6 ? ps.filter((p) => res.roles[p.id]).sort((a, b) => [...COURT, 'libero'].indexOf(res.roles[a.id]) - [...COURT, 'libero'].indexOf(res.roles[b.id])) : ps;
@@ -304,8 +319,12 @@ function resultView(o, res, sess, set, arm) {
         r && r !== 'sin_definir' ? h('span', { class: `chip${role && !own ? (also ? ' info' : ' warn') : ''}`, title: role && !own ? (also ? 'También la juega' : 'Posición nueva para probar') : '' }, POSITION_NAME[r] || r) : null));
     };
     const br = ['M', 'F'].map((b) => [b, ps.filter((p) => p.branch === b).length]).filter(([, c]) => c);
+    if (duel) return h('div', { class: `panel az-team az-duel az-c${i % COLORS}` },
+      h('div', { class: 'split' }, h('h3', {}, teamTitle(res, t)), t.wait ? null : h('span', { class: 'chip' }, `diferencia ${dgap(t).toFixed(1)}`)),
+      h('ul', { class: 'plain az-list' }, ps.flatMap((p, j) => [j ? h('li', { class: 'az-vs', 'aria-hidden': 'true' }, 'vs') : null, row(p, null)])),
+      t.wait ? h('div', { class: 'row-sub' }, 'Entra contra el que gane el primer duelo.') : null);
     return h('div', { class: `panel az-team az-c${i % COLORS}` },
-      h('div', { class: 'split' }, h('h3', {}, `Equipo ${t.name}`), h('span', { class: 'chip' }, `nivel ${lv[i].toFixed(1)}`)),
+      h('div', { class: 'split' }, h('h3', {}, teamTitle(res, t)), h('span', { class: 'chip' }, `nivel ${lv[i].toFixed(1)}`)),
       h('div', { class: 'row-sub' }, [plural(ps.length, 'jugador', 'jugadores'), br.length > 1 ? br.map(([b, c]) => `${c} ${b === 'M' ? (c === 1 ? 'hombre' : 'hombres') : (c === 1 ? 'mujer' : 'mujeres')}`).join(' · ') : null].filter(Boolean).join(' · ')),
       h('ul', { class: 'plain az-list' }, court.map((p) => row(p, res.size === 6 ? res.roles[p.id] : null))),
       bench.length ? [h('div', { class: 'row-sub az-bench' }, 'De cambio (entran rotando)'), h('ul', { class: 'plain az-list' }, bench.map((p) => row(p, null)))] : null);
@@ -313,26 +332,35 @@ function resultView(o, res, sess, set, arm) {
   const newPos = res.size === 6 ? Object.entries(res.roles).filter(([id, r]) => { const p = byId(id); return p && positionsOf(p)[0] !== r && positionsOf(p)[0] !== 'sin_definir'; }).length : 0;
   const text = shareTextOf(res, live, sess);
   return h('section', { class: 'stack az-result' },
-    h('div', { class: 'split' }, h('strong', {}, `${plural(live.length, 'equipo', 'equipos')}${live.length > 1 ? (gap <= 0.35 ? ' · muy parejos' : gap <= 0.8 ? ' · parejos' : ' · algo disparejos') : ''}`),
-      live.length > 1 ? h('span', { class: 'row-sub' }, `diferencia de nivel ${gap.toFixed(1)}`) : null),
+    duel ? h('div', { class: 'split' }, h('strong', {}, `${plural(live.filter((t) => !t.wait).length, 'duelo', 'duelos')}${res.mode === 'azar' ? '' : gap <= 0.6 ? ' · muy parejos' : gap <= 1.2 ? ' · parejos' : ' · algo disparejos'}`),
+      h('span', { class: 'row-sub' }, `diferencia máxima ${gap.toFixed(1)}`))
+      : h('div', { class: 'split' }, h('strong', {}, `${plural(live.length, 'equipo', 'equipos')}${live.length > 1 ? (gap <= 0.35 ? ' · muy parejos' : gap <= 0.8 ? ' · parejos' : ' · algo disparejos') : ''}`),
+        live.length > 1 ? h('span', { class: 'row-sub' }, `diferencia de nivel ${gap.toFixed(1)}`) : null),
     res.size === 6 && newPos ? note(`${plural(newPos, 'jugador juega', 'jugadores juegan')} en una posición que no es la suya (marcada en otro color). Así pruebas otras alineaciones.`, 'info') : null,
-    h('p', { class: 'row-sub', style: { margin: 0 } }, 'Para cambiar a dos de equipo: toca a uno y luego al otro.'),
+    h('p', { class: 'row-sub', style: { margin: 0 } }, duel ? 'Para cambiar a dos de duelo: toca a uno y luego al otro.' : 'Para cambiar a dos de equipo: toca a uno y luego al otro.'),
     h('div', { class: 'az-teams' }, cards),
-    live.length >= 3 ? note(kingText(live), '') : null,
+    duel ? note(duelText(live), '') : live.length >= 3 ? note(kingText(live), '') : null,
     h('div', { class: 'cluster' },
       h('button', { type: 'button', class: 'btn', onclick: () => bigTeams(res, live) }, ic('zoom-in', 18), 'Enseñar en grande'),
       h('button', { type: 'button', class: 'btn', onclick: () => shareText(text) }, ic('share-2', 18), 'Compartir'),
       sess ? h('button', { type: 'button', class: 'btn', onclick: () => saveToNotes(sess, text) }, ic('notebook-pen', 18), 'Guardar en el entreno') : null,
       h('button', { type: 'button', class: 'btn ghost', onclick: arm }, ic('refresh-cw', 18), 'Otra combinación')));
 }
+// v3.20: el título de cada tarjeta (equipo, duelo o el que espera).
+const teamTitle = (res, t) => (res.size !== 1 ? `Equipo ${t.name}` : t.wait ? `${t.name.replace(/espera$/, '').trim() ? `${t.name.replace(/\s*espera$/, '')} · ` : ''}Espera` : `Duelo ${t.name}`);
+function duelText(live) {
+  const n = live.filter((t) => !t.wait).length;
+  return `Duelos de 1 vs 1: en media cancha angosta (unos 3 m de ancho), a 5 puntos o 3 minutos.${n >= 2 ? ' Luego los ganadores juegan entre ellos y los que perdieron entre ellos, para que sigan parejos.' : ''}${live.some((t) => t.wait) ? ' El que espera entra contra el que gane el primer duelo.' : ''}`;
+}
 function kingText(live) {
   const L = live.map((t) => t.name);
   return `Cascarita «rey de la cancha»: empiezan ${L[0]} contra ${L[1]}; el que gana se queda y entra ${L[2]}${L.length > 3 ? `, luego ${L.slice(3).join(', ')}` : ''}. Si tienes dos canchas, juegan ${L[0]} vs ${L[1]} y ${L[2]} vs ${L[3] || 'el que gane'}.`;
 }
 function shareTextOf(res, live, sess) {
-  const lines = [`Equipos${sess ? ` · ${sess.title || 'Entrenamiento'}` : ''} (${SIZES.find(([s]) => s === res.size)?.[1] || ''})`];
+  const lines = [`${res.size === 1 ? 'Duelos' : 'Equipos'}${sess ? ` · ${sess.title || 'Entrenamiento'}` : ''} (${SIZES.find(([s]) => s === res.size)?.[1] || ''})`];
   live.forEach((t) => {
     const ps = t.ids.map(byId).filter(Boolean);
+    if (res.size === 1) { lines.push(`${teamTitle(res, t)}: ${ps.map((p) => p.name).join(' vs ')}`); return; }
     lines.push(`Equipo ${t.name}: ${ps.map((p) => `${p.name}${res.size === 6 && res.roles[p.id] ? ` (${POSITION_NAME[res.roles[p.id]]})` : res.size === 6 ? ' (cambio)' : ''}`).join(', ')}`);
   });
   return lines.join('\n');
@@ -353,8 +381,8 @@ function bigTeams(res, live) {
   const close = () => { document.removeEventListener('keydown', onKey); try { if (document.fullscreenElement) document.exitFullscreen?.(); } catch { /* nada */ } ov.remove(); if (root) root.inert = false; try { returnTo?.focus(); } catch { /* nada */ } };
   const onKey = (e) => { if (e.key === 'Escape') close(); };
   const ov = h('div', { class: 'az-big', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Equipos en grande' },
-    h('div', { class: 'az-big-top' }, h('strong', {}, 'Equipos'), h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Cerrar', onclick: close }, ic('x', 28))),
-    h('div', { class: `az-big-grid n${Math.min(live.length, 4)}` }, live.map((t, i) => h('div', { class: `az-big-t az-c${i % COLORS}` }, h('h2', {}, `Equipo ${t.name}`),
+    h('div', { class: 'az-big-top' }, h('strong', {}, res.size === 1 ? 'Duelos' : 'Equipos'), h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Cerrar', onclick: close }, ic('x', 28))),
+    h('div', { class: `az-big-grid n${Math.min(live.length, 4)}` }, live.map((t, i) => h('div', { class: `az-big-t az-c${i % COLORS}` }, h('h2', {}, teamTitle(res, t)),
       h('ol', {}, t.ids.map(byId).filter(Boolean).map((p) => h('li', {}, h('span', {}, p.jersey != null ? `${p.jersey} · ${p.name}` : p.name),
         res.size === 6 ? h('small', {}, res.roles[p.id] ? POSITION_NAME[res.roles[p.id]] : 'cambio') : null)))))));
   document.addEventListener('keydown', onKey);

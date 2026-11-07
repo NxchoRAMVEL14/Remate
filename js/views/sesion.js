@@ -1,18 +1,60 @@
 // Un entrenamiento: datos, plan por bloques (editable), lista de asistencia y modo cancha.
 import { h, ic, toast, plural, addDays, parseDate, fmtDate, openSheet, confirmSheet, todayStr } from '../util.js';
-import { state, getSession, patch, add, remove, settings, players } from '../store.js';
+import { state, getSession, patch, add, remove, settings, players, convocados, hasConv, saveConv, isApart } from '../store.js';
 import { planMinutes, focusOf } from '../calc.js';
 import { SKILL_BY_ID } from '../content/skills.js';
 import { TEMPLATES, TEMPLATE_BY_ID, planFromTemplate, WARMUPS, warmupFor } from '../content/templates.js';
 import { getExercise, KINDS, levelLabel } from '../content/exercises.js';
 import { courtSVG } from '../court.js';
-import { sectionTitle, empty, note, longDate, field, options, STATUS_LABEL } from './ui.js';
+import { sectionTitle, empty, note, longDate, field, options, STATUS_LABEL, jersey } from './ui.js';
 import { sessionFormSheet, attendanceSheet, pickExerciseSheet, undoDone, calButton, sessionEvent } from './sheets-session.js';
 import { noticeSheet } from './avisos.js';
 import { openCourtMode } from './court-mode.js';
 import { azarButton } from './azar.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
+
+// v3.20: a quiénes convocas a este entreno. Solo ellos salen al pasar lista y solo ellos reciben falta.
+function convBox(s, marks) {
+  const all = players(), conv = convocados(s), apart = all.filter(isApart);
+  const custom = hasConv(s);
+  return h('section', { class: 'panel stack conv-box' },
+    h('div', { class: 'split' }, h('h3', {}, 'Convocados'), h('span', { class: `chip ${custom ? 'info' : ''}` }, `${conv.length} de ${all.length}`)),
+    h('p', { class: 'row-sub', style: { margin: 0 } }, custom ? 'Elegiste a quiénes convocas. Solo ellos salen al pasar lista y solo ellos reciben falta.'
+      : apart.length ? `Todos, menos ${apart.length === 1 ? `${apart[0].name}, que entrena contigo aparte` : `${apart.length} que entrenan contigo aparte`}. Solo ellos salen al pasar lista.` : 'Todo el equipo. Si sabes quién no va a venir, elige a los convocados: así no les pones falta.'),
+    conv.length && conv.length < all.length ? h('p', { class: 'row-sub', style: { margin: 0 } }, conv.map((p) => p.name).join(', ')) : null,
+    s.status !== 'cancelada' ? h('div', { class: 'cluster' }, h('button', { class: 'btn sm', type: 'button', onclick: () => convSheet(s) }, ic('users', 16), 'Elegir convocados'),
+      custom ? h('button', { class: 'btn sm ghost', type: 'button', onclick: () => { saveConv(s, null); toast('Convocados: todo el equipo'); } }, ic('undo-2', 16), 'Todo el equipo') : null) : null);
+}
+function convSheet(s) {
+  const all = players(), pick = new Set(convocados(s).map((p) => p.id));
+  // Los que vinieron al último entreno hecho (antes de este).
+  const prev = (state.data.sessions || []).filter((x) => x.status === 'hecha' && x.id !== s.id && x.session_date <= s.session_date).sort((a, b) => `${b.session_date}${b.start_time || ''}`.localeCompare(`${a.session_date}${a.start_time || ''}`))[0];
+  const came = prev ? new Set(state.data.attendance.filter((a) => a.session_id === prev.id && (a.status === 'presente' || a.status === 'retardo')).map((a) => a.player_id)) : null;
+  const rows = h('div', { class: 'rows' }), count = h('strong', {});
+  const paint = () => {
+    count.textContent = `${pick.size} de ${all.length} convocados`;
+    rows.replaceChildren(...all.map((p) => h('label', { class: 'row conv-row' }, jersey(p, 'sm'),
+      h('span', { class: 'row-main' }, h('strong', {}, p.name), isApart(p) ? h('span', { class: 'row-sub' }, 'Entrena contigo aparte') : null),
+      h('input', { type: 'checkbox', checked: pick.has(p.id) ? true : null, 'aria-label': `Convocar a ${p.name}`, onchange: (e) => { if (e.target.checked) pick.add(p.id); else pick.delete(p.id); count.textContent = `${pick.size} de ${all.length} convocados`; } }))));
+  };
+  const setAll = (ids) => { pick.clear(); ids.forEach((id) => pick.add(id)); paint(); };
+  paint();
+  let sh;
+  sh = openSheet({ title: 'Elegir convocados', body: h('div', { class: 'stack' },
+    h('p', { class: 'row-sub', style: { margin: 0 } }, 'Palomea a los que van a este entreno. A los demás no se les pone falta ni salen al pasar lista.'),
+    h('div', { class: 'cluster' },
+      h('button', { class: 'btn sm', type: 'button', onclick: () => setAll(all.filter((p) => !isApart(p)).map((p) => p.id)) }, 'Todo el equipo'),
+      came && came.size ? h('button', { class: 'btn sm', type: 'button', onclick: () => setAll([...came].filter((id) => all.some((p) => p.id === id))) }, 'Los que vinieron la última vez') : null,
+      h('button', { class: 'btn sm ghost', type: 'button', onclick: () => setAll([]) }, 'Nadie')),
+    count, rows,
+    h('button', { class: 'btn primary', type: 'button', onclick: () => {
+      if (!pick.size) { toast('Convoca por lo menos a uno'); return; }
+      const team = all.filter((p) => !isApart(p)).map((p) => p.id);
+      const same = pick.size === team.length && team.every((id) => pick.has(id));
+      saveConv(s, same ? null : [...pick]); sh?.close(); toast(`Convocados: ${pick.size}`);
+    } }, ic('check', 18), 'Guardar convocados')) });
+}
 
 export default function sesion(ctx) {
   const s = getSession(ctx.args[0]);
@@ -68,13 +110,14 @@ export default function sesion(ctx) {
       h('button', { class: 'btn sm primary', type: 'button', onclick: () => pickExerciseSheet((blk) => { setPlan([...plan, { ...blk, note: '' }]); toast('Bloque agregado'); }) }, ic('plus', 16), 'Ejercicio'))),
     suggest, balance, blocks);
 
+  const conv = convBox(s, marks);
   const notes = h('textarea', { maxlength: 1200, placeholder: 'Recordatorios para el grupo o cómo salió', value: s.notes || '', 'aria-label': 'Notas del entrenamiento', onchange: (e) => patch('sessions', s.id, { notes: e.target.value.trim() }) });
   const att = marks.length ? (() => { const c = { presente: 0, retardo: 0, falta: 0, justificada: 0 }; marks.forEach((m) => c[m.status]++); return c; })() : null;
 
   return { title: s.title || 'Entrenamiento', back: '#/sesiones', actions: plan.length ? [{ label: 'Imprimir plan', icon: 'printer', onClick: () => window.print() }] : [],
-    el: h('div', { class: 'page' }, h('div', { class: 'no-print stack' }, head), planBox,
+    el: h('div', { class: 'page' }, h('div', { class: 'no-print stack' }, head, conv), planBox,
       att ? h('section', { class: 'no-print' }, sectionTitle('Asistencia'), h('div', { class: 'cluster' }, ['presente', 'retardo', 'falta', 'justificada'].map((k) => h('span', { class: `chip ${{ presente: 'ok', retardo: 'warn', falta: 'bad', justificada: 'info' }[k]}` }, `${STATUS_LABEL[k]} ${att[k]}`)),
-        h('span', { class: 'chip' }, `Sin lista ${Math.max(0, players().length - marks.length)}`))) : null,
+        h('span', { class: 'chip' }, `Sin lista ${convocados(s).filter((p) => !marks.some((m) => m.player_id === p.id)).length}`))) : null,
       h('section', { class: 'no-print' }, sectionTitle('Notas'), h('div', { class: 'field' }, notes, h('span', { class: 'hint' }, 'Los jugadores las ven cuando el entrenamiento está publicado. Para algo privado usa las notas de cada jugador.'))),
       printable(s, plan)) };
 }

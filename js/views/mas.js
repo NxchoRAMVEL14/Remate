@@ -53,7 +53,7 @@ export default function mas() {
     item('#/lab', 'zap', 'Laboratorio', 'Tu salto vertical, tu visión de juego y tu coaching. Solo tú lo ves.'),
     item('#/yo', 'user-check', 'Mi perfil de jugador', me ? `Entra como ${me.name}: tu tarjeta, radar, Teoría, En casa y retos.` : 'Si juegas con ellos (por ejemplo en un equipo mixto), ten tu propia ficha.'),
     item('#/fit', 'dumbbell', 'Remate Fit', 'Zona de adultos: gym, comida y recetas, peso, medidas y pasos. Solo mayores de 18 que tú actives.'),
-    item('#/azar', 'dice-5', 'Azar y equipos', 'El dado para elegir a alguien y equipos parejos de 6 vs 6 o cascaritas.'),
+    item('#/azar', 'dice-5', 'Azar y equipos', 'El dado para elegir a alguien, equipos parejos de 6 vs 6 o 5 vs 5, cascaritas y duelos de 1 vs 1.'),
     item('#/ejercicios', 'book-open', 'Ejercicios', 'La biblioteca con diagramas, progresiones y tus ejercicios propios.'),
     item('#/ruta', 'flag', 'Ruta', 'Los 6 niveles, exámenes y retos de tus jugadores.', claims ? `${claims} por revisar` : null),
     item('#/reportes', 'file-text', 'Reportes', 'Reportes imprimibles por jugador y del grupo.'),

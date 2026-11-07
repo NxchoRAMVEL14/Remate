@@ -1,7 +1,7 @@
 // Asistir: lo que hace un ayudante (asistente adulto o capitán): pasar lista y capturar partidos.
 // También la lista con QR (v3.7): el entrenador muestra un QR que cambia cada 20 segundos y cada jugador marca su llegada.
 import { h, ic, fmtDate, todayStr, addDays, plural, toast, confirmSheet, fmtTime } from '../util.js';
-import { state, group, sessions, players, isStaff, teamReady, sql37Ready, add, patch, settings, setAttendance, replaceRows, pendingCount, refresh, playerById } from '../store.js';
+import { state, group, sessions, players, isStaff, teamReady, sql37Ready, add, patch, settings, setAttendance, replaceRows, pendingCount, refresh, playerById, convocados } from '../store.js';
 import { client, isNetworkError, friendly } from '../cloud.js';
 import { attendanceSheet } from './sheets-session.js';
 import { matchSheet, matchesSorted, resultChip } from './partidos.js';
@@ -177,7 +177,9 @@ export function listaQr(ctx) {
   const mark = (pid) => state.data.attendance.find((a) => a.session_id === s.id && a.player_id === pid) || null;
   const here = list.filter((p) => ['presente', 'retardo'].includes(mark(p.id)?.status)).sort((a, b) => String(mark(a.id).created_at || '').localeCompare(String(mark(b.id).created_at || '')));
   const other = list.filter((p) => ['falta', 'justificada'].includes(mark(p.id)?.status));
-  const missing = list.filter((p) => !mark(p.id));
+  // v3.20: «Faltan» son solo los convocados; al cerrar, solo ellos reciben falta.
+  const conv = new Set(convocados(s).map((p) => p.id));
+  const missing = list.filter((p) => !mark(p.id) && conv.has(p.id));
   if (!open) {
     stopQr();
     const hours = h('select', { 'aria-label': 'Abierta por' }, options([['1', '1 hora'], ['2', '2 horas'], ['3', '3 horas']], '2'));

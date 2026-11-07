@@ -9,7 +9,8 @@ import { fitOk, isAdult, ageFrom } from '../calc.js';
 import { num } from '../lab-calc.js';
 import { FIT_BY_ID, fitName, PLACES, FIT_GOALS, FIT_EXP, FIT_MINUTES, normFit, buildFit, nextFitStep, fitWeek, weeklyAverages, weeklyRate, rateText,
   MEASURES, MEASURE_TIPS, STEP_NOTE, vbFromRemate, FIT_SOURCES, MUSCLES, VOLUME_TARGET, ROLE, NEED, TIER, splitName, ALL_EX, fitDefaultRx, cleanFitCustom,
-  registerOwn, cleanOwn, OWN_MUS, rampOf, applyRamp, e1rm, dayMinutes, fitAvailable } from '../content/fit.js';
+  registerOwn, cleanOwn, OWN_MUS, rampOf, applyRamp, e1rm, dayMinutes, fitAvailable, fitSwap } from '../content/fit.js';
+import { openActive, activeButton, circuitSheet, circuitDraft } from './activo.js';
 import { TEMPLATES, proposeDay, musOf, MUS_BY } from '../content/musculos.js';
 import { WD_NAMES } from './rutina-editor.js';
 import { editorPage, pickExercise } from './rutina-editor.js';
@@ -109,6 +110,8 @@ function planToday(pid, r, today = todayStr()) {
   for (let k = 1; k <= 7 && !next; k++) { const x = r.days.find((d) => d.wd === (wd + k) % 7); if (x) { next = x; inDays = k; } }
   return { fixed, today: todays || null, done, next, inDays, day: todays && !done ? todays : next || todays || r.days[0] };
 }
+
+const PLACE_WORD = { completo: 'en el gym', basico: 'en el gym', casa: 'en casa', peso: 'solo con tu peso', cancha: 'en la cancha' };
 
 // ---------- textos ----------
 const restText = (s) => (s < 60 ? `${s} s` : s % 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s / 60} min`);
@@ -212,9 +215,11 @@ function todayTab(ctx, me, canEdit) {
       h('h2', {}, head),
       h('div', {}, `Día ${day.key}: ${plural(day.items.length, 'ejercicio', 'ejercicios')}, ≈ ${day.min} min${day.light ? ' · día ligero de pierna por tu voleibol' : ''}${todayExtra.length ? ` · ${todayExtra.join(' y ')}` : ''}`),
       h('div', { class: 'cluster' },
-        canEdit ? h('a', { class: 'btn ball', href: `#/fit/registrar/${day.key}` }, ic('check', 18), `Registrar el día ${day.key}`) : null,
+        canEdit ? h('a', { class: 'btn ball', href: `#/fit/registrar/${day.key}/activo` }, ic('play', 18), 'Modo activo') : null,
+        canEdit ? h('a', { class: 'btn', href: `#/fit/registrar/${day.key}` }, ic('check', 18), `Registrar el día ${day.key}`) : null,
         h('a', { class: 'btn', href: '#/fit/rutina' }, ic('dumbbell', 18), 'Ver la rutina'),
-        canEdit ? h('a', { class: 'btn', href: '#/fit/registrar/libre' }, ic('plus', 18), 'Sesión libre') : null)),
+        canEdit ? h('a', { class: 'btn', href: '#/fit/registrar/libre' }, ic('plus', 18), 'Sesión libre') : null,
+        canEdit ? h('button', { type: 'button', class: 'btn', onclick: () => fitCircuit(me, spec) }, ic('zap', 18), 'Circuito exprés') : null)),
     wk?.light ? note('Semana de descarga: una serie menos en cada ejercicio y sin subir peso. Te recuperas y luego sigues subiendo.', 'info') : null,
     ramp ? note(`Regreso gradual, semana ${ramp.week} de 2: una serie menos y una repetición más de sobra en cada ejercicio. Así tu cuerpo se readapta sin lastimarte.`, 'info') : null,
     longPause && canEdit ? h('div', { class: 'note info stack' }, h('span', {}, `Tu última sesión fue el ${longDay(lastGym)}. Si vienes regresando, activa el regreso gradual: 2 semanas con una serie menos.`),
@@ -403,15 +408,44 @@ function logPage(ctx, me) {
   const ui = ctx.ui, canSave = !ctx.readonly;
   if (!ui.draft) {
     let saved = null; try { saved = JSON.parse(ls.get(DRAFT(me.id)) || 'null'); } catch { saved = null; }
-    if (saved && saved.key === day.key && saved.goal === spec.goal && Date.now() - (saved.at || 0) < 12 * 3600e3) { ui.draft = saved; ui.recovered = true; }
+    if (saved && saved.key === day.key && saved.goal === spec.goal && Date.now() - (saved.at || 0) < 12 * 3600e3) { ui.draft = saved; ui.recovered = !saved.circuit; }
     else ui.draft = { key: day.key, goal: spec.goal, date: todayStr(), minutes: day.min, rpe: null, pain: false, note: '', at: Date.now(),
       entries: day.items.map((rx) => { const last = lastFor(me.id, rx.ex); return { ex: rx.ex, s: Array.from({ length: rx.sets }, (_, i) => [last?.s?.[i]?.[0] ?? last?.s?.[0]?.[0] ?? '', '']) }; }) };
   }
   const dr = ui.draft;
   let timer;
   const persist = () => { dr.at = Date.now(); clearTimeout(timer); timer = setTimeout(() => ls.set(DRAFT(me.id), JSON.stringify(dr)), 300); };
+  const persistNow = () => { dr.at = Date.now(); clearTimeout(timer); ls.set(DRAFT(me.id), JSON.stringify(dr)); };
   const err = h('div', { class: 'note bad', role: 'alert', hidden: true });
   const rxOf = (entry) => day.items.find((x) => x.ex === entry.ex) || entry.rx || fitDefaultRx(entry.ex, spec);
+  // v3.20: dónde entrenas hoy. Lo que no se puede hacer ahí se cambia por uno equivalente (y regresa si vuelves al gym).
+  dr.place = PLACES[dr.place] ? dr.place : spec.place;
+  const swapAll = (place) => {
+    const changed = [], missing = [];
+    const used = new Set();
+    for (const e of dr.entries) {
+      const orig = e.orig || e.ex, want = fitSwap(orig, place, spec, { slot: day.items.find((x) => x.ex === orig)?.pat, exclude: [...used] });
+      if (!want) { missing.push(FIT_BY_ID[orig]?.name || orig); if (e.orig) { e.ex = e.orig; delete e.orig; delete e.rx; } used.add(e.ex); continue; }
+      if (want !== e.ex) {
+        const n = e.s.length, nr = fitDefaultRx(want, spec), was = e.ex;
+        if (want === orig) { delete e.orig; delete e.rx; } else { e.orig = orig; e.rx = { ...nr, sets: n }; }
+        e.ex = want; e.s = Array.from({ length: n }, () => ['', '']);
+        if (was !== want) changed.push([FIT_BY_ID[was]?.name, FIT_BY_ID[want]?.name]);
+      }
+      used.add(e.ex);
+    }
+    dr.place = place; persistNow();
+    return { changed, missing };
+  };
+  const placeSeg = h('div', { class: 'seg act-place', role: 'group', 'aria-label': '¿Dónde entrenas hoy?' },
+    [[spec.place === 'completo' || spec.place === 'basico' ? spec.place : 'completo', 'Gym'], ['casa', 'Casa'], ['peso', 'Solo tu peso'], ['cancha', 'Cancha']].map(([k, t]) => h('button', { type: 'button', 'aria-pressed': dr.place === k ? 'true' : 'false',
+      onclick: () => { const r = swapAll(k); ui.placeMsg = r; ctx.rerender(); } }, t)));
+  const placeMsg = ui.placeMsg ? (ui.placeMsg.changed.length || ui.placeMsg.missing.length ? h('div', { class: 'note info' },
+    ui.placeMsg.changed.length ? `Cambié ${plural(ui.placeMsg.changed.length, 'ejercicio', 'ejercicios')} para entrenar ${PLACE_WORD[dr.place] || 'ahí'}: ${ui.placeMsg.changed.map(([a, b]) => `${a} → ${b}`).join('; ')}.` : '',
+    ui.placeMsg.missing.length ? ` Sin equivalente aquí: ${ui.placeMsg.missing.join(', ')} (hazlo otro día o quítalo).` : '') : note(`Todo se puede hacer ${PLACE_WORD[dr.place] || 'ahí'}.`)) : null;
+  const goActive = () => openActive({ title: day.key === 'L' ? (dr.name || 'Sesión libre') : `Día ${day.key}: ${day.name}`, entries: dr.entries, byId: FIT_BY_ID, rxOf, persist: persistNow,
+    circuit: dr.circuit || null, onClose: ({ secs, quiet }) => { if ((dr.minutes === '' || dr.minutes == null || dr.circuit) && secs > 60) dr.minutes = Math.max(1, Math.round(secs / 60)); persistNow(); if (!quiet) ctx.rerender(); } });
+  if (ctx.args[2] === 'activo' && !ui.autoAct && dr.entries.length) { ui.autoAct = true; setTimeout(goActive, 60); }
   const autoRest = ls.get('remate.fit.autorest') !== '0';
   const exBlock = (entry, k) => {
     const rx = rxOf(entry), ex = FIT_BY_ID[entry.ex];
@@ -490,7 +524,7 @@ function logPage(ctx, me) {
     const cm = dr.cmin === '' || dr.cmin == null ? 0 : Math.round(Number(dr.cmin));
     if (!(cm >= 0 && cm <= 180)) return fail('El cardio va de 0 a 180 minutos.');
     const when = dr.date || todayStr(), anyPain = !!dr.pain || sets.some((x) => x.pain);
-    add('fitLogs', { player_id: me.id, kind: 'gym', day: when, data: { key: day.key, name: day.name, goal: spec.goal, minutes: m, rpe: dr.rpe || null, pain: anyPain, note: (dr.note || '').trim().slice(0, 300), sets: sets.slice(0, 16), ...(cm ? { cardio: { min: cm, tipo: dr.ctipo || 'caminadora' } } : {}) } });
+    add('fitLogs', { player_id: me.id, kind: 'gym', day: when, data: { key: day.key, name: day.key === 'L' && dr.name ? dr.name : day.name, goal: spec.goal, ...(dr.place && dr.place !== spec.place ? { place: dr.place } : {}), minutes: m, rpe: dr.rpe || null, pain: anyPain, note: (dr.note || '').trim().slice(0, 300), sets: sets.slice(0, 16), ...(cm ? { cardio: { min: cm, tipo: dr.ctipo || 'caminadora' } } : {}) } });
     if (cm) { const a = activityOf(me.id, when); saveActivity(me.id, when, { cmin: (Number(a.cmin) || 0) + cm, ctipo: dr.ctipo || 'caminadora' }); }
     ls.del(DRAFT(me.id)); ui.draft = null;
     toast('¡Bien! Sesión guardada', 2800);
@@ -498,6 +532,9 @@ function logPage(ctx, me) {
   };
   const el = h('div', { class: 'page' },
     ui.recovered ? note('Recuperé lo que llevabas anotado de esta sesión.') : null,
+    dr.circuit ? null : h('section', { class: 'panel stack' }, h('h3', {}, '¿Dónde entrenas hoy?'), placeSeg, placeMsg),
+    dr.entries.length ? h('section', { class: 'panel stack act-cta' }, h('div', { class: 'split' }, h('div', {}, h('h3', {}, 'Modo activo'),
+      h('p', { class: 'row-sub', style: { margin: 0 } }, 'A pantalla completa: el ejercicio en grande, el tiempo y el descanso. Pasa solo de uno a otro y lo va anotando.')), activeButton(goActive, 'Empezar'))) : null,
     h('p', { style: { margin: 0 } }, 'Anota lo que vas haciendo. Lo que escribas se guarda en este celular hasta que toques «Guardar sesión».'),
     dr.entries.some((e) => lastFor(me.id, e.ex)) ? h('div', { class: 'cluster' }, h('button', { type: 'button', class: 'btn sm', onclick: fillAll }, ic('copy', 16), 'Llenar todo como la vez pasada'),
       h('label', { class: 'check' }, autoCb, h('span', {}, 'Descanso automático'))) : h('label', { class: 'check' }, autoCb, h('span', {}, 'Descanso automático al anotar una serie')),
@@ -513,7 +550,17 @@ function logPage(ctx, me) {
       h('button', { class: 'btn ghost', type: 'button', onclick: async () => {
         if (await confirmSheet({ title: '¿Descartar lo anotado?', text: 'Se borra lo que llevas de esta sesión.', ok: 'Descartar', danger: true })) { ls.del(DRAFT(me.id)); ui.draft = null; location.hash = back; }
       } }, 'Descartar')));
-  return { title: day.key === 'L' ? 'Sesión libre' : `Día ${day.key}`, sub: day.key === 'L' ? 'Lo que hiciste hoy' : day.name, back, el };
+  return { title: day.key === 'L' ? (dr.name || 'Sesión libre') : `Día ${day.key}`, sub: day.key === 'L' ? (dr.circuit ? `${plural(dr.circuit.rounds, 'ronda', 'rondas')} · ${dr.circuit.work} s / ${dr.circuit.rest} s` : 'Lo que hiciste hoy') : day.name, back, el };
+}
+
+function fitCircuit(me, spec) {
+  const tierMax = (FIT_EXP[spec.exp]?.tier || 2);
+  circuitSheet({ tierMax, byId: FIT_BY_ID, defPlace: 'peso', places: [['peso', 'Solo tu peso'], ['casa', 'Casa'], ['cancha', 'Cancha']],
+    ok: (id, place) => fitAvailable(FIT_BY_ID[id], place),
+    onStart: (c, place) => {
+      const dr = circuitDraft(c, { goal: spec.goal, date: todayStr(), minutes: null, rpe: null, pain: false, at: Date.now(), place });
+      ls.set(DRAFT(me.id), JSON.stringify(dr)); location.hash = '#/fit/registrar/libre/activo';
+    } });
 }
 
 // ---------- progreso ----------

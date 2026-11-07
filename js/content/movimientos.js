@@ -138,6 +138,14 @@ export const MOVES = {
   pasos_bloqueo: { name: 'Pasos de bloqueo', view: 'front', frames: [P({ x: -34, L: [15, -15, 90], R: [15, -15, 90], A: [130, 170], B: [130, 170] }), P({ x: -10, L: [25, -15, 90], R: [-10, -15, 90], A: [130, 170], B: [130, 170] }), P({ x: 14, L: [30, -25, 90], R: [30, -25, 90], A: [130, 170], B: [130, 170] }), P({ x: 14, up: 28, L: [4, 0, 90], R: [4, 0, 90], A: [172, 176], B: [172, 176] })], hold: [0.3, 0, 0, 0.2], ms: 2400 },
   defensa: { name: 'Defensa en sombra', frames: [READY, P({ x: 14, t: 35, L: [85, -35, 90], R: [-45, -70, 50], A: [50, 50], B: [50, 50] }), READY], hold: [0.3, 0.3, 0], ms: 1600 },
   reaccion: { name: 'Juego de reacción', view: 'front', frames: [P({ x: 0, L: [20, -15, 90], R: [20, -15, 90], A: [35, 50], B: [35, 50] }), P({ x: 26, L: [35, -15, 90], R: [5, -10, 90], A: [35, 50], B: [35, 50] }), P({ x: 0, L: [20, -15, 90], R: [20, -15, 90], A: [35, 50], B: [35, 50] }), P({ x: -26, L: [5, -10, 90], R: [35, -15, 90], A: [35, 50], B: [35, 50] })], ms: 1800 },
+  // ---------- v3.20: con tu peso (calistenia y resistencia) ----------
+  burpee: { name: 'Burpee', frames: [P({ A: [10, 15], B: [-6, 0] }), P({ t: 45, L: [100, -30, 90], R: [100, -30, 90], A: [22, 22], B: [22, 22] }), PLANK_HI, P({ t: 45, L: [100, -30, 90], R: [100, -30, 90], A: [22, 22], B: [22, 22] }), JUMP_UP(28)], hold: [0.05, 0.1, 0.2, 0.1, 0.1], ms: 2600 },
+  tijeras: { name: 'Saltos de tijera', view: 'front', frames: [P({ L: [3, 0, 90], R: [3, 0, 90], A: [8, 10], B: [8, 10] }), P({ up: 6, L: [22, 0, 90], R: [22, 0, 90], A: [168, 172], B: [168, 172] })], ms: 900 },
+  escalador: { name: 'Escaladores', frames: [P({ ...PLANK_HI, L: [45, -95, 0] }), P({ ...PLANK_HI, R: [45, -95, 0] })], ms: 700 },
+  superman: { name: 'Superman', frames: [P({ t: 92, L: [-92, -92, 0], R: [-92, -92, 0], A: [90, 90], B: [90, 90] }), P({ t: 80, L: [-102, -102, 0], R: [-102, -102, 0], A: [102, 102], B: [102, 102] })], hold: [0.2, 0.5], ms: 2400 },
+  hueco: { name: 'Cuerpo hueco', frames: [SUPINE({ t: -78, L: [122, 122, 160], R: [122, 122, 160], A: [-118, -118], B: [-118, -118] }), SUPINE({ t: -74, L: [128, 128, 165], R: [128, 128, 165], A: [-112, -112], B: [-112, -112] })], ms: 2600 },
+  oso: { name: 'Caminata de oso', frames: [P({ t: 86, L: [35, -60, 20], R: [5, -85, 10], A: [5, 5], B: [-15, -15] }), P({ t: 86, L: [5, -85, 10], R: [35, -60, 20], A: [-15, -15], B: [5, 5] })], ms: 900 },
+  pica: { name: 'Lagartija en pica', frames: [P({ t: 128, L: [-48, -48, 0], R: [-48, -48, 0], A: [28, 28], B: [28, 28] }), P({ t: 145, L: [-55, -55, 0], R: [-55, -55, 0], A: [-25, 55], B: [-25, 55] })], hold: [0.3, 0.3], ms: 2400 },
 };
 Object.assign(MOVES, MACHINE_MOVES);   // v3.14: máquinas y poleas
 for (const [id, m] of Object.entries(MOVES)) m.id = id;
@@ -167,6 +175,11 @@ const FIG = {
   'f-elev-lateral': 'elev_lateral', 'f-elev-lateral-liga': 'elev_lateral', 'f-apertura': 'aperturas', 'f-press-inclinado': 'press_mancuernas', 'f-flexion-pies': 'lagartija',
   'f-press-liga': 'press_hombro', 'f-remo-barra': 'remo_barra', 'f-remo-polea': 'remo_sentado', 'f-remo-liga': 'remo_de_pie', 'f-jalon-liga': 'jalon_polea',
   'f-ext-cuad': 'mq_ext_cuad', 'f-sent-pc': 'sentadilla', 'f-zancada-atras': 'zancada', 'f-sprint': 'aceleracion',
+  // v3.20: con tu peso
+  'g-pared': 'pared_sentado', 'g-puente': 'puente', 'g-talones-1': 'talones_1', 'g-sentadilla-salto': 'sentadilla_salto', 'g-lagartija-rodillas': 'lagartija',
+  'g-lagartija-diamante': 'lagartija', 'g-pike': 'pica', 'g-remo-mesa': 'remo_invertido', 'g-dominada-neg': 'dominada', 'g-plancha': 'plancha',
+  'g-toques-hombro': 'toques_hombro', 'g-hueco': 'hueco', 'g-superman': 'superman', 'g-escalador': 'escalador', 'g-burpee': 'burpee', 'g-tijera': 'tijeras',
+  'g-rodillas': 'rodillas_arriba', 'g-oso': 'oso',
   // En casa
   'h-tobillo': S('movilidad_tobillo', 'flexor_cadera'), 'h-sentadilla': 'sentadilla', 'h-zancada': 'zancada', 'h-puente': 'puente', 'h-talones': 'talones',
   'h-plancha': S('plancha', 'plancha_lateral'), 'h-hombro': 'ytw', 'h-lagartija': 'lagartija', 'h-equilibrio': 'equilibrio', 'h-saltitos': S('saltitos', 'salto_congela'),

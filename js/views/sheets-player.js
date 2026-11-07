@@ -1,6 +1,6 @@
 // Hojas emergentes del entrenador sobre un jugador: datos, evaluación, examen, código y notas.
 import { h, ic, openSheet, confirmSheet, toast, copyText, shareText, newJoinCode, todayStr, fmtDate } from '../util.js';
-import { add, patch, remove, group, rate, recordExam, state, multiTeam, teams, teamOf, teamsOf, equiposReady, gymReady, sql311Ready } from '../store.js';
+import { add, patch, remove, group, rate, recordExam, state, multiTeam, teams, teamOf, teamsOf, equiposReady, gymReady, sql311Ready, isApart, setApart } from '../store.js';
 import { SKILLS, PHASES, POSITIONS, BRANCHES, HANDS, POSITION_NAME } from '../content/skills.js';
 import { LEVELS, required } from '../content/levels.js';
 import { currentRatings, levelGap, nextLevelN, ageFrom } from '../calc.js';
@@ -46,6 +46,10 @@ export function playerFormSheet(p = null, { self = false, name: suggested = '', 
   };
   birth?.addEventListener('input', paintAge); paintAge();
   const num = (el) => (el.value === '' ? null : Number(el.value));
+  // v3.20: alguien que entrena contigo fuera de los entrenos del equipo (por ejemplo en casa).
+  const apart = h('input', { type: 'checkbox', checked: p && isApart(p) ? true : null });
+  const apartRow = self ? null : h('label', { class: 'check' }, apart, h('span', {}, h('strong', {}, 'Entrena conmigo aparte'), ' (no va a los entrenos del equipo)', h('br'),
+    h('span', { class: 'row-sub' }, 'No se convoca sola a los entrenos, no se le pone falta y no cuenta en las faltas ni en el promedio de asistencia. Sigue teniendo su gym, su Remate Fit y todo lo demás.')));
   return openSheet({
     title: self ? 'Mi perfil de jugador' : p ? 'Editar jugador' : 'Nuevo jugador',
     body: h('div', { class: 'stack' },
@@ -57,6 +61,7 @@ export function playerFormSheet(p = null, { self = false, name: suggested = '', 
       birth ? h('div', { class: 'field' }, h('span', { class: 'label' }, 'Fecha de nacimiento'), birth, ageOut) : null,
       fitRow,
       teamsBox ? field('También juega en', teamsBox, 'Opcional. Ve la convocatoria y sale en la lista de cada equipo que marques.') : null,
+      apartRow,
       self ? null : h('label', { class: 'check' }, consent, 'Ya tengo la autorización de su madre, padre o tutor')),
     actions: [{ label: 'Cancelar' }, { label: 'Guardar', kind: 'primary', onClick: () => {
       const n = name.value.trim();
@@ -74,9 +79,9 @@ export function playerFormSheet(p = null, { self = false, name: suggested = '', 
       if (team) data.team = team.value;
       if (teamsBox) data.teams = teams().map((t) => t.id).filter((id) => moreTeams.has(id) && id !== team.value);
       if (extraBox) data.positions = POSITIONS.map((x) => x.id).filter((id) => extra.has(id) && id !== pos.value && id !== 'sin_definir');
-      if (p) { patch('players', p.id, data); toast('Guardado'); onSaved?.(p); }
+      if (p) { patch('players', p.id, data); if (!self && apart.checked !== isApart(p)) setApart(p.id, apart.checked); toast('Guardado'); onSaved?.(p); }
       else if (self) { const np = add('players', { ...data, group_id: group()?.id, level: 1 }); toast('Listo: ya tienes tu perfil de jugador'); onSaved?.(np); }
-      else { const np = add('players', { ...data, group_id: group()?.id, level: 1 }); toast('Jugador agregado'); setTimeout(() => codeSheet(np), 200); }
+      else { const np = add('players', { ...data, group_id: group()?.id, level: 1 }); if (apart.checked && np?.id) setApart(np.id, true); toast('Jugador agregado'); setTimeout(() => codeSheet(np), 200); }
     } }],
   });
 }

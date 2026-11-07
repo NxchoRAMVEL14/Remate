@@ -1,6 +1,6 @@
 // Hojas emergentes de sesiones y ejercicios: crear sesión, pasar lista, elegir ejercicio, ejercicio propio.
 import { h, ic, openSheet, confirmSheet, toast, todayStr, addDays, parseDate, DAYS, buildICS, download, copyText, plural, fmtDate, googleCalUrl, weeklyRule, nextWeekday } from '../util.js';
-import { add, patch, remove, group, settings, players, setAttendance, state, calReady, randomToken, multiTeam, teamName, teamOf } from '../store.js';
+import { add, patch, remove, group, settings, players, setAttendance, state, calReady, randomToken, multiTeam, teamName, teamOf, convocados } from '../store.js';
 import { SKILLS, SKILL_BY_ID } from '../content/skills.js';
 import { TEMPLATES, TEMPLATE_BY_ID, planFromTemplate } from '../content/templates.js';
 import { allExercises, filterExercises, MATERIAL, KINDS, levelLabel } from '../content/exercises.js';
@@ -75,8 +75,14 @@ export async function undoDone(s) {
 }
 
 export function attendanceSheet(s) {
-  const list = players();
   const mark = (pid) => state.data.attendance.find((a) => a.session_id === s.id && a.player_id === pid)?.status || null;
+  // v3.20: solo los convocados (y los que ya tienen marca); «Ver a todos» muestra al resto.
+  const convIds = new Set(convocados(s).map((p) => p.id));
+  let showAll = false, list = [];
+  const others = () => players().filter((p) => !convIds.has(p.id) && !mark(p.id));
+  const pickList = () => { list = showAll ? players() : players().filter((p) => convIds.has(p.id) || mark(p.id)); };
+  pickList();
+  const allBtn = h('button', { class: 'btn sm ghost', type: 'button', onclick: () => { showAll = !showAll; pickList(); paint(); } });
   const future = s.session_date > todayStr();
   // Un entrenamiento que todavía no llega: primero se confirma, para no dejarlo como hecho por un toque de más.
   let armed = !future || marksOf(s).length > 0;
@@ -94,7 +100,10 @@ export function attendanceSheet(s) {
     bulk.disabled = !armed;
     counts.replaceChildren(...ATT.map(([k]) => h('span', { class: `chip ${{ presente: 'ok', retardo: 'warn', falta: 'bad', justificada: 'info' }[k]}` }, `${STATUS_LABEL[k]} ${c[k]}`)),
       h('span', { class: 'chip' }, `Sin lista ${c.sin}`));
-    rows.replaceChildren(...list.map((p) => h('div', { class: 'row' }, jersey(p, 'sm'), h('span', { class: 'row-main' }, h('strong', {}, p.name)),
+    const n = others().length;
+    allBtn.hidden = !n && !showAll;
+    allBtn.textContent = showAll ? 'Solo los convocados' : `Ver a los no convocados (${n})`;
+    rows.replaceChildren(...list.map((p) => h('div', { class: 'row' }, jersey(p, 'sm'), h('span', { class: 'row-main' }, h('strong', {}, p.name), !convIds.has(p.id) ? h('span', { class: 'row-sub' }, 'No convocado') : null),
       h('div', { class: 'att', role: 'group', 'aria-label': `Asistencia de ${p.name}` }, ATT.map(([k, l, c2]) => h('button', {
         type: 'button', class: c2, 'aria-pressed': String(mark(p.id) === k), 'aria-label': STATUS_LABEL[k], title: STATUS_LABEL[k], disabled: armed ? null : true,
         onclick: () => set(p.id, mark(p.id) === k ? null : k) }, l))))));
@@ -114,7 +123,7 @@ export function attendanceSheet(s) {
     title: 'Pasar lista',
     body: h('div', { class: 'stack' }, guard, futureTip,
       list.length ? h('div', { class: 'cluster' }, bulk) : null,
-      counts, list.length ? rows : note('Primero agrega jugadores.'),
+      counts, list.length ? rows : note(players().length ? 'No hay convocados para este entreno.' : 'Primero agrega jugadores.'), allBtn,
       h('p', { class: 'row-sub' }, 'P presente, R retardo, F falta, J justificada. Toca otra vez para borrar la marca.')),
     actions: [{ label: 'Listo', kind: 'primary' }],
   });

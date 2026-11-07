@@ -180,28 +180,28 @@ const R = [
     steps: ['Lava las lentejas y cuécelas en 6 tazas de agua con sal, 25 minutos.', 'Mientras, cuece los huevos 10 minutos y pélalos.', 'Licúa jitomate, cebolla y ajo; fríe la salsa en el aceite 3 minutos y agrégala a las lentejas con la zanahoria en cubos.', 'Cocina 10 minutos más. Sirve cada plato con un huevo partido y 2 tortillas.', 'Duran 4 días en el refrigerador.'],
     eq: { leg: 2, aoa3: 1, ver: 1, gra: 0.5, cer: 2 }, tip: 'Una de las comidas más baratas con buena proteína. Para más proteína, 2 huevos por plato.' },
   { id: 'frijoles-pollo', name: 'Frijoles de la olla con pollo deshebrado y arroz', meals: ['com', 'post'], diet: ['sl', 'sg'], min: 50, serv: 4, prep: true, eco: true,
-    ing: [[3, 'taza', 'Frijoles cocidos', AB], [500, 'g', 'Pechuga de pollo', CA], [2, 'taza', 'Arroz cocido', AB], [1, 'pz', 'Jitomate', FV], [0.5, 'pz', 'Cebolla', FV], [2, 'pz', 'Chile serrano', FV], [null, '', 'Cilantro', FV], [2, 'cdta', 'Aceite', AB]],
-    steps: ['Cuece la pechuga en agua con sal, ajo y cebolla, 25 minutos; deshébrala.', 'Haz pico de gallo con jitomate, cebolla, chile y cilantro.', 'Calienta los frijoles con su caldo.', 'Sirve frijoles, pollo y arroz en un plato hondo con el pico de gallo encima.'],
+    ing: [[3, 'taza', 'Frijoles cocidos', AB], [500, 'g', 'Pechuga de pollo', CA], [0.67, 'taza', 'Arroz', AB], [1, 'pz', 'Jitomate', FV], [0.5, 'pz', 'Cebolla', FV], [2, 'pz', 'Chile serrano', FV], [null, '', 'Cilantro', FV], [2, 'cdta', 'Aceite', AB]],
+    steps: ['Cuece la pechuga en agua con sal, ajo y cebolla, 25 minutos; deshébrala. Mientras, cuece el arroz (2/3 de taza crudo rinde 2 tazas).', 'Haz pico de gallo con jitomate, cebolla, chile y cilantro.', 'Calienta los frijoles con su caldo.', 'Sirve frijoles, pollo y arroz en un plato hondo con el pico de gallo encima.'],
     eq: { leg: 1.5, aoa1: 3.5, cer: 2, ver: 0.5, gra: 0.5 } },
   { id: 'huevo-nopales', name: 'Huevo con nopales y frijoles', meals: ['des', 'cen'], diet: ['veg', 'sl', 'sg'], min: 15, serv: 1, eco: true,
-    ing: [[2, 'pz', 'Huevo', LH], [1, 'taza', 'Nopales en tiras', FV], [0.25, 'pz', 'Cebolla', FV], [0.5, 'pz', 'Jitomate', FV], [1, 'cdta', 'Aceite', AB], [0.5, 'taza', 'Frijoles cocidos', AB], [2, 'pz', 'Tortillas de maíz', TP]],
+    ing: [[2, 'pz', 'Huevo', LH], [1, 'taza', 'Nopales', FV], [0.25, 'pz', 'Cebolla', FV], [0.5, 'pz', 'Jitomate', FV], [1, 'cdta', 'Aceite', AB], [0.5, 'taza', 'Frijoles cocidos', AB], [2, 'pz', 'Tortillas de maíz', TP]],
     steps: ['Cuece los nopales en agua con sal 10 minutos (o asados) y escúrrelos.', 'Sofríe cebolla y jitomate en el aceite, agrega los nopales y luego los huevos batidos.', 'Sirve con los frijoles y las tortillas.'],
     eq: { aoa3: 2, ver: 1.5, leg: 1, cer: 2, gra: 1 } },
   { id: 'tostadas-frijol-huevo', name: 'Tostadas de frijol con huevo y salsa', meals: ['des', 'cen'], diet: ['veg', 'sl', 'sg'], min: 10, serv: 1, eco: true,
-    ing: [[2, 'pz', 'Tostadas horneadas', TP], [0.5, 'taza', 'Frijoles cocidos', AB], [2, 'pz', 'Huevo', LH], [null, '', 'Salsa verde o roja', AB], [1, 'taza', 'Lechuga picada', FV]],
+    ing: [[2, 'pz', 'Tostadas horneadas', TP], [0.5, 'taza', 'Frijoles cocidos', AB], [2, 'pz', 'Huevo', LH], [null, '', 'Salsa', AB], [1, 'taza', 'Lechuga', FV]],
     steps: ['Machaca los frijoles calientes y úntalos en las tostadas.', 'Haz los huevos estrellados en sartén antiadherente sin aceite (o revueltos).', 'Pon un huevo en cada tostada con lechuga y salsa.'],
     eq: { cer: 2, leg: 1, aoa3: 2, ver: 0.5 } },
   { id: 'pollo-cacahuate', name: 'Pollo en salsa de cacahuate con arroz', meals: ['com'], diet: ['sl', 'sg'], min: 40, serv: 4, prep: true,
-    ing: [[600, 'g', 'Pechuga de pollo', CA], [56, 'pz', 'Cacahuates', AB], [2, 'pz', 'Jitomate', FV], [1, 'pz', 'Chile guajillo', AB], [0.5, 'pz', 'Cebolla', FV], [2, 'diente', 'Ajo', FV], [2, 'taza', 'Arroz cocido', AB], [2, 'taza', 'Calabacita o ejotes', FV]],
-    steps: ['Corta el pollo en cubos y cuécelo en una olla con poca agua y sal, 15 minutos.', 'Asa el jitomate, la cebolla, el ajo y el chile sin semillas; licúalos con los cacahuates y 1 taza del caldo.', 'Agrega la salsa al pollo con la verdura picada y cocina 10 minutos a fuego bajo.', 'Sirve con el arroz. Dura 4 días en el refrigerador.'],
+    ing: [[600, 'g', 'Pechuga de pollo', CA], [56, 'pz', 'Cacahuates', AB], [2, 'pz', 'Jitomate', FV], [1, 'pz', 'Chile guajillo', AB], [0.5, 'pz', 'Cebolla', FV], [2, 'diente', 'Ajo', FV], [0.67, 'taza', 'Arroz', AB], [2, 'taza', 'Calabacita o ejotes', FV]],
+    steps: ['Corta el pollo en cubos y cuécelo en una olla con poca agua y sal, 15 minutos.', 'Asa el jitomate, la cebolla, el ajo y el chile sin semillas; licúalos con los cacahuates y 1 taza del caldo.', 'Agrega la salsa al pollo con la verdura picada y cocina 10 minutos a fuego bajo.', 'Cuece el arroz (2/3 de taza crudo rinde 2 tazas) y sirve con él. Dura 4 días en el refrigerador.'],
     eq: { aoa1: 4, grap: 1, ver: 1, cer: 2 }, tip: 'Sale como un encacahuatado ligero: el cacahuate da la grasa, así que no lleva aceite.' },
   { id: 'cacahuates-fruta', name: 'Cacahuates con manzana o plátano', meals: ['col', 'pre'], diet: ['veg', 'sl', 'sg'], min: 1, serv: 1, eco: true,
     ing: [[28, 'pz', 'Cacahuates', AB], [1, 'pz', 'Manzana', FV]],
     steps: ['Cuenta 28 cacahuates (naturales o tostados, sin sal ni enchilados de bolsa) y acompáñalos con la fruta.'],
     eq: { grap: 2, fru: 1 }, tip: 'Llénate con la fruta primero: los cacahuates son sanos pero se acaban rápido las calorías.' },
   { id: 'molletes-huevo', name: 'Molletes de frijol con huevo revuelto', meals: ['des'], diet: ['veg', 'sl'], min: 10, serv: 1, eco: true,
-    ing: [[1, 'pz', 'Bolillo', TP], [0.5, 'taza', 'Frijoles cocidos', AB], [2, 'pz', 'Huevo', LH], [null, '', 'Pico de gallo', FV]],
-    steps: ['Parte el bolillo, quítale el migajón y úntale los frijoles.', 'Tuéstalo en el comal o el horno.', 'Encima pon el huevo revuelto (sin aceite, en antiadherente) y pico de gallo.'],
+    ing: [[1, 'pz', 'Bolillo', TP], [0.5, 'taza', 'Frijoles cocidos', AB], [2, 'pz', 'Huevo', LH], [0.5, 'pz', 'Jitomate', FV], [null, '', 'Cebolla', FV], [null, '', 'Chile serrano', FV]],
+    steps: ['Parte el bolillo, quítale el migajón y úntale los frijoles.', 'Tuéstalo en el comal o el horno.', 'Encima pon el huevo revuelto (sin aceite, en antiadherente) y un pico de gallo de jitomate, cebolla y chile picados.'],
     eq: { cer: 2, leg: 1, aoa3: 2, ver: 0.5 } },
 ];
 
@@ -239,14 +239,24 @@ export function shoppingList(picks) {
   for (const [id, n] of Object.entries(picks || {})) {
     const r = RECIPE_BY_ID[id]; if (!r || !(n > 0)) continue;
     const f = n / r.serv;
-    for (const [q, u, name, cat] of r.ing) {
+    for (const [q0, u0, name, cat] of r.ing) {
+      // v3.19.1: cucharadas y cucharaditas se suman juntas (1 cucharada = 3 cucharaditas).
+      const u = u0 === 'cda' ? 'cdta' : u0, q = u0 === 'cda' && q0 != null ? q0 * 3 : q0;
       const k = `${name}|${u}`;
       const cur = map.get(k) || { name, u, cat, q: 0, any: false, from: new Set() };
       if (q == null) cur.any = true; else cur.q += q * f;
       cur.from.add(r.name); map.set(k, cur);
     }
   }
-  const items = [...map.values()].map((x) => ({ ...x, text: x.q ? amountText(x.q, x.u) : 'al gusto', from: [...x.from] }));
+  // v3.19.1: si un ingrediente va «al gusto» en una receta y con cantidad en otra, sale una sola vez (con la cantidad).
+  for (const [k, x] of map) {
+    if (x.q) continue;
+    const other = [...map.values()].find((y) => y !== x && y.name === x.name && y.q > 0);
+    if (other) { for (const f of x.from) other.from.add(f); map.delete(k); }
+  }
+  // De 3 cucharaditas para arriba se dice en cucharadas.
+  const amt = (x) => (x.u === 'cdta' && x.q >= 3 ? amountText(Math.round((x.q / 3) * 2) / 2, 'cda') : amountText(x.q, x.u));
+  const items = [...map.values()].map((x) => ({ ...x, text: x.q ? amt(x) : 'al gusto', from: [...x.from] }));
   return SHOP_CATS.map((c, i) => [c, items.filter((x) => x.cat === i).sort((a, b) => a.name.localeCompare(b.name, 'es'))]).filter(([, xs]) => xs.length);
 }
 export function shoppingText(picks, title = 'Lista del súper') {
