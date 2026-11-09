@@ -1,4 +1,4 @@
-// Remate · función "recordatorios" (Supabase Edge Function), v3.9 + v3.21.
+// Remate · función "recordatorios" (Supabase Edge Function), v3.9 + v3.21 (+ CORS en la 3.23.1).
 // La llama pg_cron cada 15 minutos (ver sql/recordatorios.sql). Manda un aviso al celular:
 //  - de cada entrenamiento publicado, unas horas antes (Ajustes → Recordatorios; 2 h si no eliges),
 //  - de cada partido (no tienen hora): a las 8:00 de ese día.
@@ -15,7 +15,9 @@
 import webpush from 'npm:web-push@3.6.7';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+// v3.23.1: CORS, para que «Estado de las notificaciones» (desde el celular) pueda preguntarle si existe.
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 type Row = Record<string, any>;
 
 // Fecha y hora de pared en la zona del equipo, como minutos desde 1970 (sirve para comparar).
@@ -28,7 +30,7 @@ function wallNow(tz: string) {
 const wall = (date: string, time: string) => { const [y, m, d] = date.split('-').map(Number), [hh, mm] = time.split(':').map(Number); return Date.UTC(y, m - 1, d, hh, mm) / 60000; };
 const addDay = (date: string, n: number) => { const t = new Date(`${date}T12:00:00Z`); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
 const hhmm = (t: string) => String(t).slice(0, 5);
-const VERSION = '3.21.0';
+const VERSION = '3.23.1';
 const weekday = (date: string) => new Date(`${date}T12:00:00Z`).getUTCDay();          // 0 domingo … 6 sábado
 const DAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 // id estable (formato uuid) para apuntar avisos que no son de un entreno ni de un partido
@@ -53,6 +55,7 @@ const isSpec = (s: Row | null) => !!(s && typeof s === 'object' && typeof s.goal
 
 Deno.serve(async (req) => {
   try {
+    if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
     const reqBody = await req.json().catch(() => ({}));
     if (reqBody?.ping) return json({ pong: true, version: VERSION });
     let secret = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
