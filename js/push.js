@@ -97,7 +97,10 @@ export async function pushDiagnose({ coach = false } = {}) {
         data?.pong ? '' : 'Vuelve a pegar su código nuevo (LEEME).');
     } catch (e) {
       const st = e?.context?.status;
-      add('rec', false, 'La función «recordatorios» existe en Supabase', st === 401 ? 'Está con «Verify JWT» encendido: apágalo en Edge Functions → recordatorios → Details.' : 'No la encontré. Créala con ese nombre exacto (LEEME, notificaciones, paso 1).');
+      if (st === 401) add('rec', false, 'La función «recordatorios» existe en Supabase', 'Está con «Verify JWT» encendido: apágalo en Edge Functions → recordatorios → Details.');
+      else if (st === 404) add('rec', false, 'La función «recordatorios» existe en Supabase', 'No la encontré. Créala con ese nombre exacto (LEEME, notificaciones, paso 1).');
+      // Sin respuesta legible: casi siempre es el código de antes de la 3.23.1 (sin CORS), que el celular no puede leer.
+      else add('rec', null, 'La función «recordatorios»: no se pudo revisar desde el celular', 'Si en Supabase sí aparece, pega su código nuevo (3.23.1). Los recordatorios automáticos funcionan igual: los manda Supabase solo.');
     }
   }
   return out;

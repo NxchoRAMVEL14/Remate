@@ -181,6 +181,8 @@ function coach() {
     e.target.value = ''; } });
 
   const el = h('div', { class: 'page' },
+    // v3.23.1: el entrenador también activa las notificaciones en su celular (antes solo jugadores y ayudantes)
+    h('section', { class: 'stack' }, sectionTitle('Notificaciones en este celular'), pushSettings()),
     h('section', { class: 'stack' }, sectionTitle('Tu equipo'),
       field('Nombre del equipo', name), field('Temporada', season, 'Aparece en reportes y en tu ayuda memoria. Es opcional.')),
     h('section', { class: 'stack' }, sectionTitle('Entrenamientos'),
