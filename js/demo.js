@@ -105,7 +105,11 @@ export function makeDemoData() {
   }
   return { groups, players, sessions, attendance, ratings, exams, claims, notes: [
     { id: 'demo-n1', owner_id: 'demo', player_id: 'demo-p9', body: 'Platicar con ella: ha faltado dos veces seguidas.', created_at: iso(Date.now() - 864e5) },
-  ], customEx: [], gymLogs, sessionRpe, techVideos: [], ...fit, ...phase };
+  ], customEx: [], gymLogs, sessionRpe, techVideos: [], ...fit, ...phase, injuries: [
+    // v3.23: una molestia que reportó la jugadora (sin ver) y un esguince en regreso, fase 3.
+    { id: 'demo-inj1', owner_id: 'demo', player_id: 'demo-p4', zone: 'hombro', kind: 'molestia', pain: 4, started_on: addDays(today, -1), status: 'activa', stage: 0, note: 'Me duele al rematar desde el entreno del jueves.', coach_note: '', reported_by: 'jugador', seen_at: null, ended_on: null, updated_at: iso(Date.now() - 864e5), created_at: iso(Date.now() - 864e5) },
+    { id: 'demo-inj2', owner_id: 'demo', player_id: 'demo-p7', zone: 'tobillo', kind: 'lesion', pain: 2, started_on: addDays(today, -16), status: 'regreso', stage: 3, note: '', coach_note: 'Esguince leve al caer en el bloqueo. El médico dijo 2 semanas.', reported_by: 'entrenador', seen_at: iso(Date.now() - 15 * 864e5), ended_on: null, updated_at: iso(Date.now() - 2 * 864e5), created_at: iso(Date.now() - 16 * 864e5) },
+  ] };
 }
 
 // ---------- partidos, laboratorio, En casa, ayudantes y torneos (antes js/demo-lab.js) ----------

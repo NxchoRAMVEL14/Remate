@@ -107,14 +107,21 @@ export function attendanceFor(playerId, sessions, attendance, settings = {}) {
 }
 
 // ---------- XP ----------
-export function xpFor(player, { sessions, attendance, claims, exams }) {
+// v3.22: retos de la semana. st.weekly_retos = [{ week: lunes 'YYYY-MM-DD', ids: [...] }]. Un reto destacado vale
+// +50 % si se pidió esa semana (por la fecha en que el jugador lo pidió). Lo de antes no cambia.
+export const WEEK_BONUS = 0.5;
+const mondayOf = (iso) => { const d = new Date(iso); if (Number.isNaN(+d)) return ''; d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+export const isWeekly = (st, challengeId, iso) => { const w = mondayOf(iso); return !!w && (Array.isArray(st?.weekly_retos) ? st.weekly_retos : []).some((x) => x.week === w && (x.ids || []).includes(challengeId)); };
+export const claimXp = (c, st) => { const base = CHALLENGE_BY_ID[c.challenge_id]?.xp || 0; return base + (isWeekly(st, c.challenge_id, c.claimed_at) ? Math.round(base * WEEK_BONUS) : 0); };
+
+export function xpFor(player, { sessions, attendance, claims, exams }, st = null) {
   const done = new Set(doneSessions(sessions).map((s) => s.id));
   let xp = 0;
   for (const a of attendance) {
     if (a.player_id !== player.id || !done.has(a.session_id)) continue;
     xp += XP_RULES[a.status] || 0;
   }
-  for (const c of claims) if (c.player_id === player.id && c.status === 'aprobada') xp += CHALLENGE_BY_ID[c.challenge_id]?.xp || 0;
+  for (const c of claims) if (c.player_id === player.id && c.status === 'aprobada') xp += claimXp(c, st);
   for (const e of exams) if (e.player_id === player.id && e.passed) xp += XP_RULES.examen;
   return xp;
 }

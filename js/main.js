@@ -13,10 +13,10 @@ const R = (file, pick = 'default') => ({ file, pick });
 const ROUTES = { hoy: R('hoy'), jugadores: R('jugadores'), jugador: R('jugador'), sesiones: R('sesiones'), sesion: R('sesion'), ejercicios: R('ejercicios'), ejercicio: R('ejercicio'),
   ruta: R('ruta'), ajustes: R('ajustes'), ayuda: R('ayuda'), novedades: R('ayuda', 'novedades'), partidos: R('partidos'), partido: R('partidos', 'partido'), lab: R('lab'), reportes: R('reportes'),
   mas: R('mas'), casa: R('casa'), mejoras: R('mejoras'), pruebas: R('pruebas'), temporada: R('temporada'), avisos: R('avisos'), radar: R('radar-guia'), comparar: R('radar-guia', 'comparar'),
-  teoria: R('teoria'), aprende: R('aprende'), pizarra: R('pizarra'), torneo: R('torneos'), alineacion: R('partido-capture', 'alineacion'), rivales: R('rivales'), rival: R('rivales'), gym: R('gym'), medir: R('medir'),
+  teoria: R('teoria'), aprende: R('aprende'), pizarra: R('pizarra'), panel: R('panel'), lesiones: R('lesiones'), scout: R('scout-rapido'), video: R('video-dibujo'), torneo: R('torneos'), alineacion: R('partido-capture', 'alineacion'), rivales: R('rivales'), rival: R('rivales'), gym: R('gym'), medir: R('medir'),
   'lista-qr': R('asistir', 'listaQr'), llegue: R('asistir', 'llegue'), asistir: R('asistir'), inicio: R('inicio'), entrenos: R('entrenos'), carga: R('carga'), tecnica: R('tecnica'), azar: R('azar'), fit: R('fit'), imprimir: R('imprimir') };
-const COACH = new Set(['hoy', 'jugadores', 'jugador', 'sesiones', 'sesion', 'ejercicios', 'ejercicio', 'ruta', 'ajustes', 'ayuda', 'partidos', 'partido', 'lab', 'reportes', 'mas', 'casa', 'mejoras', 'pruebas', 'temporada', 'avisos', 'radar', 'novedades', 'teoria', 'comparar', 'torneo', 'alineacion', 'rivales', 'rival', 'gym', 'medir', 'lista-qr', 'llegue', 'carga', 'tecnica', 'azar', 'fit', 'imprimir', 'aprende', 'pizarra']);
-const PLAYER = new Set(['inicio', 'ruta', 'entrenos', 'partidos', 'partido', 'ejercicios', 'ejercicio', 'casa', 'pruebas', 'avisos', 'asistir', 'ajustes', 'ayuda', 'radar', 'novedades', 'teoria', 'torneo', 'gym', 'medir', 'llegue', 'lista-qr', 'tecnica', 'fit', 'imprimir', 'aprende', 'pizarra']);
+const COACH = new Set(['hoy', 'jugadores', 'jugador', 'sesiones', 'sesion', 'ejercicios', 'ejercicio', 'ruta', 'ajustes', 'ayuda', 'partidos', 'partido', 'lab', 'reportes', 'mas', 'casa', 'mejoras', 'pruebas', 'temporada', 'avisos', 'radar', 'novedades', 'teoria', 'comparar', 'torneo', 'alineacion', 'rivales', 'rival', 'gym', 'medir', 'lista-qr', 'llegue', 'carga', 'tecnica', 'azar', 'fit', 'imprimir', 'aprende', 'pizarra', 'panel', 'lesiones', 'scout', 'video']);
+const PLAYER = new Set(['inicio', 'ruta', 'entrenos', 'partidos', 'partido', 'ejercicios', 'ejercicio', 'casa', 'pruebas', 'avisos', 'asistir', 'ajustes', 'ayuda', 'radar', 'novedades', 'teoria', 'torneo', 'gym', 'medir', 'llegue', 'lista-qr', 'tecnica', 'fit', 'imprimir', 'aprende', 'pizarra', 'lesiones']);
 const ASSISTANT = new Set(['asistir', 'partidos', 'partido', 'avisos', 'ejercicios', 'ejercicio', 'ajustes', 'ayuda', 'novedades', 'torneo', 'alineacion', 'lista-qr', 'aprende', 'pizarra']);
 const MODS = new Map();
 const loadView = (file) => (MODS.has(file) ? Promise.resolve(MODS.get(file)) : import(`./views/${file}.js`).then((m) => { MODS.set(file, m); return m; }));
@@ -38,11 +38,11 @@ const NAV = {
   player: [['inicio', 'Inicio', 'house'], ['entrenos', 'Entrenos', 'calendar-days'], ['partidos', 'Partidos', 'volleyball'], ['ejercicios', 'Ejercicios', 'book-open'], ['ruta', 'Ruta', 'flag']],
   assistant: [['asistir', 'Asistir', 'clipboard-check'], ['partidos', 'Partidos', 'volleyball'], ['avisos', 'Avisos', 'bell'], ['ejercicios', 'Ejercicios', 'book-open']],
 };
-const PARENT = { jugador: 'jugadores', sesion: 'sesiones', azar: 'sesiones', ejercicio: 'ejercicios', partido: 'partidos', casa: 'ejercicios', pruebas: 'jugadores', temporada: 'sesiones', avisos: 'hoy', asistir: 'inicio', novedades: 'ajustes', comparar: 'jugadores', torneo: 'partidos', alineacion: 'partidos', rivales: 'partidos', rival: 'partidos', 'lista-qr': 'sesiones', llegue: 'inicio', aprende: 'ejercicios', pizarra: 'partidos' };   // sección que se ilumina en la navegación
+const PARENT = { jugador: 'jugadores', sesion: 'sesiones', azar: 'sesiones', ejercicio: 'ejercicios', partido: 'partidos', casa: 'ejercicios', pruebas: 'jugadores', temporada: 'sesiones', avisos: 'hoy', asistir: 'inicio', novedades: 'ajustes', comparar: 'jugadores', torneo: 'partidos', alineacion: 'partidos', rivales: 'partidos', rival: 'partidos', 'lista-qr': 'sesiones', llegue: 'inicio', aprende: 'ejercicios', pizarra: 'partidos', panel: 'hoy', scout: 'partidos', video: 'mas' };   // sección que se ilumina en la navegación
 const UNDER_MAS = new Set(['ejercicios', 'ruta', 'lab', 'reportes', 'ajustes', 'ayuda', 'mejoras', 'mas', 'novedades', 'gym', 'carga', 'tecnica']);
 // Pantalla en la que estás → sección de la mejora (para anotarla rápido desde el foco del encabezado).
 const IDEA_AREA = { hoy: 'hoy', jugadores: 'jugadores', jugador: 'jugadores', sesiones: 'entrenos', sesion: 'entrenos', partidos: 'partidos', partido: 'partidos',
-  casa: 'casa', lab: 'laboratorio', reportes: 'reportes', ruta: 'ruta', ejercicios: 'ejercicios', ejercicio: 'ejercicios', ajustes: 'ajustes', teoria: 'entrenos', comparar: 'jugadores', radar: 'jugadores', torneo: 'partidos', gym: 'gym', medir: 'laboratorio', 'lista-qr': 'entrenos', carga: 'jugadores', tecnica: 'jugadores', azar: 'entrenos', aprende: 'ejercicios', pizarra: 'partidos' };          // en celular, estas iluminan "Más"
+  casa: 'casa', lab: 'laboratorio', reportes: 'reportes', ruta: 'ruta', ejercicios: 'ejercicios', ejercicio: 'ejercicios', ajustes: 'ajustes', teoria: 'entrenos', comparar: 'jugadores', radar: 'jugadores', torneo: 'partidos', gym: 'gym', medir: 'laboratorio', 'lista-qr': 'entrenos', carga: 'jugadores', tecnica: 'jugadores', azar: 'entrenos', aprende: 'ejercicios', pizarra: 'partidos', panel: 'hoy' };          // en celular, estas iluminan "Más"
 
 const root = $('#root');
 const uiState = new Map();
@@ -92,7 +92,7 @@ function render({ fresh = false } = {}) {
   const ctx = { role, me, readonly: !!state.viewAs && !state.self, self: !!state.viewAs && state.self, args, ui: uiState.get(key), rerender: () => render() };
   let view;
   try { view = mod[route.pick](ctx); } catch (e) { view = errorView(e); }
-  const nav = name === 'fit' ? (role === 'coach' ? 'mas' : 'inicio') : name === 'radar' ? (role === 'coach' ? 'jugadores' : 'inicio') : name === 'teoria' ? (role === 'coach' ? 'sesiones' : 'entrenos') : name === 'gym' ? (role === 'coach' ? 'gym' : 'ejercicios') : name === 'medir' ? (role === 'coach' ? 'lab' : 'inicio') : (PARENT[name] || name);
+  const nav = name === 'lesiones' ? (role === 'coach' ? 'hoy' : 'inicio') : name === 'fit' ? (role === 'coach' ? 'mas' : 'inicio') : name === 'radar' ? (role === 'coach' ? 'jugadores' : 'inicio') : name === 'teoria' ? (role === 'coach' ? 'sesiones' : 'entrenos') : name === 'gym' ? (role === 'coach' ? 'gym' : 'ejercicios') : name === 'medir' ? (role === 'coach' ? 'lab' : 'inicio') : (PARENT[name] || name);
 
   const sync = state.mode === 'demo' ? h('span', { class: 'sync' }, 'Demo')
     : !state.online ? h('span', { class: 'sync warn' }, pendingCount() ? `Sin internet, ${pendingCount()} por enviar` : 'Sin internet')
