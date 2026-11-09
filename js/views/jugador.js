@@ -4,6 +4,7 @@ import { state, getPlayer, settings, remove, resolveClaim, patch, teamReady, isM
 import { testsPanel } from './pruebas.js';
 import { loadSection } from './carga.js';
 import { videosOf } from './tecnica.js';
+import { playerSection, injuryChip } from './lesiones.js';
 import { homePlanSheet, planOf } from './casa.js';
 import { refName } from '../content/casa.js';
 import { gymPlanSheet, playerGymSheet, coachPlanOf, gymStats, specText } from './gym.js';
@@ -15,7 +16,7 @@ import { dots, statusChip, sectionTitle, empty, note } from './ui.js';
 import { playerCard, playerStats, badgesEl } from './card.js';
 import { playerFormSheet, deletePlayer, evaluateSheet, examSheet, codeSheet, noteSheet } from './sheets-player.js';
 
-const TABS = [['resumen', 'Resumen'], ['habilidades', 'Habilidades'], ['pruebas', 'Pruebas'], ['asistencia', 'Asistencia'], ['carga', 'Carga'], ['videos', 'Videos'], ['notas', 'Notas']];
+const TABS = [['resumen', 'Resumen'], ['habilidades', 'Habilidades'], ['pruebas', 'Pruebas'], ['asistencia', 'Asistencia'], ['carga', 'Carga'], ['videos', 'Videos'], ['lesiones', 'Lesiones'], ['notas', 'Notas']];
 
 export default function jugador(ctx) {
   const p = getPlayer(ctx.args[0]);
@@ -32,6 +33,8 @@ export default function jugador(ctx) {
     h('div', { class: 'cluster' },
       h('button', { class: 'btn sm', type: 'button', onclick: () => codeSheet(p) }, ic('lock', 16), p.user_id ? 'Código de acceso' : 'Código (sin usar)'),
       h('button', { class: 'btn sm', type: 'button', onclick: () => noteSheet(p) }, ic('pencil', 16), 'Nota'),
+      ctx.readonly ? null : h('a', { class: 'btn sm', href: `#/reportes/${p.id}/familia` }, ic('house', 16), 'Reporte para la familia'),
+      injuryChip(p.id),
       h('button', { class: 'btn sm', type: 'button', onclick: () => playerFormSheet(p) }, ic('settings', 16), 'Editar datos'),
       isMine(p) ? h('a', { class: 'btn sm ball', href: '#/yo' }, ic('user-check', 16), 'Entrar a mi perfil') : h('a', { class: 'btn sm', href: `#/ver/${p.id}` }, ic('eye', 16), 'Ver como jugador'),
       h('a', { class: 'btn sm', href: `#/comparar/${p.id}` }, ic('arrow-left-right', 16), 'Antes y después'),
@@ -57,7 +60,7 @@ export default function jugador(ctx) {
     h('button', { type: 'button', role: 'tab', 'aria-selected': String(ui.tab === id), onclick: () => { ui.tab = id; paint(); } }, label)));
   function paint() {
     [...tabs.children].forEach((b, i) => b.setAttribute('aria-selected', String(TABS[i][0] === ui.tab)));
-    panel.replaceChildren(({ resumen, habilidades, pruebas: (pp) => testsPanel(pp, { canEdit: true }), asistencia, carga: (pp) => loadSection(pp), videos: (pp) => videosOf(pp, { coach: true }), notas })[ui.tab](p, stats));
+    panel.replaceChildren(({ resumen, habilidades, pruebas: (pp) => testsPanel(pp, { canEdit: true }), asistencia, carga: (pp) => loadSection(pp), videos: (pp) => videosOf(pp, { coach: true }), lesiones: (pp) => playerSection(pp, { ...ctx, rerender: paint }) || note('Falta correr en Supabase el bloque «v3.23» de sql/instalar.sql para registrar lesiones.', 'bad'), notas })[ui.tab](p, stats));
   }
   paint();
   return { title: p.name, back: '#/jugadores', el: h('div', { class: 'page' }, playerCard(p, stats), actions, h('div', { class: 'stack' }, tabs, panel)) };

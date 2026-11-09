@@ -6,6 +6,7 @@ import { result, replay, phaseStats, byRotation, rotLabel, zoneCounts, addCounts
 import { sectionTitle, note, empty, field, options } from './ui.js';
 import { zoneMapEl, rivalSection } from './partido-summary.js';
 import { missingSqlNote } from './lab.js';
+import { bigPlan } from './scout-rapido.js';
 
 export { rivalKey };
 const scouting = () => profile().scouting || {};
@@ -165,6 +166,8 @@ function ficha(ctx, key) {
       h('p', { style: { margin: 0 } }, rv.done.length ? `Contra ellos: ${rv.wins} ${rv.wins === 1 ? 'ganado' : 'ganados'} y ${rv.losses} ${rv.losses === 1 ? 'perdido' : 'perdidos'}.` : 'Todavía no hay partidos terminados contra ellos.'),
       rv.next ? h('p', { style: { margin: 0 } }, h('a', { href: `#/partido/${rv.next.id}`, style: { color: 'inherit' } }, `Próximo partido: ${fmtDate(rv.next.match_date, { weekday: 'long', day: 'numeric', month: 'long' })}`)) : null),
     // Lo que anotas tú
+    h('div', { class: 'cluster' }, h('a', { class: 'btn primary', href: `#/scout/${rv.key}${rv.next ? `/${rv.next.id}` : ''}` }, ic('zap', 18), 'Scouting en 1 minuto'),
+      h('button', { class: 'btn', type: 'button', onclick: () => bigPlan(rv, rv.next) }, ic('maximize', 18), 'Plan de juego')),
     h('section', { class: 'stack' }, sectionTitle('Tu scouting', ro ? null : h('button', { class: 'btn sm primary', type: 'button', onclick: () => scoutSheet(rv) }, ic('pencil', 16), sc ? 'Editar' : 'Llenar ficha')),
       sc ? h('div', { class: 'stack' },
         h('div', { class: 'grid sc-facts' },

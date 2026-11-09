@@ -6,6 +6,7 @@ import { state, add, patch, remove, players, getPlayer, group, sql39Ready } from
 import { client, isNetworkError, friendly } from '../cloud.js';
 import { SKILLS } from '../content/skills.js';
 import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
+import { drawLayer, snapshot } from './video-dibujo.js';
 
 export const MAX_MB = 45, MAX_SECS = 60, MAX_PER_PLAYER = 10, QUOTA_MB = 1024;
 const BUCKET = 'tecnica';
@@ -92,6 +93,10 @@ export function viewerSheet(v, { coach }) {
   const p = getPlayer(v.player_id) || players().find((x) => x.id === v.player_id);
   const vid = h('video', { controls: true, playsinline: true, preload: 'metadata', class: 'tv-video' });
   vid.setAttribute('playsinline', ''); vid.setAttribute('webkit-playsinline', '');
+  vid.crossOrigin = 'anonymous';                 // v3.23: para poder copiar el cuadro con el dibujo (si Supabase lo permite)
+  vid.addEventListener('error', () => { if (vid.crossOrigin && vid.src) { const u = vid.src; vid.removeAttribute('crossorigin'); vid.src = u; } });   // si no lo permite, se ve igual (la imagen sale solo con el dibujo)
+  const layer = drawLayer(vid);
+  vid.addEventListener('play', () => { if (!layer.editing) layer.clear(); });
   const status = h('p', { class: 'row-sub', style: { margin: 0 } }, 'Cargando el video…');
   signedUrl(v).then((u) => { if (u) { vid.src = u; status.textContent = ''; } else status.textContent = 'Este video ya no está disponible (en el demo se borra al recargar).'; })
     .catch((e) => { status.textContent = isNetworkError(e) ? 'Sin internet: no se puede ver el video.' : friendly(e); });
@@ -99,29 +104,35 @@ export function viewerSheet(v, { coach }) {
   const step = (d) => { vid.pause(); vid.currentTime = Math.max(0, Math.min(vid.duration || 0, vid.currentTime + d)); };
   const list = h('div', { class: 'stack' });
   const paint = () => list.replaceChildren(...(v.comments || []).slice().sort((a, b) => (a.t ?? 1e9) - (b.t ?? 1e9)).map((c, i) => h('div', { class: 'row' },
-    c.t != null ? h('button', { type: 'button', class: 'btn sm', onclick: () => { vid.currentTime = c.t; vid.pause(); } }, ic('clock', 14), fmtT(c.t)) : null,
-    h('span', { class: 'row-main' }, h('span', {}, c.text), h('span', { class: 'row-sub' }, fmtDate(String(c.at).slice(0, 10)))),
+    c.t != null ? h('button', { type: 'button', class: 'btn sm', onclick: () => { vid.pause(); vid.currentTime = c.t; layer.set(c.draw || []); } }, ic('clock', 14), fmtT(c.t)) : null,
+    h('span', { class: 'row-main' }, h('span', {}, c.text, c.draw?.length ? h('span', { class: 'chip ball tv-draw' }, ' ✏️ con dibujo') : null), h('span', { class: 'row-sub' }, fmtDate(String(c.at).slice(0, 10)))),
     coach ? h('button', { type: 'button', class: 'iconbtn', 'aria-label': 'Quitar comentario', onclick: () => { v.comments = v.comments.filter((x) => x !== c); patch('techVideos', v.id, { comments: v.comments }); paint(); } }, ic('x', 18)) : null)));
   paint();
   const txt = h('input', { type: 'text', maxlength: 300, placeholder: 'Por ejemplo: el codo baja antes del golpe' });
   const withTime = h('input', { type: 'checkbox', checked: true });
   const addC = () => {
-    const t = txt.value.trim(); if (!t) { toast('Escribe el comentario'); return; }
-    v.comments = [...(v.comments || []), { t: withTime.checked && Number.isFinite(vid.currentTime) ? Math.round(vid.currentTime * 10) / 10 : null, text: t, at: new Date().toISOString() }];
-    patch('techVideos', v.id, { comments: v.comments }); txt.value = ''; paint();
+    const draw = layer.shapes();
+    const t = txt.value.trim() || (draw.length ? 'Mira el dibujo' : ''); if (!t) { toast('Escribe el comentario o dibuja'); return; }
+    const c = { t: (withTime.checked || draw.length) && Number.isFinite(vid.currentTime) ? Math.round(vid.currentTime * 10) / 10 : null, text: t, at: new Date().toISOString(), ...(draw.length ? { draw } : {}) };
+    const next = [...(v.comments || []), c];
+    if (JSON.stringify(next).length > 11500) { toast('Ya no cabe otro dibujo en este video: borra algún comentario o dibuja con menos trazos.', 5000); return; }
+    v.comments = next; patch('techVideos', v.id, { comments: v.comments }); txt.value = ''; layer.on(false); layer.clear(); drawBtn.setAttribute('aria-pressed', 'false'); drawBtn.lastChild.textContent = 'Dibujar'; paint();
   };
+  const drawBtn = h('button', { type: 'button', class: 'btn sm primary', 'aria-pressed': 'false', onclick: () => { const on = !layer.editing; layer.on(on); drawBtn.setAttribute('aria-pressed', String(on)); drawBtn.lastChild.textContent = on ? 'Listo' : 'Dibujar'; } }, ic('pencil', 16), h('span', {}, 'Dibujar'));
   if (coach && !v.seen_at) patch('techVideos', v.id, { seen_at: new Date().toISOString() });
   openSheet({ title: `${p?.name || 'Jugador'} · ${skillName(v.skill)}`, body: h('div', { class: 'stack' },
     v.note ? h('p', { style: { margin: 0 } }, h('strong', {}, 'Pregunta: '), v.note) : null,
-    vid, status,
+    layer.el, coach ? layer.bar : null, status,
     h('div', { class: 'cluster' },
       h('button', { type: 'button', class: 'btn sm', onclick: () => step(-1 / 30) }, ic('chevron-left', 16), 'Cuadro'),
       h('button', { type: 'button', class: 'btn sm', onclick: () => step(1 / 30) }, 'Cuadro', ic('chevron-right', 16)),
       h('button', { type: 'button', class: 'btn sm', onclick: () => rate(0.25) }, '×0.25'),
       h('button', { type: 'button', class: 'btn sm', onclick: () => rate(0.5) }, '×0.5'),
-      h('button', { type: 'button', class: 'btn sm', onclick: () => rate(1) }, 'Normal')),
+      h('button', { type: 'button', class: 'btn sm', onclick: () => rate(1) }, 'Normal'),
+      coach ? drawBtn : null,
+      h('button', { type: 'button', class: 'btn sm', onclick: () => snapshot(vid, layer.shapes(), `${p?.name || 'video'}-${skillName(v.skill)}`) }, ic('share-2', 16), 'Imagen')),
     sectionTitle(coach ? 'Tus comentarios' : 'Comentarios de tu entrenador'),
-    (v.comments || []).length ? list : h('div', {}, list, h('p', { class: 'row-sub', style: { margin: 0 } }, coach ? 'Pausa en el momento que quieras comentar y escribe abajo.' : 'Tu entrenador todavía no comenta este video.')),
+    (v.comments || []).length ? list : h('div', {}, list, h('p', { class: 'row-sub', style: { margin: 0 } }, coach ? 'Pausa en el momento que quieras comentar; con «Dibujar» marcas encima del video y escribes abajo.' : 'Tu entrenador todavía no comenta este video.')),
     coach ? h('div', { class: 'stack' }, field('Comentario', txt), h('label', { class: 'check' }, withTime, h('span', {}, 'Marcar el segundo donde está pausado')),
       h('button', { type: 'button', class: 'btn primary', onclick: addC }, ic('plus', 16), 'Agregar comentario')) : null,
     h('p', { class: 'row-sub', style: { margin: 0 } }, `${fmtDate(String(v.created_at).slice(0, 10))}${v.seconds ? ` · ${Math.round(v.seconds)} s` : ''} · ${mb(v.size_bytes)} MB`)),

@@ -12,7 +12,7 @@ import { catsOf, catOf } from '../content/categorias.js';
 
 export function playerStats(p) {
   const d = state.data;
-  return { att: attendanceFor(p.id, d.sessions, d.attendance, settings()), xp: xpFor(p, d), gap: levelGap(p, d.ratings) };
+  return { att: attendanceFor(p.id, d.sessions, d.attendance, settings()), xp: xpFor(p, d, settings()), gap: levelGap(p, d.ratings) };
 }
 
 // Botón que abre la explicación detallada del radar. El jugador ve la suya; el entrenador, la de ese jugador.

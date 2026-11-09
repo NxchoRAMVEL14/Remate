@@ -1,6 +1,6 @@
 // Ajustes: equipo, días de entrenamiento, apariencia, respaldo, privacidad y cuenta.
 import { h, ic, toast, confirmSheet, openSheet, download, copyText, shareText, fmtDate, newJoinCode, DAYS, DAYS_LONG, plural, THEMES, getTheme, setTheme } from '../util.js';
-import { state, group, settings, saveSettings, add, patch, remove, players, sessions, exportBackup, importBackup, refresh, pendingCount, teamReady, equiposReady, teams } from '../store.js';
+import { state, group, settings, saveSettings, add, patch, remove, players, sessions, exportBackup, importBackup, refresh, flush, pendingCount, teamReady, equiposReady, teams } from '../store.js';
 import { pushSettings } from './avisos.js';
 import { fraseField } from './frase.js';
 import { disablePush } from '../push.js';
@@ -156,6 +156,7 @@ function categoriesSection() {
 function asistente() {
   return { title: 'Ajustes', el: h('div', { class: 'page' },
     h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField(), fraseField()),
+    offlineSection(),
     h('section', { class: 'stack' }, sectionTitle('Notificaciones'), pushSettings()),
     aboutSection(),
     h('section', { class: 'stack' }, sectionTitle('Cuenta'),
@@ -227,6 +228,7 @@ function coach() {
     categoriesSection(),
     supportSection(),
     h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField(), fraseField()),
+    offlineSection(),
     h('section', { class: 'stack' }, sectionTitle('Tus datos'),
       state.mode === 'cloud' ? h('p', { style: { margin: 0 } }, pendingCount() ? `${plural(pendingCount(), 'cambio espera', 'cambios esperan')} conexión para enviarse.` : state.online ? 'Todo está guardado en la nube.' : 'Sin internet: los cambios se guardan en este celular y se envían al volver la conexión.') : note('Modo demo: los datos son de ejemplo y viven solo en este navegador. Para usar Remate con tus jugadores, conéctalo a Supabase (el LEEME explica cómo).', 'warn'),
       h('div', { class: 'cluster' },
@@ -254,6 +256,7 @@ function jugador(ctx) {
   const me = ctx.me;
   if (ctx.self) return { title: 'Ajustes', el: h('div', { class: 'page' },
     h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField(), fraseField()),
+    offlineSection(),
     h('section', { class: 'stack' }, sectionTitle('Tu perfil de jugador'),
       h('p', { style: { margin: 0 } }, `Estás usando Remate con tu ficha de jugador (${me.name}). Lo que registres aquí (En casa, retos, convocatorias y Teoría) cuenta como de ese jugador.`),
       h('div', { class: 'cluster' }, h('button', { class: 'btn', type: 'button', onclick: () => import('./sheets-player.js').then((m) => m.playerFormSheet(me, { self: true })) }, ic('pencil', 18), 'Editar mis datos'),
@@ -261,6 +264,7 @@ function jugador(ctx) {
     aboutSection()) };
   return { title: 'Ajustes', el: h('div', { class: 'page' },
     h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField(), fraseField()),
+    offlineSection(),
     ctx.readonly ? null : h('section', { class: 'stack' }, sectionTitle('Notificaciones'), pushSettings()),
     h('section', { class: 'stack' }, sectionTitle('Tu información'),
       h('p', { style: { margin: 0 } }, `Tu entrenador guarda tu nombre o apodo${me ? ` (${me.name})` : ''}, tu posición, tus evaluaciones y tu asistencia. No guarda teléfono, domicilio ni fotos. Solo tú y tu entrenador ven tu avance. Si quieres que se corrija o se borre algo, pídeselo a tu entrenador.`)),
@@ -269,4 +273,39 @@ function jugador(ctx) {
       h('p', { style: { margin: 0 } }, 'Si sales, vas a necesitar tu código otra vez para volver a entrar.'),
       h('div', { class: 'cluster' }, h('button', { class: 'btn', type: 'button', onclick: async () => { if (await confirmSheet({ title: '¿Salir de Remate en este celular?', text: 'Para volver a entrar necesitarás tu código.', ok: 'Salir', danger: true })) signOut(); } }, ic('log-out', 18), 'Salir'),
         h('a', { class: 'btn ghost', href: '#/ayuda' }, ic('circle-help', 18), 'Ayuda')))) };
+}
+
+
+// ---------- Usar sin internet (v3.23) ----------
+async function swAsk(type) {
+  const reg = await navigator.serviceWorker?.getRegistration?.().catch(() => null);
+  const sw = reg?.active; if (!sw) return null;
+  return new Promise((res) => { const ch = new MessageChannel(); const t = setTimeout(() => res(null), type === 'precache' ? 60000 : 8000); ch.port1.onmessage = (e) => { clearTimeout(t); res(e.data); }; sw.postMessage({ type }, [ch.port2]); });
+}
+const ago = (iso) => { if (!iso) return 'nunca'; const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? 'hace un momento' : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} días`; };
+export function offlineSection() {
+  const box = h('div', { class: 'stack' });
+  const paint = async (st = null) => {
+    st ??= await swAsk('status');
+    const pend = pendingCount();
+    const appOk = st && st.ok >= st.total;
+    box.replaceChildren(
+      h('div', { class: 'rows' },
+        h('div', { class: 'row' }, h('span', { class: `chip ${appOk ? 'ok' : st ? 'warn' : 'bad'}` }, appOk ? '✓' : st ? '…' : '✗'),
+          h('span', { class: 'row-main' }, h('strong', {}, appOk ? 'La app completa está en este celular' : st ? `La app está a medias: ${st.ok} de ${st.total} archivos` : 'Este navegador no guardó la app'),
+            h('span', { class: 'row-sub' }, appOk ? 'Todas las pantallas abren sin internet.' : st ? 'Toca «Descargar todo» con internet.' : 'Abre Remate con internet (en iPhone, instalada en la pantalla de inicio).'))),
+        h('div', { class: 'row' }, h('span', { class: `chip ${state.mode !== 'cloud' || state.syncedAt ? 'ok' : 'warn'}` }, state.mode !== 'cloud' || state.syncedAt ? '✓' : '…'),
+          h('span', { class: 'row-main' }, h('strong', {}, state.mode !== 'cloud' ? 'Modo demo: todo vive en este celular' : `Datos al día ${ago(state.syncedAt)}`),
+            h('span', { class: 'row-sub' }, state.mode !== 'cloud' ? 'No se sube nada a la nube.' : 'Sin internet ves lo último que bajó y puedes pasar lista, capturar partidos y registrar; se sube solo al volver la señal.'))),
+        h('div', { class: 'row' }, h('span', { class: `chip ${pend ? 'warn' : 'ok'}` }, pend ? String(pend) : '✓'),
+          h('span', { class: 'row-main' }, h('strong', {}, pend ? `${pend} ${pend === 1 ? 'cambio' : 'cambios'} por subir` : 'Nada pendiente por subir'),
+            h('span', { class: 'row-sub' }, !state.online ? 'Ahora estás sin internet.' : pend ? 'Se suben solos; si quieres, súbelos ya.' : 'Todo lo que hiciste ya está en la nube.')))),
+      h('div', { class: 'cluster' },
+        pend && state.online ? h('button', { class: 'btn sm primary', type: 'button', onclick: async (e) => { e.currentTarget.disabled = true; await flush(); toast(pendingCount() ? 'Algunos cambios no se pudieron subir' : 'Todo subido'); paint(); } }, ic('upload', 16), 'Subir ahora') : null,
+        h('button', { class: 'btn sm', type: 'button', onclick: async (e) => { if (!navigator.onLine) { toast('Necesitas internet para descargar'); return; } e.currentTarget.disabled = true; toast('Descargando la app…'); const r = await swAsk('precache'); toast(r ? (r.ok >= r.total ? 'Listo: la app completa está guardada' : `Se guardaron ${r.ok} de ${r.total}`) : 'No se pudo: abre la app con internet'); paint(r); } }, ic('download', 16), 'Descargar todo')),
+      h('p', { class: 'row-sub', style: { margin: 0 } }, 'Sin internet no funcionan: entrar por primera vez, videos de técnica, notificaciones, el lector de carteles ni el calendario del celular.'));
+  };
+  box.append(h('p', { class: 'row-sub', style: { margin: 0 } }, 'Revisando…'));
+  paint();
+  return h('section', { class: 'stack' }, sectionTitle('Usar sin internet'), box);
 }

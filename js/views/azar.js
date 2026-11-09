@@ -3,6 +3,7 @@
 // o duelos de 1 vs 1 (v3.20).
 // Se arman parejos por posición y nivel, solo por nivel o al azar total; y por rama (mezcladas parejo,
 // cada rama por su lado, o solo una). Todo se queda en este celular: no usa tablas nuevas.
+import { availability } from './lesiones.js';
 import { h, ic, toast, todayStr, plural, shareText, confirmSheet } from '../util.js';
 import { state, players, patch, getSession, sessions, multiTeam, teams, inTeam, convocados, teamPlayers } from '../store.js';
 import { currentRatings, positionsOf } from '../calc.js';
@@ -46,8 +47,11 @@ export function poolFor(sess, o = load()) {
   const marks = sess ? state.data.attendance.filter((a) => a.session_id === sess.id) : [];
   const listed = marks.length > 0;
   if (o.who === 'presentes' && listed) { const here = new Set(marks.filter((a) => a.status === 'presente' || a.status === 'retardo').map((a) => a.player_id)); ps = ps.filter((p) => here.has(p.id)); }
+  // v3.23: quien está lesionado (o en las fases 1 y 2 del regreso) no entra a los equipos.
+  const hurt = ps.filter((p) => availability(p.id).k === 'fuera');
+  if (hurt.length) { const hs = new Set(hurt.map((p) => p.id)); ps = ps.filter((p) => !hs.has(p.id)); }
   const base = ps.length, out = new Set(o.out.ids);
-  return { all: ps, list: ps.filter((p) => !out.has(p.id)), base, listed };
+  return { all: ps, list: ps.filter((p) => !out.has(p.id)), base, listed, hurt };
 }
 
 // ---------- nivel y posición ----------
@@ -191,6 +195,7 @@ function filters(o, sess, pool, set) {
   return h('section', { class: 'panel stack az-filters' },
     h('div', { class: 'split' }, h('strong', {}, `Juegan ${pool.list.length}${pool.list.length !== pool.base ? ` de ${pool.base}` : ''}`),
       sess ? h('span', { class: 'row-sub' }, `${sess.title || 'Entrenamiento'} · ${longDate(sess.session_date)}`) : h('span', { class: 'row-sub' }, 'Sin entrenamiento hoy')),
+    pool.hurt?.length ? h('p', { class: 'row-sub', style: { margin: 0 } }, `🩹 Fuera por lesión: ${pool.hurt.map((p) => p.name).join(', ')}.`) : null,
     mt ? seg('Equipo', [['', 'Todos'], ...teams().map((t) => [t.id, t.name])], o.team, (v) => set({ team: v, res: null })) : null,
     seg('Rama', RAMAS, o.rama, (v) => set({ rama: v, res: null })),
     sess ? seg('Quiénes', [['presentes', 'Los que vinieron'], ['todos', 'Todo el equipo']], o.who, (v) => set({ who: v, res: null })) : null,

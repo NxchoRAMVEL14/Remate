@@ -2,8 +2,8 @@
 // cada quien en su ficha; las arrastras, dibujas flechas (de tu equipo, del rival o del balón), rotas a cualquiera de
 // los dos lados y guardas «pasos» para ver la jugada animada. Desde un partido, tus 6 salen en la rotación de ese
 // momento. Las jugadas se guardan en los ajustes del equipo (no necesita SQL) y se comparten como imagen.
-import { h, ic, toast, openSheet, confirmSheet, uid, fmtDate } from '../util.js';
-import { state, players, playerById, settings, saveSettings, isStaff } from '../store.js';
+import { h, ic, toast, openSheet, confirmSheet, uid, fmtDate, rivalKey } from '../util.js';
+import { state, players, playerById, settings, saveSettings, isStaff, profile } from '../store.js';
 import { replay } from '../match-calc.js';
 import { note } from './ui.js';
 
@@ -46,6 +46,8 @@ export default function pizarra(ctx) {
       let slots = null;
       if (m) { try { const log = (state.data.matchLogs || []).find((l) => l.match_id === m.id)?.log || []; slots = replay(log, m.lineups || [], players()).cur?.slots || m.lineups?.[0]?.slots || null; } catch { slots = m.lineups?.[0]?.slots || null; } }
       ui.b = fresh(slots); ui.name = m ? `Contra ${m.rival}` : '';
+      // v3.23: si tienes scouting de ese rival, sus números (primero los que atacan) en lugar del 1 al 6.
+      if (m) { const sc = (profile().scouting || {})[rivalKey(m.rival)]; const ns = (sc?.players || []).filter((p) => p.num).sort((a, b) => (b.attacks ? 1 : 0) - (a.attacks ? 1 : 0)).map((p) => String(p.num)).slice(0, 6); ns.forEach((n, i) => { ui.b.them[i].label = n; }); }
     }
     ui.tool = 'move'; ui.hist = []; ui.step = -1;
   }

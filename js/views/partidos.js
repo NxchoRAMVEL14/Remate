@@ -1,5 +1,5 @@
 // Partidos: lista de la temporada, récord y alta de un partido nuevo. El jugador ve resultados y sus propios números.
-import { h, ic, toast, openSheet, fmtDate, todayStr, plural } from '../util.js';
+import { h, ic, toast, openSheet, fmtDate, todayStr, plural, rivalKey } from '../util.js';
 import { state, add, patch, group, labReady, isStaff, torneosReady, multiTeam, teams, teamOf, teamName, equiposReady, inTeam, sql313Ready } from '../store.js';
 import { hhmm, addMin, toMin, defaultMinutes, normSchedule, upcomingSlots, slotLabel, timeText, matchTime, scheduleText } from '../horarios.js';
 import { KINDS, result, metrics, addCounts, fmtEff } from '../match-calc.js';
@@ -181,5 +181,5 @@ export function partido(ctx) {
     h('button', { type: 'button', role: 'tab', 'aria-selected': ui.tab === id ? 'true' : 'false', disabled: id === 'captura' && !canEdit ? true : null, onclick: () => { ui.tab = id; ctx.rerender(); } }, label)));
   const body = ui.tab === 'captura' && canEdit ? capture(m, ctx) : summaryView(m, ctx, { canEdit, coach });
   return { title: `Contra ${m.rival}`, sub, back: backTo,
-    actions: canEdit ? [{ icon: 'printer', label: 'Hoja de alineación para la mesa', href: `#/alineacion/${m.id}` }, { icon: 'pencil', label: 'Editar partido', onClick: () => matchSheet(m) }] : [], el: h('div', { class: 'page' }, h('div', { class: 'split' }, tabs, h('a', { class: 'btn sm', href: `#/pizarra/${m.id}` }, ic('move', 16), 'Pizarra')), body) };
+    actions: canEdit ? [{ icon: 'printer', label: 'Hoja de alineación para la mesa', href: `#/alineacion/${m.id}` }, { icon: 'pencil', label: 'Editar partido', onClick: () => matchSheet(m) }] : [], el: h('div', { class: 'page' }, h('div', { class: 'split' }, tabs, h('div', { class: 'cluster' }, coach ? h('a', { class: 'btn sm', href: `#/scout/${rivalKey(m.rival)}/${m.id}` }, ic('eye', 16), m.status === 'terminado' ? 'Plan rival' : 'Scouting 1 min') : null, h('a', { class: 'btn sm', href: `#/pizarra/${m.id}` }, ic('move', 16), 'Pizarra'))), body) };
 }

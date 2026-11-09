@@ -1,6 +1,9 @@
 // Inicio del jugador: su tarjeta, el próximo entrenamiento, qué le falta para subir y su asistencia.
 import { h, ic, plural, fmtDate, todayStr } from '../util.js';
-import { state, settings, sessions } from '../store.js';
+import { weeklyCard } from './ranking.js';
+import { openOf, reportSheet } from './lesiones.js';
+import { zoneName, stageOf } from '../content/lesiones.js';
+import { state, settings, sessions, sql323Ready } from '../store.js';
 import { nextSession, planMinutes, focusOf } from '../calc.js';
 import { SKILL_BY_ID } from '../content/skills.js';
 import { CHALLENGES } from '../content/challenges.js';
@@ -82,6 +85,19 @@ export default function inicio(ctx) {
     el.append(h('a', { class: 'panel', href: '#/pruebas', style: { textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '12px' } },
       ic('ruler', 26), h('span', { class: 'row-main' }, h('strong', {}, 'Tus pruebas físicas'),
         h('span', { class: 'row-sub' }, kinds.map((k) => { const tr = testTrend(myTests, k); return `${PTESTS[k].short}: ${Number(tr.last)} ${PTESTS[k].unit}${tr.n > 1 && tr.d ? ` (${tr.d > 0 ? '+' : ''}${tr.d})` : ''}`; }).join(' · ') || 'Ver tus resultados')), ic('chevron-right', 18)));
+  }
+
+  // retos de la semana (v3.22)
+  { const wk = weeklyCard({ me, compact: true }); if (wk) el.append(wk); }
+
+  // lesiones (v3.23): su regreso si está lesionado; si no, el botón para reportar una molestia
+  if (sql323Ready()) {
+    const open = openOf(me.id);
+    if (open.length) { const x = open[0]; el.append(h('a', { class: 'panel inj-band', href: '#/lesiones', style: { textDecoration: 'none', color: 'inherit' } }, ic('heart-pulse', 22),
+      h('span', { class: 'row-main' }, h('strong', {}, x.status === 'activa' ? `Lesión: ${zoneName(x.zone).toLowerCase()}` : `Tu regreso: fase ${x.stage} de 5`),
+        h('span', { class: 'row-sub' }, x.status === 'activa' ? 'Descansa esa zona; tu entrenador te dice cuándo empiezas el regreso.' : `Puedes: ${stageOf(x.stage)?.can || ''}`)), ic('chevron-right', 18))); }
+    else if (!ctx.readonly) el.append(h('div', { class: 'cluster' }, h('button', { class: 'btn sm', type: 'button', onclick: () => reportSheet(me, ctx.rerender) }, ic('heart-pulse', 16), '¿Te duele algo? Repórtalo'),
+      h('a', { class: 'btn sm ghost', href: '#/lesiones' }, 'Prevención')));
   }
 
   // aprende (v3.21): teoría y práctica de su posición o de lo que más le falta

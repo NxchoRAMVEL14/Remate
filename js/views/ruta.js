@@ -1,21 +1,25 @@
 // La ruta de 6 niveles y los retos (entrenador y jugador).
 import { h, ic, toast, fmtDate, plural } from '../util.js';
-import { state, players, getPlayer, add, remove, resolveClaim } from '../store.js';
+import { state, players, getPlayer, add, remove, resolveClaim, settings } from '../store.js';
 import { levelGap, xpFor, XP_RULES, currentRatings } from '../calc.js';
 import { SKILLS, SKILL_BY_ID, POSITION_NAME } from '../content/skills.js';
 import { LEVELS, required } from '../content/levels.js';
 import { CHALLENGES } from '../content/challenges.js';
 import { dots, sectionTitle, note, jersey } from './ui.js';
+import { rankingTab, rankMode, weeklyCard, weeklyIds } from './ranking.js';
+import { WEEK_BONUS } from '../calc.js';
 
 export default function ruta(ctx) {
   const ui = ctx.ui; ui.tab ??= 'niveles';
-  if (!ui.init) { ui.init = true; if (['niveles', 'retos'].includes(ctx.args[0])) ui.tab = ctx.args[0]; }
-  const tabs = [['niveles', 'Niveles'], ['retos', 'Retos']];
+  const showRank = ctx.role === 'coach' || (rankMode() !== 'no' && !!settings().ranking_pub);
+  if (!ui.init) { ui.init = true; if (['niveles', 'retos', 'ranking'].includes(ctx.args[0])) ui.tab = ctx.args[0]; }
+  const tabs = [['niveles', 'Niveles'], ['retos', 'Retos'], ...(showRank ? [['ranking', 'Ranking']] : [])];
+  if (!tabs.some((t) => t[0] === ui.tab)) ui.tab = 'niveles';
   const panel = h('div', { class: 'stack', role: 'tabpanel' });
   const bar = h('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Ruta' }, tabs.map(([id, t]) => h('button', { type: 'button', role: 'tab', 'aria-selected': String(ui.tab === id), onclick: () => { ui.tab = id; paint(); } }, t)));
   function paint() {
     [...bar.children].forEach((b, i) => b.setAttribute('aria-selected', String(tabs[i][0] === ui.tab)));
-    panel.replaceChildren(ui.tab === 'niveles' ? niveles(ctx) : retos(ctx));
+    panel.replaceChildren(ui.tab === 'niveles' ? niveles(ctx) : ui.tab === 'ranking' ? rankingTab(ctx) : retos(ctx));
   }
   paint();
   return { title: 'Ruta', el: h('div', { class: 'page' }, h('p', { style: { margin: 0, color: 'var(--ink-2)' } },
@@ -61,7 +65,7 @@ function retos(ctx) {
   const me = ctx.role === 'player' ? ctx.me : null;
   const readonly = !!ctx.readonly;
   if (me) {
-    const xp = xpFor(me, d);
+    const xp = xpFor(me, d, settings());
     out.append(h('div', { class: 'panel stack' }, h('div', { class: 'split' }, h('h2', {}, 'Tus puntos XP'), h('span', { class: 'num', style: { fontSize: '2.4rem', color: 'var(--court)' } }, String(xp))),
       h('p', { style: { margin: 0 }, class: 'muted' }, `Ganas ${XP_RULES.presente} XP por entrenamiento al que llegas a tiempo, ${XP_RULES.retardo} si llegas tarde, los puntos de cada reto aprobado y ${XP_RULES.examen} al aprobar un examen de nivel. Los puntos no cambian tu nivel: el nivel solo sube con el examen.`)));
     if (readonly) out.append(note('Vista previa: así lo ve el jugador. Aquí no se piden retos por él.', 'warn'));
@@ -74,6 +78,8 @@ function retos(ctx) {
           h('button', { class: 'btn sm', type: 'button', onclick: () => { resolveClaim(c.id, false); toast('Reto rechazado'); } }, 'Rechazar')));
     })) : note('No hay retos por aprobar.'));
   }
+  out.append(weeklyCard({ coach: ctx.role === 'coach', me }) || h('span'));
+  const wk = new Set(weeklyIds());
   const claimOf = (cid) => me ? d.claims.filter((c) => c.player_id === me.id && c.challenge_id === cid).sort((a, b) => String(b.claimed_at).localeCompare(String(a.claimed_at)))[0] : null;
   const row = (c) => {
     const claim = claimOf(c.id), done = claim?.status === 'aprobada';
@@ -86,7 +92,7 @@ function retos(ctx) {
       else if (!readonly) end = h('button', { class: 'btn sm primary', type: 'button', onclick: () => { add('claims', { player_id: me.id, challenge_id: c.id }); toast('Listo: tu entrenador lo revisará'); } }, claim?.status === 'rechazada' ? 'Intentar otra vez' : 'Pedir aprobación');
     } else end = doneBy ? h('span', { class: 'chip ok' }, plural(doneBy, 'jugador lo logró', 'jugadores lo lograron')) : null;
     return h('div', { class: `reto ${done ? 'done' : ''}` },
-      h('div', { class: 'head' }, h('div', {}, h('strong', {}, c.name), h('div', { class: 'row-sub' }, `${SKILL_BY_ID[c.skill].name}, niveles ${c.levels[0]} a ${c.levels[1]}`)), h('span', { class: 'xp' }, `${c.xp} XP`)),
+      h('div', { class: 'head' }, h('div', {}, h('strong', {}, c.name), h('div', { class: 'row-sub' }, `${SKILL_BY_ID[c.skill].name}, niveles ${c.levels[0]} a ${c.levels[1]}`)), wk.has(c.id) ? h('span', { class: 'xp wk' }, `${c.xp + Math.round(c.xp * WEEK_BONUS)} XP ★`) : h('span', { class: 'xp' }, `${c.xp} XP`)),
       h('p', { style: { margin: 0 } }, c.desc), h('p', { class: 'row-sub', style: { margin: 0 } }, `Cómo se aprueba: ${c.verify}`),
       claim?.status === 'rechazada' ? h('p', { class: 'row-sub', style: { margin: 0, color: 'var(--bad)' } }, 'Tu último intento no se aprobó. Puedes volver a intentarlo.') : null,
       end ? h('div', { class: 'cluster' }, end) : null);

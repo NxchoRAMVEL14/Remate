@@ -11,6 +11,7 @@ import { sessionFormSheet, attendanceSheet, pickExerciseSheet, undoDone, calButt
 import { noticeSheet } from './avisos.js';
 import { openCourtMode } from './court-mode.js';
 import { azarButton } from './azar.js';
+import { planToqueButton } from './plan-toque.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
 
@@ -92,7 +93,7 @@ export default function sesion(ctx) {
     plan.length ? h('span', { class: `chip ${diff === 0 ? 'ok' : 'warn'}` }, diff === 0 ? 'Completo' : diff > 0 ? `Faltan ${diff} min` : `Sobran ${-diff} min`) : null);
 
   const blocks = plan.length ? h('div', { class: 'blocks' }, plan.map((b, i) => blockRow(s, plan, i, b, setPlan)))
-    : empty('El plan está vacío', 'Elige una plantilla para empezar rápido, o agrega ejercicios uno por uno.');
+    : empty('El plan está vacío', 'Toca «Armar con un toque» y Remate lo arma con lo que más necesita tu grupo, o elige una plantilla, o agrega ejercicios uno por uno.');
 
   // Sugerencia: empezar con el calentamiento preventivo de la semana (se apaga en Ajustes).
   const wu = warmupFor(s.session_date), fiIdx = plan.findIndex((b) => b.ex === 'fi-01');
@@ -107,6 +108,7 @@ export default function sesion(ctx) {
   const planBox = h('section', { class: 'no-print stack' },
     sectionTitle('Plan', h('div', { class: 'cluster' },
       h('button', { class: 'btn sm', type: 'button', onclick: () => templateSheet(s) }, ic('book-open', 16), 'Plantilla'),
+      s.status === 'planeada' ? planToqueButton({ session: s }) : null,
       h('button', { class: 'btn sm primary', type: 'button', onclick: () => pickExerciseSheet((blk) => { setPlan([...plan, { ...blk, note: '' }]); toast('Bloque agregado'); }) }, ic('plus', 16), 'Ejercicio'))),
     suggest, balance, blocks);
 

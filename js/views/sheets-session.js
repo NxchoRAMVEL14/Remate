@@ -1,4 +1,5 @@
 // Hojas emergentes de sesiones y ejercicios: crear sesión, pasar lista, elegir ejercicio, ejercicio propio.
+import { injuryChip } from './lesiones.js';
 import { h, ic, openSheet, confirmSheet, toast, todayStr, addDays, parseDate, DAYS, buildICS, download, copyText, plural, fmtDate, googleCalUrl, weeklyRule, nextWeekday } from '../util.js';
 import { add, patch, remove, group, settings, players, setAttendance, state, calReady, randomToken, multiTeam, teamName, teamOf, convocados } from '../store.js';
 import { SKILLS, SKILL_BY_ID } from '../content/skills.js';
@@ -103,7 +104,7 @@ export function attendanceSheet(s) {
     const n = others().length;
     allBtn.hidden = !n && !showAll;
     allBtn.textContent = showAll ? 'Solo los convocados' : `Ver a los no convocados (${n})`;
-    rows.replaceChildren(...list.map((p) => h('div', { class: 'row' }, jersey(p, 'sm'), h('span', { class: 'row-main' }, h('strong', {}, p.name), !convIds.has(p.id) ? h('span', { class: 'row-sub' }, 'No convocado') : null),
+    rows.replaceChildren(...list.map((p) => h('div', { class: 'row' }, jersey(p, 'sm'), h('span', { class: 'row-main' }, h('strong', {}, p.name, ' ', injuryChip(p.id)), !convIds.has(p.id) ? h('span', { class: 'row-sub' }, 'No convocado') : null),
       h('div', { class: 'att', role: 'group', 'aria-label': `Asistencia de ${p.name}` }, ATT.map(([k, l, c2]) => h('button', {
         type: 'button', class: c2, 'aria-pressed': String(mark(p.id) === k), 'aria-label': STATUS_LABEL[k], title: STATUS_LABEL[k], disabled: armed ? null : true,
         onclick: () => set(p.id, mark(p.id) === k ? null : k) }, l))))));
