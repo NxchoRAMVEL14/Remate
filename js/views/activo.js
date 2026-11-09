@@ -82,7 +82,7 @@ export function openActive({ title = 'Sesión', entries, byId, rxOf, persist = (
     playBtn,
     h('button', { type: 'button', class: 'act-btn', 'aria-label': 'Saltar', onclick: () => go(idx + 1, true) }, ic('skip-forward', 26)));
   const extra = h('div', { class: 'act-extra' });
-  const ov = h('div', { class: 'act', role: 'dialog', 'aria-modal': 'true', 'aria-label': `Modo activo: ${title}` },
+  const ov = h('div', { class: 'actv', role: 'dialog', 'aria-modal': 'true', 'aria-label': `Modo activo: ${title}` },
     h('div', { class: 'act-top' }, prog, h('span', { class: 'cluster', style: { gap: '4px', flexWrap: 'nowrap' } }, soundBtn, closeBtn)),
     barWrap,
     h('div', { class: 'act-main' }, phaseEl, nameEl, figBox, clock, target, doneBtn, cue, nextEl),

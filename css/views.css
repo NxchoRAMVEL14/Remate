@@ -1055,20 +1055,20 @@ body:has(.rest-timer) .main { padding-bottom: 170px; }
 
 /* v3.20 · Modo activo (pantalla completa) */
 body.act-on { overflow: hidden; }
-.act { position: fixed; inset: 0; z-index: 80; color: #fff; background: var(--court-deep); display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto; gap: 8px;
+.actv { position: fixed; inset: 0; z-index: 80; color: #fff; background: var(--court-deep); display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto; gap: 8px;
   padding: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); transition: background-color .35s; }
-.act[data-phase='rest'] { background: #0E4A3A; }
-.act[data-phase='prep'] { background: #5B3D00; }
-.act.paused .act-time { opacity: .55; }
+.actv[data-phase='rest'] { background: #0E4A3A; }
+.actv[data-phase='prep'] { background: #5B3D00; }
+.actv.paused .act-time { opacity: .55; }
 .act-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .act-prog { font-weight: 700; font-size: .95rem; opacity: .92; }
-.act .iconbtn { color: #fff; }
+.actv .iconbtn { color: #fff; }
 .act-bar { height: 6px; border-radius: 99px; background: rgba(255,255,255,.18); overflow: hidden; }
 .act-bar i { display: block; height: 100%; background: var(--ball); transition: width .4s; }
 .act-main { overflow-y: auto; min-height: 0; height: 100%; align-self: stretch; display: grid; align-content: start; justify-items: center; gap: 8px; text-align: center; padding: 4px 0; }
 .act-phase { font: 900 1.1rem var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: var(--ball); }
-.act[data-phase='rest'] .act-phase { color: #8EF0C6; }
-.act[data-phase='prep'] .act-phase { color: #FFD66B; }
+.actv[data-phase='rest'] .act-phase { color: #8EF0C6; }
+.actv[data-phase='prep'] .act-phase { color: #FFD66B; }
 .act-name { margin: 0; color: #fff; font: 900 clamp(1.7rem, 7vw, 2.8rem)/1.02 var(--font-display); max-width: 22ch; }
 .act-fig { width: min(100%, 300px, 27vh); }
 .act-fig .fg-wrap { max-width: none; background: rgba(255,255,255,.94); }
@@ -1076,7 +1076,7 @@ body.act-on { overflow: hidden; }
 .act-time { font: 900 clamp(3.6rem, 19vw, 8rem)/.9 var(--font-display); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 .act-time.low { color: var(--ball); animation: act-pulse .9s ease-in-out infinite; }
 @keyframes act-pulse { 50% { transform: scale(1.06); } }
-@media (prefers-reduced-motion: reduce) { .act-time.low { animation: none; } .act { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .act-time.low { animation: none; } .actv { transition: none; } }
 .act-target { display: grid; gap: 8px; justify-items: center; }
 .act-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; }
 .act-lbl { font-weight: 700; opacity: .9; width: 100%; }
@@ -1110,6 +1110,38 @@ body.act-on { overflow: hidden; }
 .act-cta .split { align-items: center; }
 .act-list { display: grid; gap: 4px; padding-left: 20px !important; list-style: decimal; }
 .act-place button { min-width: 0; }
-.act small { color: inherit; }
+.actv small { color: inherit; }
 .conv-row input[type='checkbox'] { width: 24px; height: 24px; }
 .conv-row { cursor: pointer; }
+
+/* v3.21 · Aprende */
+.ap-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ap-chip { border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 99px; padding: 8px 14px; font: 700 .92rem var(--font-body, inherit); cursor: pointer; min-height: 40px; }
+.ap-chip[aria-pressed='true'] { background: var(--court); border-color: var(--court); color: #fff; }
+.ap-band .ap-count { margin-top: 6px; font-weight: 700; opacity: .9; }
+.ap-keys { display: grid; gap: 6px; padding-left: 20px !important; list-style: decimal; }
+.ap-gym summary { list-style: none; cursor: pointer; display: flex; }
+.ap-gym summary::-webkit-details-marker { display: none; }
+.ap-gym { display: block; }
+
+/* ---------- Pizarra (v3.21) ---------- */
+.pz-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.pz-tool { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border-radius: 12px; border: 1.5px solid var(--line, #ddd); background: var(--surface, #fff); color: inherit; font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; min-height: 52px; }
+.pz-tool[aria-pressed="true"] { border-color: currentColor; background: color-mix(in srgb, currentColor 12%, transparent); }
+.pz-tool.us { color: #1B4FA8; } .pz-tool.them { color: #C62828; } .pz-tool.ball { color: #9A6F00; }
+.pz-wrap { position: relative; display: flex; justify-content: center; background: #2E7D32; border-radius: 16px; padding: 6px; }
+.pz-svg { height: min(calc(100dvh - 190px), 640px); min-height: 380px; width: auto; max-width: 100%; touch-action: none; user-select: none; -webkit-user-select: none; display: block; }
+.pz-out { fill: #2E7D32; } .pz-court { fill: #F4A261; stroke: #fff; stroke-width: .8; }
+.pz-line { stroke: #fff; stroke-width: .6; } .pz-net { stroke: #222; stroke-width: 1.6; }
+.pz-side { font: 700 5px system-ui, sans-serif; fill: #fff; text-anchor: middle; opacity: .85; pointer-events: none; }
+.pz-tok { cursor: grab; } .pz-tok circle { stroke: #fff; stroke-width: 1; } .pz-tok.on circle { stroke: #FFD43B; stroke-width: 1.6; }
+.pz-tok.ball circle { stroke: #8A6500; }
+.pz-lbl { font: 800 6px system-ui, sans-serif; fill: #fff; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.pz-arrow { stroke-width: 1.4; fill: none; stroke-linecap: round; } .pz-arrow.ball { stroke-dasharray: 3 2; }
+.pz-close { display: none; position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,.55); color: #fff; }
+.pz-wrap:fullscreen, .pz-wrap.pz-full { position: fixed; inset: 0; z-index: 900; border-radius: 0; align-items: center; padding: 8px; }
+.pz-wrap:fullscreen .pz-svg, .pz-wrap.pz-full .pz-svg { max-width: none; max-height: 96vh; width: auto; height: 96vh; }
+.pz-wrap:fullscreen .pz-close, .pz-wrap.pz-full .pz-close { display: inline-flex; }
+.pz-roster { display: flex; flex-wrap: wrap; gap: 6px; max-height: 40vh; overflow: auto; }
+.btn.ball { border-color: #E0A100; }
+:root[data-theme="dark"] .pz-tool.us { color: #8DB4FF; } :root[data-theme="dark"] .pz-tool.them { color: #FF8A80; } :root[data-theme="dark"] .pz-tool.ball { color: #FFD43B; }

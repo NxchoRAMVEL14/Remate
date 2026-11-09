@@ -1,6 +1,7 @@
 // Remate · función "avisos" (Supabase Edge Function).
 // - action "key": devuelve la llave pública para que el celular active las notificaciones.
 // - action "send": el entrenador del equipo manda un aviso a los celulares suscritos de su grupo.
+// - action "test" (v3.21): manda una notificación de prueba solo a los celulares de quien la pide.
 // Las llaves del servidor se crean solas la primera vez y se guardan en la tabla push_config (nadie más la lee).
 import webpush from 'npm:web-push@3.6.7';
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -29,12 +30,23 @@ Deno.serve(async (req) => {
     }
     if (!cfg) return json({ error: 'No se pudieron crear las llaves de notificaciones. ¿Ya corriste el SQL nuevo?' }, 500);
     if (body.action === 'key') return json({ publicKey: cfg.public_key });
-    if (body.action !== 'send') return json({ error: 'Acción desconocida' }, 400);
+    if (body.action !== 'send' && body.action !== 'test') return json({ error: 'Acción desconocida' }, 400);
 
     const token = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
     const { data: auth } = await admin.auth.getUser(token);
     const user = auth?.user;
     if (!user) return json({ error: 'Tu sesión caducó. Vuelve a entrar.' }, 401);
+
+    if (body.action === 'test') {
+      webpush.setVapidDetails(`mailto:${user.email || 'avisos@example.com'}`, cfg.public_key, cfg.private_key);
+      const { data: mine } = await admin.from('push_subscriptions').select('id, endpoint, keys').eq('user_id', user.id);
+      if (!mine?.length) return json({ sent: 0, failed: 0, removed: 0, devices: 0 });
+      const payload = JSON.stringify({ title: 'Prueba de Remate', body: '¡Si ves esto, las notificaciones funcionan en este celular! 🏐', url: '#/ajustes' });
+      const res = await Promise.allSettled(mine.map((s) => webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys }, payload, { TTL: 600 })));
+      const dead = mine.filter((_, i) => { const r = res[i]; return r.status === 'rejected' && [404, 410].includes((r.reason as { statusCode?: number })?.statusCode ?? 0); }).map((s) => s.id);
+      if (dead.length) await admin.from('push_subscriptions').delete().in('id', dead);
+      return json({ devices: mine.length, sent: res.filter((r) => r.status === 'fulfilled').length, failed: res.filter((r) => r.status === 'rejected').length, removed: dead.length });
+    }
     const { data: g } = await admin.from('groups').select('id, owner_id, name').eq('id', body.group_id).maybeSingle();
     if (!g || g.owner_id !== user.id) return json({ error: 'Solo el entrenador del equipo puede mandar avisos.' }, 403);
 

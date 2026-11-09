@@ -4,6 +4,7 @@ import { state, group, settings, saveSettings, add, patch, remove, players, sess
 import { pushSettings } from './avisos.js';
 import { fraseField } from './frase.js';
 import { disablePush } from '../push.js';
+import { statusSheet } from './avisos.js';
 import { attendanceFor, doneSessions } from '../calc.js';
 import { leave, restartDemo } from '../auth.js';
 import { sectionTitle, note, field, options } from './ui.js';
@@ -211,6 +212,12 @@ function coach() {
       field('Recordatorio del entreno y del partido', h('select', { onchange: (e) => { saveSettings({ reminder_hours: Number(e.target.value) }); toast('Guardado'); } },
         options([['1', '1 hora antes'], ['2', '2 horas antes'], ['3', '3 horas antes'], ['4', '4 horas antes']], String(st.reminder_hours || 2))),
         'Solo llega a quien activó las notificaciones (en iPhone, con la app instalada). Necesita la función «recordatorios» en Supabase: ver LEEME.'),
+      // v3.21: avisos automáticos nuevos (misma función «recordatorios»)
+      ...[['reminders_gym', 'Recordatorio de gym a cada jugador con rutina, en sus días de gym a las 4 pm (si ese día aún no registra su sesión).'],
+        ['reminders_faltas', 'Aviso amable al jugador que faltó sin justificar a los 2 últimos entrenos: «¡Te extrañamos!» y cuándo es el próximo.'],
+        ['reminders_resumen', 'Resumen del lunes para ti (8 am): entrenos y asistencia de la semana pasada, y lo que viene esta semana.']].map(([k, txt]) =>
+        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st[k] !== false ? true : null, onchange: (e) => { saveSettings({ [k]: e.target.checked }); toast(e.target.checked ? 'Activado' : 'Apagado'); } }), h('span', {}, txt))),
+      h('button', { type: 'button', class: 'btn ghost', style: { alignSelf: 'flex-start' }, onclick: () => statusSheet() }, ic('list-checks', 18), 'Estado de las notificaciones'),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.warmup_prev !== false ? true : null, onchange: (e) => { saveSettings({ warmup_prev: e.target.checked }); toast(e.target.checked ? 'Calentamiento preventivo activado' : 'Calentamiento preventivo desactivado'); } }),
         h('span', {}, 'Empezar cada entrenamiento con el calentamiento preventivo (tobillo, rodilla y hombro). Se turnan las versiones A, B y C por semana.')),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: st.gym_players !== false ? true : null, onchange: (e) => { saveSettings({ gym_players: e.target.checked }); toast(e.target.checked ? 'Tus jugadores ya ven Gym' : 'Gym oculto para tus jugadores'); } }),

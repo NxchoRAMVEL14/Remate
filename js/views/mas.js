@@ -57,6 +57,8 @@ export default function mas() {
     item('#/ejercicios', 'book-open', 'Ejercicios', 'La biblioteca con diagramas, progresiones y tus ejercicios propios.'),
     item('#/ruta', 'flag', 'Ruta', 'Los 6 niveles, exámenes y retos de tus jugadores.', claims ? `${claims} por revisar` : null),
     item('#/reportes', 'file-text', 'Reportes', 'Reportes imprimibles por jugador y del grupo.'),
+    item('#/aprende', 'graduation-cap', 'Aprende', 'Teoría y práctica juntas, por fundamento (saque, remate…) o por posición (central, líbero…).'),
+    item('#/pizarra', 'move', 'Pizarra', 'Una cancha para acomodar a tu equipo y al rival, dibujar flechas, rotar y guardar jugadas.'),
     item('#/teoria', 'notebook-pen', 'Teoría', 'Lecciones, quizzes, repaso general y tus errores. Para tus jugadores y para ti.'),
     item('#/casa', 'house', 'En casa', 'Rutinas opcionales para tus jugadores y quién está entrenando en casa.'),
     item('#/gym', 'dumbbell', 'Gym', 'Rutinas de pesas según lo que quieren lograr, quién va al gym y sus cargas.'),

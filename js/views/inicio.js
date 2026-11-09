@@ -84,6 +84,11 @@ export default function inicio(ctx) {
         h('span', { class: 'row-sub' }, kinds.map((k) => { const tr = testTrend(myTests, k); return `${PTESTS[k].short}: ${Number(tr.last)} ${PTESTS[k].unit}${tr.n > 1 && tr.d ? ` (${tr.d > 0 ? '+' : ''}${tr.d})` : ''}`; }).join(' · ') || 'Ver tus resultados')), ic('chevron-right', 18)));
   }
 
+  // aprende (v3.21): teoría y práctica de su posición o de lo que más le falta
+  el.append(h('a', { class: 'panel', href: '#/aprende', style: { textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '12px' } },
+    ic('graduation-cap', 26), h('span', { class: 'row-main' }, h('strong', {}, 'Aprende'),
+      h('span', { class: 'row-sub' }, 'Teoría y práctica juntas de tu posición o del fundamento que quieras mejorar.')), ic('chevron-right', 18)));
+
   // en casa (opcional)
   const hw = homeWeek(me.id), hp = planOf(me);
   el.append(h('a', { class: 'panel', href: '#/casa', style: { textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '12px' } },

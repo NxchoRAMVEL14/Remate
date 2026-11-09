@@ -34,6 +34,9 @@ export default function ejercicios(ctx) {
     h('span', { class: 'lc-t' }, h('strong', {}, 'Para hacer en casa'), h('span', {}, ctx.role === 'coach' ? 'Rutinas opcionales que ven tus jugadores: físico, técnica con y sin balón.' : 'Opcional: físico, técnica con balón y sin balón, a tu nivel.')), ic('chevron-right', 20));
   const gymCard = ctx.role === 'coach' || gymVisible() || ctx.self ? h('a', { class: 'labcard', href: '#/gym' }, h('span', { class: 'lc-ic' }, ic('dumbbell', 26)),
     h('span', { class: 'lc-t' }, h('strong', {}, 'Físico en el gym'), h('span', {}, ctx.role === 'coach' ? 'Rutinas de pesas para tus jugadores, quién va al gym y sus cargas.' : 'Tu rutina de pesas según lo que quieres mejorar, y cómo llegar bien al entreno.')), ic('chevron-right', 20)) : null;
-  return { title: 'Ejercicios', el: h('div', { class: 'page' }, h('div', { class: 'labcards' }, home, gymCard), h('section', {}, sectionTitle('Biblioteca', add),
+  // v3.21: Aprende, la teoría y la práctica juntas.
+  const learn = h('a', { class: 'labcard', href: '#/aprende' }, h('span', { class: 'lc-ic' }, ic('graduation-cap', 26)),
+    h('span', { class: 'lc-t' }, h('strong', {}, 'Aprende por fundamento o posición'), h('span', {}, 'Saque, remate, central, líbero…: la teoría, la práctica, En casa y el gym, juntos.')), ic('chevron-right', 20));
+  return { title: 'Ejercicios', el: h('div', { class: 'page' }, h('div', { class: 'labcards' }, learn, home, gymCard), h('section', {}, sectionTitle('Biblioteca', add),
     h('div', { class: 'stack' }, q, h('div', { class: 'grid' }, sk, lv, kd, mt), count, rows))) };
 }

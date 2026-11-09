@@ -103,7 +103,8 @@ function coach(ctx) {
   const el = h('div', { class: 'page' },
     ro ? missingSqlNote() : null,
     ro ? null : h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', onclick: () => matchSheet(null, (m) => { location.hash = `#/partido/${m.id}`; }) }, ic('plus', 18), 'Nuevo partido'),
-      isCoach ? h('a', { class: 'btn', href: '#/rivales' }, ic('eye', 18), 'Scouting de rivales') : null),
+      isCoach ? h('a', { class: 'btn', href: '#/rivales' }, ic('eye', 18), 'Scouting de rivales') : null,
+      isCoach || state.role === 'assistant' ? h('a', { class: 'btn', href: '#/pizarra' }, ic('move', 18), 'Pizarra') : null),
     tournamentsSection(ctx),
     list.length || tf ? sectionTitle('Partidos') : null,
     mt ? h('div', { class: 'seg', role: 'group', 'aria-label': 'Equipo' }, [['', 'Todos'], ...teams().map((t) => [t.id, t.name])].map(([k, txt]) =>
@@ -180,5 +181,5 @@ export function partido(ctx) {
     h('button', { type: 'button', role: 'tab', 'aria-selected': ui.tab === id ? 'true' : 'false', disabled: id === 'captura' && !canEdit ? true : null, onclick: () => { ui.tab = id; ctx.rerender(); } }, label)));
   const body = ui.tab === 'captura' && canEdit ? capture(m, ctx) : summaryView(m, ctx, { canEdit, coach });
   return { title: `Contra ${m.rival}`, sub, back: backTo,
-    actions: canEdit ? [{ icon: 'printer', label: 'Hoja de alineación para la mesa', href: `#/alineacion/${m.id}` }, { icon: 'pencil', label: 'Editar partido', onClick: () => matchSheet(m) }] : [], el: h('div', { class: 'page' }, tabs, body) };
+    actions: canEdit ? [{ icon: 'printer', label: 'Hoja de alineación para la mesa', href: `#/alineacion/${m.id}` }, { icon: 'pencil', label: 'Editar partido', onClick: () => matchSheet(m) }] : [], el: h('div', { class: 'page' }, h('div', { class: 'split' }, tabs, h('a', { class: 'btn sm', href: `#/pizarra/${m.id}` }, ic('move', 16), 'Pizarra')), body) };
 }

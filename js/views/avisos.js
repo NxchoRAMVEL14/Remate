@@ -1,7 +1,7 @@
 // Avisos al equipo: en la app, por WhatsApp y como notificación en el celular.
 import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr, addDays, plural } from '../util.js';
 import { state, add, remove, group, teamReady, ls } from '../store.js';
-import { sendPush, pushStatus, enablePush, disablePush } from '../push.js';
+import { sendPush, pushStatus, enablePush, disablePush, sendTest, pushDiagnose } from '../push.js';
 import { sectionTitle, note, empty, field, options } from './ui.js';
 
 const LINKS = [['', 'Sin enlace'], ['#/inicio', 'Inicio'], ['#/entrenos', 'Entrenamientos'], ['#/partidos', 'Partidos'], ['#/casa', 'En casa'], ['#/ruta', 'Ruta y retos']];
@@ -65,10 +65,34 @@ export function pushSettings() {
       off: 'Recibe los avisos del equipo aunque no tengas la app abierta.' }[st];
     const btn = st === 'on' ? h('button', { class: 'btn', type: 'button', onclick: async () => { await disablePush(); toast('Notificaciones desactivadas'); paint(); } }, 'Desactivar')
       : st === 'off' ? h('button', { class: 'btn primary', type: 'button', onclick: async (e) => { e.target.disabled = true; try { await enablePush(); toast('¡Listo! Notificaciones activadas'); } catch (err) { toast(err.message, 5000); } paint(); } }, ic('bell', 18), 'Activar notificaciones') : null;
-    box.replaceChildren(h('p', { style: { margin: 0 } }, msg), btn);
+    const test = st === 'on' ? h('button', { class: 'btn', type: 'button', onclick: async (e) => {
+      e.currentTarget.disabled = true;
+      try {
+        const r = await sendTest();
+        toast(!r.devices ? 'No encontré tu celular en Supabase: toca «Desactivar» y «Activar» otra vez.' : r.sent ? `Prueba enviada a ${r.sent === 1 ? 'tu celular' : `${r.sent} celulares tuyos`}. Debe llegar en unos segundos.` : 'No se pudo entregar la prueba. Revisa «Estado de las notificaciones».', 6000);
+      } catch (err) { toast(err.message, 6000); }
+      paint();
+    } }, ic('send', 18), 'Mandarme una prueba') : null;
+    const diag = h('button', { class: 'btn ghost', type: 'button', onclick: () => statusSheet() }, ic('list-checks', 18), 'Estado de las notificaciones');
+    box.replaceChildren(h('p', { style: { margin: 0 } }, msg), h('div', { class: 'cluster' }, btn, test, diag));
   };
   if (state.mode === 'cloud') paint(); else box.replaceChildren(h('p', { class: 'row-sub', style: { margin: 0 } }, 'En el modo demo no hay notificaciones.'));
   return box;
+}
+
+// v3.21: revisa pieza por pieza y dice qué arreglar en lo que falle.
+export function statusSheet() {
+  const body = h('div', { class: 'stack' }, h('p', { class: 'row-sub', style: { margin: 0 } }, 'Revisando…'));
+  openSheet({ title: 'Estado de las notificaciones', body });
+  pushDiagnose({ coach: state.role === 'coach' }).then((list) => {
+    const bad = list.filter((x) => x.ok === false);
+    body.replaceChildren(
+      h('div', { class: 'rows' }, list.map((x) => h('div', { class: 'row' },
+        h('span', { class: `chip ${x.ok === true ? 'ok' : x.ok === false ? 'bad' : 'warn'}`, 'aria-hidden': 'true' }, x.ok === true ? '✓' : x.ok === false ? '✗' : '?'),
+        h('span', { class: 'row-main' }, h('strong', {}, x.label), x.ok !== true && x.fix ? h('span', { class: 'row-sub' }, x.fix) : null)))),
+      bad.length ? note(`Arregla primero el punto «${bad[0].label}»: casi siempre los demás se acomodan solos.`, 'warn')
+        : note('Todo en orden. Si aun así no te llega, revisa que el celular no esté en «No molestar» o ahorro de batería extremo.', 'ok'));
+  }).catch(() => body.replaceChildren(note('No se pudo revisar. ¿Tienes internet?', 'bad')));
 }
 
 export default function avisos(ctx) {
