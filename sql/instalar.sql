@@ -1760,3 +1760,58 @@ exception when duplicate_object then null; end $$;
 update public.matches
    set start_time = (substring(note from 'Hora: ?([0-2]?[0-9]:[0-5][0-9])'))::time
  where start_time is null and note ~ 'Hora: ?([01]?[0-9]|2[0-3]):[0-5][0-9]';
+
+-- =====================================================================
+-- REMATE · v3.23 — Lesiones y regreso por fases.
+-- Son datos de salud de menores: solo los ve el entrenador y el propio jugador (los ayudantes no).
+-- El jugador solo puede reportar una molestia suya; seguirla, pasarla de fase o darla de alta lo hace el entrenador.
+-- Se puede correr las veces que quieras. No borra nada.
+-- =====================================================================
+create table if not exists public.injuries (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,   -- siempre el entrenador
+  player_id uuid not null references public.players(id) on delete cascade,
+  zone text not null check (zone in ('tobillo', 'rodilla', 'hombro', 'espalda', 'dedos', 'muneca', 'cadera', 'otra')),
+  kind text not null default 'molestia' check (kind in ('molestia', 'lesion')),
+  pain smallint check (pain between 0 and 10),                       -- qué tanto duele (0 a 10)
+  started_on date not null default current_date,
+  status text not null default 'activa' check (status in ('activa', 'regreso', 'alta')),
+  stage smallint not null default 0 check (stage between 0 and 5),   -- fase del regreso (1 a 5; 0 = aún no empieza)
+  note text not null default '' check (char_length(note) <= 500),           -- lo que cuenta el jugador
+  coach_note text not null default '' check (char_length(coach_note) <= 500),
+  reported_by text not null default 'entrenador' check (reported_by in ('jugador', 'entrenador')),
+  seen_at timestamptz,
+  ended_on date,
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+create index if not exists injuries_player_idx on public.injuries (player_id, started_on desc);
+alter table public.injuries enable row level security;
+
+drop policy if exists injuries_coach on public.injuries;
+create policy injuries_coach on public.injuries for all to authenticated
+  using (owner_id = auth.uid() and public.is_coach())
+  with check (owner_id = auth.uid() and public.is_coach());
+drop policy if exists injuries_player_read on public.injuries;
+create policy injuries_player_read on public.injuries for select to authenticated
+  using (player_id in (select public.my_player_ids()));
+drop policy if exists injuries_player_insert on public.injuries;
+create policy injuries_player_insert on public.injuries for insert to authenticated
+  with check (player_id in (select public.my_player_ids()) and reported_by = 'jugador' and status = 'activa'
+              and stage = 0 and coach_note = '' and seen_at is null and started_on between current_date - 30 and current_date);
+
+create or replace function public.injuries_set_owner() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then
+    select owner_id into new.owner_id from public.players where id = new.player_id;
+    if new.owner_id is null then raise exception 'Jugador no encontrado'; end if;
+  end if;
+  new.updated_at := now();
+  return new;
+end $$;
+drop trigger if exists injuries_set_owner on public.injuries;
+create trigger injuries_set_owner before insert or update on public.injuries
+  for each row execute function public.injuries_set_owner();
+revoke all on public.injuries from anon;
+grant select, insert, update, delete on public.injuries to authenticated;
