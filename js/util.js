@@ -10,7 +10,7 @@ export function h(tag, attrs, ...kids) {
     else if (k === 'html') el.innerHTML = v;
     else if (k === 'for') el.htmlFor = v;
     else if (k === 'value') value = v;
-    else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+    else if (k === 'style' && typeof v === 'object') { for (const [sk, sv] of Object.entries(v)) { if (sk.startsWith('--')) el.style.setProperty(sk, sv); else el.style[sk] = sv; } }
     else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
     else if (v === true) el.setAttribute(k, '');
     else el.setAttribute(k, v);
