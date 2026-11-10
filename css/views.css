@@ -1227,3 +1227,71 @@ body.act-on { overflow: hidden; }
 .vd-color { width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--line); cursor: pointer; }
 .vd-color[aria-pressed="true"] { outline: 3px solid var(--ink); outline-offset: 2px; }
 .tv-draw { font-size: .78rem; }
+
+/* ---------- Teoría visual (v3.24) ---------- */
+.teo-hero { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; padding: 14px 14px 10px; border-radius: var(--r-l); color: #fff;
+  background: linear-gradient(135deg, var(--u) 0%, color-mix(in srgb, var(--u) 70%, #000) 100%); overflow: hidden; }
+.teo-hero h2 { margin: 2px 0 4px; color: #fff; font-family: var(--font-display); font-size: 1.7rem; line-height: 1.05; }
+.teo-hero .when { font-size: .78rem; font-weight: 700; opacity: .9; }
+.teo-hero p { font-size: .95rem; }
+.teo-hero .ig-fig { width: 92px; }
+.teo-hero .ig-fig svg { width: 100%; height: auto; }
+.teo-hero .ig-fig .fg-ground { stroke: rgba(255,255,255,.5); }
+.teo-hero .fg-limb, .teo-hero .fg-torso { stroke: #fff; } .teo-hero .fg-head { fill: #fff; } .teo-hero .fg-far { stroke: #fff; opacity: .5; } .teo-hero .fg-shadow { fill: #000; opacity: .2; } .teo-hero .fg-net { stroke: rgba(255,255,255,.7); }
+.teo-hero .fg { cursor: default; } .ig-fig .fg { cursor: default; }
+.teo-keycards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.teo-keycards li { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: start; padding: 10px; border-radius: var(--r-m); background: var(--surface);
+  border: 2px solid color-mix(in srgb, var(--k) 45%, var(--line)); border-top: 6px solid var(--k); font-weight: 600; font-size: .92rem; }
+.teo-kn { width: 26px; height: 26px; border-radius: 50%; background: var(--k); color: #fff; display: grid; place-items: center; font-weight: 900; font-family: var(--font-display); }
+.ig { margin: 0; display: grid; gap: 8px; padding: 12px; border-radius: var(--r-l); background: var(--surface); border: 1px solid var(--line); }
+.ig-title { font-family: var(--font-display); font-weight: 900; font-size: 1.25rem; color: var(--ink); }
+.ig figcaption, .ig > figcaption { font-size: .88rem; color: var(--ink-2); }
+.ig-svg { width: 100%; max-width: 360px; justify-self: center; display: block; }
+.ig-out { fill: #1E5631; } .ig-floor { fill: #F4A261; stroke: #fff; stroke-width: .8; }
+.ig-line { stroke: #fff; stroke-width: .7; } .ig-net { stroke: #1a1a1a; stroke-width: 2.4; }
+.ig-netlbl { font: 800 3.6px system-ui, sans-serif; fill: #fff; text-anchor: middle; letter-spacing: .4px; }
+.ig-zone { cursor: pointer; } .ig-zone rect { opacity: .82; transition: opacity .15s; } .ig-zone.on rect { opacity: 1; stroke: #FFD43B; stroke-width: 1.6; }
+.ig-zone:focus-visible { outline: none; } .ig-zone:focus-visible rect { stroke: #fff; stroke-width: 1.6; }
+.ig-znum { font: 900 13px system-ui, sans-serif; fill: #fff; text-anchor: middle; pointer-events: none; }
+.ig-zsub { font: 700 3.3px system-ui, sans-serif; fill: #fff; text-anchor: middle; opacity: .9; pointer-events: none; text-transform: uppercase; }
+.ig-small { font: 600 3.4px system-ui, sans-serif; fill: #fff; text-anchor: middle; }
+.ig-arrow-serve { stroke: #FFD43B; stroke-width: 1.2; fill: none; }
+.ig-info { padding: 8px 10px; border-radius: var(--r-m); background: var(--surface-2); }
+.ig-tok { transition: transform .6s ease; } .ig-tok circle { fill: #1565C0; stroke: #fff; stroke-width: 1.2; }
+.ig-tok.serve circle { fill: #F9A825; } .ig-tok.serve .ig-toknum { fill: #3B2A00; }
+.ig-toknum { font: 900 7px system-ui, sans-serif; fill: #fff; text-anchor: middle; pointer-events: none; }
+.ig-zlbl { font: 700 3.6px system-ui, sans-serif; fill: rgba(0,0,0,.55); text-anchor: middle; }
+.ig-rot { stroke: rgba(255,255,255,.85); stroke-width: 1.4; fill: none; stroke-dasharray: 3 2; } .ig-headfill { fill: #fff; }
+.ig-pos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.ig-pos { border-radius: var(--r-m); border: 2px solid var(--c); overflow: hidden; background: var(--surface); }
+.ig-pos-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 6px 10px; background: var(--c); color: #fff; }
+.ig-pos-h strong { font-family: var(--font-display); font-size: 1.2rem; } .ig-pos-h span { font-size: .78rem; font-weight: 700; opacity: .95; }
+.ig-pos-b { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: center; padding: 6px 10px 0; }
+.ig-pos-c { display: grid; gap: 2px; justify-items: center; }
+.ig-pos p { margin: 6px 10px; font-size: .9rem; } .ig-ojo { color: var(--ink-2); font-size: .84rem !important; }
+.ig-fig svg { width: 100%; height: auto; max-height: 120px; }
+.ig-mz { fill: rgba(255,255,255,.35); } .ig-mz.on { opacity: .9; }
+.ig-mznum { font: 800 9px system-ui, sans-serif; fill: rgba(0,0,0,.45); text-anchor: middle; } .ig-mznum.on { fill: #fff; }
+.ig-small-t { font-size: .74rem; color: var(--ink-2); text-align: center; }
+.ig-sys-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.ig-sys-cell { display: grid; gap: 2px; justify-items: center; }
+.ig-sys-tok circle { fill: #607D8B; stroke: #fff; stroke-width: 1; } .ig-sys-tok.c circle { fill: #B0892A; }
+.ig-sys-tok.sets circle { fill: #F9A825; stroke: #3B2A00; stroke-width: 1.6; } .ig-sys-tok.sets .ig-toknum { fill: #3B2A00; }
+.ig-sys-tok.rec circle { fill: #6A1B9A; }
+.ig-legend { margin: 0; font-size: .8rem; color: var(--ink-2); }
+.ig-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #F9A825; border: 2px solid #3B2A00; vertical-align: middle; }
+.ig-rec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.ig-rec { display: grid; gap: 4px; font-size: .88rem; }
+.ig-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.ig-steps li { position: relative; display: grid; gap: 2px; padding: 8px; border-radius: var(--r-m); background: var(--surface-2); font-size: .86rem; }
+.ig-steps li strong { font-family: var(--font-display); font-size: 1.05rem; }
+.ig-stepn { position: absolute; top: 6px; left: 6px; width: 24px; height: 24px; border-radius: 50%; background: var(--court); color: #fff; display: grid; place-items: center; font-weight: 900; }
+.ig-cycle { display: grid; gap: 6px; padding: 8px 10px; border-radius: var(--r-m); background: var(--surface-2); }
+.ig-cycle.k1 { border-left: 6px solid #1565C0; } .ig-cycle.k2 { border-left: 6px solid #C62828; }
+.ig-cycle ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.ig-cycle li { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 99px; background: var(--surface); border: 1px solid var(--line); font-weight: 700; font-size: .85rem; }
+.ig-cycle li + li::before { content: '→'; margin-right: 4px; color: var(--ink-2); }
+@media (prefers-reduced-motion: reduce) { .ig-tok { transition: none; } }
+.teo-keys.stack { background: none; color: var(--ink); padding: 0; }
+.teo-keys.stack > h3 { color: var(--ink); font-family: var(--font-display); font-size: 1.3rem; }
+@media print { .teo-hero { background: #fff !important; color: #000; border: 2px solid #000; } .teo-hero h2 { color: #000; } .ig-rotacion .cluster { display: none; } }
