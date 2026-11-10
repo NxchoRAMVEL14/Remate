@@ -10,6 +10,7 @@ import { levelGap } from '../calc.js';
 import { FUNDS, FUND, FUND_NAME, POS, POS_IDS, lessonsForFund, lessonsForPos } from '../content/aprende.js';
 import { progress, lessonDone } from './teoria.js';
 import { note } from './ui.js';
+import { posicionesIG, pasosIG, POS_IG, STEPS } from './infografia.js';
 
 const gymOn = () => settings().gym_players !== false;
 
@@ -60,6 +61,8 @@ export default function aprende(ctx) {
       ui.sel !== `f:${tip.skill}` ? h('button', { type: 'button', class: 'btn sm', onclick: () => pick(`f:${tip.skill}`) }, `Ver ${FUND_NAME[tip.skill]}`) : null) : null,
     h('section', { class: 'panel stack' }, chipRow('Por fundamento', FUNDS, 'f'), chipRow('Por posición', POS_IDS.map((k) => [k, POS[k].name]), 'p')),
     head,
+    // v3.24: la tarjeta visual de la posición o el paso a paso del fundamento
+    kind === 'p' && POS_IG[id] ? posicionesIG(id) : kind === 'f' && STEPS[id] ? pasosIG(id) : null,
     kind === 'p' ? h('section', { class: 'panel stack' }, h('h3', {}, 'Lo que más usa'), h('div', { class: 'ap-chips' }, POS[id].funds.map((f, i) => h('button', { type: 'button', class: 'ap-chip', onclick: () => pick(`f:${f}`) }, `${i + 1}. ${FUND_NAME[f]}`)))) : null,
     section('key-round', 'Las 3 claves', null, h('ol', { class: 'plain ap-keys' }, keys.map((k) => h('li', {}, k)))),
     section('notebook-pen', 'Teoría', 'Lecciones cortas con quiz. La palomita es que ya la aprobaste en este celular.',

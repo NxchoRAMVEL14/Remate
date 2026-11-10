@@ -7,6 +7,10 @@ import { SCENARIOS, SCENARIO_BY_ID, CATS } from '../content/vision.js';
 import { CHALLENGE_BY_ID } from '../content/challenges.js';
 import { courtSVG } from '../court.js';
 import { sectionTitle, note, empty } from './ui.js';
+import { LESSON_IG, heroFig } from './infografia.js';
+
+const UNIT_COLOR = { reglas: '#1565C0', tecnica: '#2E7D32', sistemas: '#6A1B9A', tactica: '#C62828' };
+const KEY_COLORS = ['#C62828', '#2E7D32', '#1565C0', '#6A1B9A', '#00796B', '#EF6C00'];
 
 // ---------- avance (solo en este celular) ----------
 const pkey = () => `remate.teoria.${state.viewAs || state.me?.id || 'entrenador'}`;
@@ -145,10 +149,15 @@ function lesson(ctx, l) {
   const best = progress().quiz[l.id];
   const flat = LESSONS.indexOf(l), prev = LESSONS[flat - 1], next = LESSONS[flat + 1];
   const el = h('div', { class: 'page teoria lesson' },
-    h('section', { class: 'band next stack' }, h('span', { class: 'when' }, `${u.name} · lección ${i + 1} de ${list.length} · ${l.min} min`),
-      h('h2', {}, l.name), h('p', { style: { margin: 0 } }, l.intro)),
+    // v3.24: encabezado tipo póster con el muñequito de la habilidad, infografías («Míralo») y claves en tarjetas.
+    h('section', { class: 'teo-hero', style: { '--u': UNIT_COLOR[l.unit] || '#1565C0' } },
+      h('div', { class: 'teo-hero-t' }, h('span', { class: 'when' }, `${u.name} · lección ${i + 1} de ${list.length} · ${l.min} min`),
+        h('h2', {}, l.name), h('p', { style: { margin: 0 } }, l.intro)),
+      heroFig(l.skill)),
+    LESSON_IG[l.id] ? h('section', { class: 'stack teo-ig' }, sectionTitle('Míralo'), ...LESSON_IG[l.id].map((f) => f())) : null,
     h('article', { class: 'panel stack teo-body' }, l.body.map(blockEl)),
-    h('section', { class: 'panel stack teo-keys' }, h('h3', {}, 'Para recordar'), h('ul', { class: 'plain' }, l.keys.map((k) => h('li', {}, k)))),
+    h('section', { class: 'stack teo-keys' }, h('h3', { style: { margin: 0 } }, 'Para recordar'),
+      h('ol', { class: 'teo-keycards' }, l.keys.map((k, n) => h('li', { style: { '--k': KEY_COLORS[n % KEY_COLORS.length] } }, h('span', { class: 'teo-kn' }, String(n + 1)), h('span', {}, k))))),
     h('section', { class: 'stack' }, sectionTitle('Comprueba lo que aprendiste', best != null ? h('span', { class: `chip ${best >= passMark(l) ? 'ok' : ''}` }, `Tu mejor: ${best} de ${all}`) : null),
       l.quiz.map((q, k) => questionEl(q, ui, k, onAnswer, k + 1)),
       answered === all ? h('div', { class: `note ${score >= passMark(l) ? '' : 'warn'}`, role: 'status' },
