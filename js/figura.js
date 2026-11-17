@@ -28,12 +28,14 @@ function joints(p, view, groundY) {
     const knee = down(base, ang[0], LEN.thigh, m), ank = down(knee, ang[1], LEN.shin, m), toe = down(ank, ang[2] ?? 90, front ? 3 : LEN.foot, m);
     limbs[key] = [base, knee, ank, toe];
   };
-  const arm = (key, ang, side) => {
-    const m = front ? side : 1, base = front ? [sh[0] + side * 10, sh[1] + 2] : sh;
+  // v3.25: sg = hombros arriba (encogimientos, en px); wa y wb = ángulo de la mano (muñeca) de cada brazo.
+  const sg = p.sg || 0;
+  const arm = (key, ang, side, w) => {
+    const m = front ? side : 1, base = front ? [sh[0] + side * 10, sh[1] + 2 - sg] : [sh[0], sh[1] - sg];
     const el = down(base, ang[0], LEN.upper, m), hand = down(el, ang[1], LEN.fore, m);
-    limbs[key] = [base, el, hand];
+    limbs[key] = w == null ? [base, el, hand] : [base, el, hand, down(hand, w, 7, m)];
   };
-  leg('L', p.L, 1); leg('R', p.R, -1); arm('A', p.A, 1); arm('B', p.B, -1);
+  leg('L', p.L, 1); leg('R', p.R, -1); arm('A', p.A, 1, p.wa); arm('B', p.B, -1, p.wb);
   const pts = [head, sh, ...limbs.L, ...limbs.R, ...limbs.A, ...limbs.B];
   // Lo más bajo del cuerpo toca el piso (o el cajón, o queda en el aire con «up»).
   const lowest = Math.max(...pts.map((q) => q[1] + (q === head ? LEN.head : 0)));
@@ -52,6 +54,7 @@ const lerpPose = (a, b, k) => {
     o[key] = Array.isArray(va) ? va.map((v, i) => lerp(v, vb[i] ?? v, k)) : lerp(va, vb, k);
   }
   o.hd = lerp(a.hd || 0, b.hd || 0, k);
+  for (const x of ['sg', 'wa', 'wb']) if (a[x] != null || b[x] != null) o[x] = lerp(a[x] ?? b[x], b[x] ?? a[x], k);
   return o;
 };
 const ease = (k) => 0.5 - Math.cos(Math.PI * k) / 2;
@@ -59,7 +62,7 @@ const ease = (k) => 0.5 - Math.cos(Math.PI * k) / 2;
 // Utilería que se dibuja pegada al cuerpo o fija en la escena.
 function propsSVG(mv, J, groundY) {
   const out = [];
-  const A = J.A[2], B = J.B[2];
+  const A = J.A[J.A.length - 1], B = J.B[J.B.length - 1];
   const handMid = [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
   for (const pr of mv.props || []) {
     const k = typeof pr === 'string' ? pr : pr.k;
@@ -67,6 +70,7 @@ function propsSVG(mv, J, groundY) {
     else if (k === 'barback') { const s = J.sh; out.push(`<circle class="fg-pr" cx="${(s[0] - 3).toFixed(1)}" cy="${(s[1] + 1).toFixed(1)}" r="9"/><circle class="fg-pr2" cx="${(s[0] - 3).toFixed(1)}" cy="${(s[1] + 1).toFixed(1)}" r="2.5"/>`); }
     else if (k === 'barhip') { const p = J.hip; out.push(`<circle class="fg-pr" cx="${(p[0] + 2).toFixed(1)}" cy="${(p[1] - 6).toFixed(1)}" r="9"/><circle class="fg-pr2" cx="${(p[0] + 2).toFixed(1)}" cy="${(p[1] - 6).toFixed(1)}" r="2.5"/>`); }
     else if (k === 'db') for (const q of [A, B]) out.push(`<rect class="fg-pr" x="${(q[0] - 5).toFixed(1)}" y="${(q[1] - 2.5).toFixed(1)}" width="10" height="5" rx="2"/>`);
+    else if (k === 'barF') out.push(`<line class="fg-wall" x1="${(Math.min(A[0], B[0]) - 14).toFixed(1)}" y1="${((A[1] + B[1]) / 2).toFixed(1)}" x2="${(Math.max(A[0], B[0]) + 14).toFixed(1)}" y2="${((A[1] + B[1]) / 2).toFixed(1)}"/>`);   // v3.25: barra vista de frente
     else if (k === 'db1') out.push(`<rect class="fg-pr" x="${(A[0] - 5).toFixed(1)}" y="${(A[1] - 2.5).toFixed(1)}" width="10" height="5" rx="2"/>`);
     else if (k === 'dbchest') out.push(`<rect class="fg-pr" x="${(handMid[0] - 3).toFixed(1)}" y="${(handMid[1] - 7).toFixed(1)}" width="6" height="12" rx="2"/>`);
     else if (k === 'mb') out.push(`<circle class="fg-pr" cx="${handMid[0].toFixed(1)}" cy="${(handMid[1] - 2).toFixed(1)}" r="6.5"/>`);
@@ -126,7 +130,7 @@ function bodySVG(mv, p) {
   return `<ellipse class="fg-shadow" cx="${J.hip[0].toFixed(1)}" cy="${GROUND + 1}" rx="${(22 * sh).toFixed(1)}" ry="2.5"/>`
     + poly(J.R, far) + poly(J.B, far)
     + `<line class="fg-torso" x1="${J.hip[0].toFixed(1)}" y1="${J.hip[1].toFixed(1)}" x2="${J.neck[0].toFixed(1)}" y2="${J.neck[1].toFixed(1)}"/>`
-    + (front ? seg([J.hip[0] - 6, J.hip[1]], [J.hip[0] + 6, J.hip[1]], 'fg-limb') + seg([J.sh[0] - 10, J.sh[1] + 2], [J.sh[0] + 10, J.sh[1] + 2], 'fg-limb') : '')
+    + (front ? seg([J.hip[0] - 6, J.hip[1]], [J.hip[0] + 6, J.hip[1]], 'fg-limb') + seg(J.B[0], J.A[0], 'fg-limb') : '')
     + `<circle class="fg-head" cx="${J.head[0].toFixed(1)}" cy="${J.head[1].toFixed(1)}" r="${LEN.head}"/>`
     + poly(J.L, 'fg-limb') + poly(J.A, 'fg-limb')
     + propsSVG(mv, J, groundY);
