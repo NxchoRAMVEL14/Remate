@@ -1295,3 +1295,27 @@ body.act-on { overflow: hidden; }
 .teo-keys.stack { background: none; color: var(--ink); padding: 0; }
 .teo-keys.stack > h3 { color: var(--ink); font-family: var(--font-display); font-size: 1.3rem; }
 @media print { .teo-hero { background: #fff !important; color: #000; border: 2px solid #000; } .teo-hero h2 { color: #000; } .ig-rotacion .cluster { display: none; } }
+
+/* ---------- v3.25: Remate Fit · Cardio ---------- */
+.cd-bar { margin: 4px 0 2px; background: rgba(255,255,255,.22); }
+.cd-bar i { background: var(--ball); }
+.cd-zones { display: grid; gap: 6px; }
+.cd-zone { display: grid; gap: 2px; padding: 9px 12px; border-radius: 10px; background: var(--surface-2); border-left: 5px solid var(--zc, var(--court)); font-size: .92rem; }
+.cd-zone strong { color: var(--ink); }
+.cd-bpm { font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cd-z1 { --zc: #6BA6D9; } .cd-z2 { --zc: #2E9E6A; } .cd-z3 { --zc: #D9A21B; } .cd-z4 { --zc: #E0672A; } .cd-z5 { --zc: #C7362F; }
+.chip.cd-z1, .chip.cd-z2, .chip.cd-z3, .chip.cd-z4, .chip.cd-z5 { background: var(--zc); color: #fff; border-color: transparent; }
+.cd-week { display: grid; gap: 4px; }
+.cd-day { display: grid; grid-template-columns: 42px 1fr; column-gap: 8px; align-items: start; padding: 7px 10px; border-radius: 10px; background: var(--surface-2); font-size: .88rem; line-height: 1.3; }
+.cd-day b { color: var(--ink); padding-top: 1px; }
+.cd-day.today { box-shadow: inset 0 0 0 2px var(--ball); }
+.cd-what { display: grid; gap: 3px; justify-items: start; }
+.cd-what small { color: var(--ink-2); }
+.cd-pill { display: inline-block; padding: 2px 9px; border-radius: 6px; background: var(--surface); border-left: 4px solid var(--zc, var(--court)); color: var(--ink); font-weight: 700; }
+.cd-rest { color: var(--ink-2); }
+.cd-kind summary { display: flex; align-items: center; gap: 10px; }
+.cd-ico { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--info-bg); color: var(--court); flex: none; }
+.cd-today .chip { font-size: .78rem; }
+.cd-timer[data-phase='work'] { background: #7A2416; }
+/* v3.25: con la pestaña Cardio son 6: más compactas en celular */
+@media (max-width: 480px) { .fit .tabs { gap: 0; } .fit .tabs button { padding: 10px 2px; font-size: .86rem; letter-spacing: -.01em; } }
