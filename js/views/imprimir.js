@@ -103,7 +103,7 @@ function fitPrint(ctx) {
   const spec = specOf(me.id), vb = vbOf(me, spec), r = buildFit(spec, vb.days);
   const tools = [h('div', { class: 'cluster' }, check(ui, 'cols', 'Columnas para anotar pesos (4 semanas)', true), check(ui, 'how', 'Cómo se hace cada ejercicio', false))];
   return page('Rutina de Remate Fit', back, tools, routineSheet(ui, { title: 'Rutina de Remate Fit', who: me.name,
-    lines: [`${FIT_GOALS[spec.goal].name} · ${r.custom ? `personalizada, ${plural(r.days.length, 'día', 'días')}` : splitName(spec.days)}`, [`${spec.minutes} min`, FIT_EXP[spec.exp].name, PLACES[spec.place].name, `${vb.days} de voleibol por semana`].join(' · ')],
+    lines: [`${FIT_GOALS[spec.goal].name} · ${r.custom ? `personalizada, ${plural(r.days.length, 'día', 'días')}` : r.rota ? `cambia cada semana; esta: ${r.rota.name.toLowerCase()}` : splitName(spec.days)}`, [`${spec.minutes} min`, FIT_EXP[spec.exp].name, PLACES[spec.place].name, `${vb.days} de voleibol por semana`].join(' · ')],
     days: r.days, byId: FIT_BY_ID, roleName: FROLE, notes: r.notes,
     foot: 'Cada 6 semanas, una semana de descarga: una serie menos en cada ejercicio y sin subir peso.' }));
 }

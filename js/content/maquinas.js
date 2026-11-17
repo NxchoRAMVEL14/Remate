@@ -117,7 +117,7 @@ export const MAQ = [
     cues: ['Sin juntar los omóplatos de más', 'Codos un poco doblados'],
     err: 'Usar mucho peso y jalar con la espalda.',
     easier: 'Menos peso.', harder: 'Pausa atrás.', safety: SEAT }),
-  M({ id: 'm-encogimientos', name: 'Encogimientos de hombros en máquina o multipower', pat: 'hombro', slot: 'rear', role: 'acc', fig: 'granjero', body: 'Trapecio (cuello y hombros)',
+  M({ id: 'm-encogimientos', name: 'Encogimientos de hombros en máquina o multipower', pat: 'hombro', slot: 'trap', role: 'acc', fig: 'granjero', body: 'Trapecio (cuello y hombros)',
     why: 'Trabaja el trapecio, el músculo que sube los hombros.',
     how: ['Toma la barra o las manijas con los brazos estirados.', 'Sube los hombros hacia las orejas.', 'Sostén 1 segundo arriba.', 'Baja despacio.'],
     cues: ['Arriba y abajo, sin girar', 'Brazos rectos'],

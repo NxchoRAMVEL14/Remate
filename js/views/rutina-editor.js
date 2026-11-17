@@ -13,7 +13,7 @@ export function exGroup(ex) {
   if (/^Pecho|^Hombro, pecho/.test(b)) return 'Pecho';
   if (/^Espalda/.test(b)) return 'Espalda';
   if (/^(Hombro|Manguito|Serrato)/.test(b)) return 'Hombro';
-  if (/^(Bíceps|Tríceps)/.test(b)) return 'Brazos';
+  if (/^(Bíceps|Tríceps|Antebrazo)/.test(b)) return 'Brazos';
   if (/^Trapecio/.test(b)) return 'Hombro';
   if (/^(Abdomen|Costados|Tronco)/.test(b)) return 'Tronco y abdomen';
   return 'Pierna y glúteo';

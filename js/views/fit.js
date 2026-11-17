@@ -9,7 +9,8 @@ import { fitOk, isAdult, ageFrom } from '../calc.js';
 import { num } from '../lab-calc.js';
 import { FIT_BY_ID, fitName, PLACES, FIT_GOALS, FIT_EXP, FIT_MINUTES, normFit, buildFit, nextFitStep, fitWeek, weeklyAverages, weeklyRate, rateText,
   MEASURES, MEASURE_TIPS, STEP_NOTE, vbFromRemate, FIT_SOURCES, MUSCLES, VOLUME_TARGET, ROLE, NEED, TIER, splitName, ALL_EX, fitDefaultRx, cleanFitCustom,
-  registerOwn, cleanOwn, OWN_MUS, rampOf, applyRamp, e1rm, dayMinutes, fitAvailable, fitSwap } from '../content/fit.js';
+  registerOwn, cleanOwn, OWN_MUS, rampOf, applyRamp, e1rm, dayMinutes, fitAvailable, fitSwap, SMALL_MUS, SMALL_TARGET, ROT_DEFAULT, ROT_NAMES, normRota } from '../content/fit.js';
+import { cardioTab, cardioTodayCard } from './cardio.js';
 import { openActive, activeButton, circuitSheet, circuitDraft } from './activo.js';
 import { TEMPLATES, proposeDay, musOf, MUS_BY } from '../content/musculos.js';
 import { WD_NAMES } from './rutina-editor.js';
@@ -86,8 +87,8 @@ export function vbOf(me, spec) {
     playerId: me.id, teamDays: (settings().days || []).length });
   return { auto, days: spec.vbAuto ? auto.days : spec.vbDays };
 }
-function routineOf(me) {
-  const spec = specOf(me.id), vb = vbOf(me, spec), r = buildFit(spec, vb.days), wk = fitWeek(spec.since);
+function routineOf(me, opts = {}) {
+  const spec = specOf(me.id), vb = vbOf(me, spec), r = buildFit(spec, vb.days, opts), wk = fitWeek(spec.since);
   // Semana de descarga (cada 6): una serie menos en todo y sin subir peso.
   if (wk?.light) r.days.forEach((d) => d.items.forEach((rx) => { rx.sets = Math.max(1, rx.sets - 1); }));
   const ramp = rampOf(spec);   // v3.18: regreso gradual
@@ -145,7 +146,7 @@ function exItem(ex, { rx = null, last, n } = {}) {
 }
 
 // ---------- pestañas ----------
-const TABS = [['hoy', 'Hoy'], ['rutina', 'Rutina'], ['comida', 'Comida'], ['progreso', 'Progreso'], ['ajustes', 'Perfil']];
+const TABS = [['hoy', 'Hoy'], ['rutina', 'Rutina'], ['cardio', 'Cardio'], ['comida', 'Comida'], ['progreso', 'Progreso'], ['ajustes', 'Perfil']];
 const FOOD = ['comida', 'menu', 'recetas', 'super'];
 const tabKey = (a) => (FOOD.includes(a) ? 'comida' : TABS.some(([k]) => k === a) ? a : 'hoy');
 function tabsEl(ctx, base = '#/fit') {
@@ -168,7 +169,7 @@ export default function fit(ctx) {
   const tab = tabKey(ctx.args[0]);
   const canEdit = !ctx.readonly;
   // La comida necesita el perfil Fit (objetivo y días de gym): si no hay, primero eso.
-  const body = tab === 'comida' ? (profOf(me.id) ? foodTab(ctx, me, canEdit, ctx.args[0]) : todayTab(ctx, me, canEdit)) : tab === 'rutina' ? routineTab(ctx, me, canEdit) : tab === 'progreso' ? progressTab(ctx, me, canEdit) : tab === 'ajustes' ? profileTab(ctx, me, canEdit) : todayTab(ctx, me, canEdit);
+  const body = tab === 'comida' ? (profOf(me.id) ? foodTab(ctx, me, canEdit, ctx.args[0]) : todayTab(ctx, me, canEdit)) : tab === 'rutina' ? routineTab(ctx, me, canEdit) : tab === 'cardio' ? (profOf(me.id) ? cardioPage(ctx, me, canEdit) : todayTab(ctx, me, canEdit)) : tab === 'progreso' ? progressTab(ctx, me, canEdit) : tab === 'ajustes' ? profileTab(ctx, me, canEdit) : todayTab(ctx, me, canEdit);
   return { title: 'Remate Fit', sub: 'Zona de adultos', back: '#/inicio', el: h('div', { class: 'page fit' }, tabsEl(ctx), body) };
 }
 
@@ -225,6 +226,7 @@ function todayTab(ctx, me, canEdit) {
     longPause && canEdit ? h('div', { class: 'note info stack' }, h('span', {}, `Tu última sesión fue el ${longDay(lastGym)}. Si vienes regresando, activa el regreso gradual: 2 semanas con una serie menos.`),
       h('button', { type: 'button', class: 'btn sm', onclick: () => { saveProf(me.id, { rampSince: today }); toast('Regreso gradual activado por 2 semanas'); } }, 'Activar regreso gradual')) : null,
     plan.fixed ? weekStrip(r, wkx, wdToday) : null,
+    plan.fixed ? cardioTodayCard(spec, r, wkx.vb, wdToday, canEdit) : null,
     h('div', { class: 'kpis fit-kpis' },
       kpi('Gym esta semana', `${gymWeek} de ${r.days.length}`, gymWeek >= r.days.length ? 'ok' : ''),
       kpi('Pasos (promedio 7 días)', stAvg != null ? stAvg.toLocaleString('es-MX') : '—', stAvg != null && stAvg >= spec.stepsGoal ? 'ok' : ''),
@@ -279,15 +281,26 @@ function firstTime(ctx, me) {
 }
 const privacyNote = () => note('Lo que registras en Remate Fit es tuyo. Tu entrenador lo ve solo si activas «Compartir con mi entrenador». Nadie más lo ve en la app.');
 
+// ---------- cardio (v3.25) ----------
+function cardioPage(ctx, me, canEdit) {
+  const { spec, vb, r } = routineOf(me);
+  return cardioTab(ctx, me, canEdit, { spec, r, vbWd: weekOf(spec).vb, vbDays: vb.days, saveProf, saveActivity, activityOf, fitLogsOf });
+}
+
 // ---------- rutina ----------
 function routineTab(ctx, me, canEdit) {
-  const { spec, vb, r, wk } = routineOf(me);
+  const rota = specOf(me.id).plan === 'rota', wsel = rota ? ctx.ui.week || 0 : 0;
+  const { spec, vb, r, wk } = routineOf(me, { week: wsel });
   const [lo, hi] = VOLUME_TARGET[spec.goal];
-  const vol = Object.entries(r.volume).filter(([m]) => m !== 'abdomen');
+  const vol = Object.entries(r.volume).filter(([m, x]) => m !== 'abdomen' && !(SMALL_MUS.has(m) && x === 0));
+  const tgt = (m) => (SMALL_MUS.has(m) ? SMALL_TARGET : [lo, hi]);
+  const canLog = canEdit && wsel === 0;
   return h('div', { class: 'stack' },
     h('section', { class: 'panel stack' },
-      h('div', { class: 'split' }, h('h3', {}, r.custom ? `Personalizada: ${plural(r.days.length, 'día', 'días')}` : splitName(spec.days)), h('span', { class: 'chip ball' }, FIT_GOALS[spec.goal].name)),
+      h('div', { class: 'split' }, h('h3', {}, r.custom ? `Personalizada: ${plural(r.days.length, 'día', 'días')}` : r.rota ? `Cambia cada semana: ${r.rota.name}` : splitName(spec.days)), h('span', { class: 'chip ball' }, FIT_GOALS[spec.goal].name)),
       h('p', { class: 'row-sub', style: { margin: 0 } }, [`${spec.days} días`, `${spec.minutes} min`, FIT_EXP[spec.exp].name, PLACES[spec.place].name, `${vb.days} de voleibol${spec.vbAuto ? ' (de Remate)' : ' (a mano)'}`].join(' · ')),
+      r.rota ? h('div', { class: 'seg', role: 'tablist', 'aria-label': 'Qué semana ver' }, [[0, 'Esta semana'], [1, 'La próxima']].map(([k, t]) => h('button', { type: 'button', role: 'tab', 'aria-selected': wsel === k ? 'true' : 'false', onclick: () => { ctx.ui.week = k; ctx.rerender(); } }, t))) : null,
+      r.rota && wsel ? note(`Así se verá la semana del lunes ${fmtDate(r.rota.monday, { day: 'numeric', month: 'long' })}: «${r.rota.name}». Para registrar, regresa a «Esta semana».`, 'info') : null,
       wk ? h('p', { class: 'row-sub', style: { margin: 0 } }, `Bloque ${wk.block}, semana ${wk.week} de 6. ${wk.light ? 'Esta es de descarga.' : `La semana 6 es de descarga (termina el ${fmtDate(wk.ends, { day: 'numeric', month: 'short' })}).`}`) : null,
       h('ul', { class: 'plain' }, r.notes.map((x) => h('li', {}, x))),
       r.days.some((d) => Number.isInteger(d.wd)) || weekOf(spec).vb.length || weekOf(spec).coach.length ? weekStrip(r, weekOf(spec), wdOfDate(todayStr())) : null,
@@ -302,11 +315,11 @@ function routineTab(ctx, me, canEdit) {
       h('details', { class: 'gx-sub' }, h('summary', {}, h('strong', {}, 'Calentamiento, 8 a 10 min')), h('ol', { class: 'plain' }, WARMUP.map((x) => h('li', {}, x)))),
       h('div', { class: 'rows' }, d.items.map((rx, i) => exItem(FIT_BY_ID[rx.ex], { rx, last: lastFor(me.id, rx.ex), n: i + 1 }))),
       h('details', { class: 'gx-sub' }, h('summary', {}, h('strong', {}, 'Para terminar')), h('ul', { class: 'plain' }, COOLDOWN.map((x) => h('li', {}, x)))),
-      canEdit ? h('a', { class: 'btn primary', href: `#/fit/registrar/${d.key}` }, ic('check', 18), `Registrar el día ${d.key}`) : null)),
+      canLog ? h('a', { class: 'btn primary', href: `#/fit/registrar/${d.key}` }, ic('check', 18), `Registrar el día ${d.key}`) : null)),
     h('section', { class: 'panel stack' }, h('h3', {}, 'Series por semana de cada músculo'),
-      h('p', { class: 'row-sub', style: { margin: 0 } }, `Para tu objetivo, de ${lo} a ${hi} por músculo. Las de un ejercicio que lo trabaja de lado cuentan la mitad.`),
-      h('div', { class: 'fit-vol' }, vol.map(([m, x]) => h('div', { class: `fit-vol-row ${x >= lo ? 'ok' : x > 0 ? 'low' : 'none'}` },
-        h('span', {}, MUSCLES[m]), h('span', { class: 'fit-bar' }, h('i', { style: { width: `${Math.min(100, (x / hi) * 100)}%` } })), h('strong', {}, String(r1(x))))))),
+      h('p', { class: 'row-sub', style: { margin: 0 } }, `Para tu objetivo, de ${lo} a ${hi} por músculo (los chicos, como antebrazo, trapecio y tibial, de ${SMALL_TARGET[0]} a ${SMALL_TARGET[1]}). Las de un ejercicio que lo trabaja de lado cuentan la mitad.${r.rota ? ' En la rotativa cambian un poco cada semana: lo que importa es el promedio del ciclo.' : ''}`),
+      h('div', { class: 'fit-vol' }, vol.map(([m, x]) => { const [a, b] = tgt(m); return h('div', { class: `fit-vol-row ${x >= a ? 'ok' : x > 0 ? 'low' : 'none'}` },
+        h('span', {}, MUSCLES[m]), h('span', { class: 'fit-bar' }, h('i', { style: { width: `${Math.min(100, (x / b) * 100)}%` } })), h('strong', {}, String(r1(x)))); }))),
     h('details', { class: 'panel' }, h('summary', {}, h('strong', {}, 'Cómo leer tu rutina')),
       h('dl', { class: 'gx-dl' },
         h('dt', {}, '3 × 8-10'), h('dd', {}, '3 series de 8 a 10 repeticiones.'),
@@ -324,9 +337,9 @@ const FIT_WARM = '8 a 10 min: cardio suave, movilidad de tobillo, cadera y espal
 const FIT_COOL = '3 a 5 min caminando y estiramiento suave.';
 function fitShare(me) {
   const spec = specOf(me.id), vb = vbOf(me, spec), r = buildFit(spec, vb.days), who = firstName(me);
-  const code = packRoutine('fit', { goal: spec.goal, exp: spec.exp, days: spec.days, minutes: spec.minutes, place: spec.place }, r.custom ? r.days.map((d) => ({ name: d.name, wd: d.wd, items: d.items })) : null, who, cleanOwn(spec.myEx));
+  const code = packRoutine('fit', { goal: spec.goal, exp: spec.exp, days: spec.days, minutes: spec.minutes, place: spec.place }, r.custom || r.rota ? r.days.map((d) => ({ name: d.name, wd: d.wd, items: d.items })) : null, who, cleanOwn(spec.myEx));
   shareSheet({ title: 'Compartir o imprimir mi rutina', print: '#/imprimir/fit',
-    text: routineText({ title: 'Rutina de Remate Fit', who, summary: [FIT_GOALS[spec.goal].name, r.custom ? `personalizada, ${plural(r.days.length, 'día', 'días')}` : splitName(spec.days), `${spec.minutes} min`, FIT_EXP[spec.exp].name, PLACES[spec.place].name].join(' · '),
+    text: routineText({ title: 'Rutina de Remate Fit', who, summary: [FIT_GOALS[spec.goal].name, r.custom ? `personalizada, ${plural(r.days.length, 'día', 'días')}` : r.rota ? `cambia cada semana; esta: ${r.rota.name.toLowerCase()}` : splitName(spec.days), `${spec.minutes} min`, FIT_EXP[spec.exp].name, PLACES[spec.place].name].join(' · '),
       days: r.days, byId: FIT_BY_ID, warmup: FIT_WARM, cooldown: FIT_COOL, notes: ['Cada 6 semanas, una semana de descarga: una serie menos y sin subir peso.'] }),
     link: routineLink('fit', code), linkText: `Te paso mi rutina de Remate Fit${who ? ` (${who})` : ''}. Ábrela en tu Remate Fit y toca «Usar esta rutina»:` });
 }
@@ -344,13 +357,13 @@ function useFit(ctx) {
   const me = ctx.me;
   if (!me || !sql311Ready() || !fitOk(me)) return wrap(empty('Remate Fit es para adultos', 'Esta rutina es de Remate Fit, la zona de gym para mayores de 18 que activa tu entrenador.'));
   if (got.own?.length) registerOwn(got.own);
-  const cur = specOf(me.id), spec = normFit({ ...cur, goal: got.s.goal, exp: got.s.exp, days: got.s.days, minutes: got.s.minutes, place: got.s.place, custom: got.custom ? cleanFitCustom(got.custom) : null });
+  const cur = specOf(me.id), spec = normFit({ ...cur, plan: 'auto', goal: got.s.goal, exp: got.s.exp, days: got.s.days, minutes: got.s.minutes, place: got.s.place, custom: got.custom ? cleanFitCustom(got.custom) : null });
   const vb = vbOf(me, cur), r = buildFit(spec, vb.days);
   const use = async () => {
     if (ctx.readonly) { toast('Vista previa: aquí no se guarda'); return; }
     if (profOf(me.id) && !(await confirmSheet({ title: '¿Usar esta rutina?', text: 'Cambia tu objetivo, experiencia, días, minutos, lugar y tus días y ejercicios por los de esta rutina. Tus registros, tu comida y tu peso no cambian.', ok: 'Usar esta rutina' }))) return;
     const mine = cleanOwn(cur.myEx), add = cleanOwn(got.own).filter((o) => !mine.some((m) => m.id === o.id));
-    saveProf(me.id, { goal: spec.goal, exp: spec.exp, days: spec.days, minutes: spec.minutes, place: spec.place, custom: spec.custom?.length ? spec.custom : null, ...(add.length ? { myEx: [...mine, ...add] } : {}), ...(profOf(me.id) ? {} : { since: todayStr() }) });
+    saveProf(me.id, { goal: spec.goal, exp: spec.exp, days: spec.days, minutes: spec.minutes, place: spec.place, plan: 'auto', custom: spec.custom?.length ? spec.custom : null, ...(add.length ? { myEx: [...mine, ...add] } : {}), ...(profOf(me.id) ? {} : { since: todayStr() }) });
     toast('Listo: ya es tu rutina'); location.hash = '#/fit/rutina';
   };
   return wrap(
@@ -369,11 +382,11 @@ function editRoutine(ctx, me) {
   const lib = libFor(me, spec);
   const wkx = weekOf(spec);
   const ok = (id) => !!FIT_BY_ID[id] && fitAvailable(FIT_BY_ID[id], spec.place);
-  return editorPage(ctx, { title: 'Mi rutina', back: '#/fit/rutina', days: buildFit(spec, vb.days).days, custom: Array.isArray(spec.custom) && spec.custom.length > 0,
+  return editorPage(ctx, { title: 'Mi rutina', back: '#/fit/rutina', days: buildFit(spec, vb.days).days, custom: spec.plan !== 'rota' && Array.isArray(spec.custom) && spec.custom.length > 0,
     lib, weekdays: true, templates: TEMPLATES,
     muscles: { propose: (keys, exclude) => proposeDay(keys, { ok, rx: (id) => fitDefaultRx(id, spec), minutes: dayMinutes, max: spec.minutes, exclude }) },
     week: (wd) => [wkx.vb.includes(wd) ? 'Voleibol' : null, wkx.coach.includes(wd) ? 'Das entreno' : null].filter(Boolean),
-    onSave: (custom) => { const c = cleanFitCustom(custom); saveProf(me.id, { custom: c, days: Math.min(6, Math.max(2, c.length)) }); toast('Rutina guardada'); location.hash = '#/fit/rutina'; },
+    onSave: (custom) => { const c = cleanFitCustom(custom); saveProf(me.id, { custom: c, plan: 'auto', days: Math.min(6, Math.max(2, c.length)) }); toast('Rutina guardada'); location.hash = '#/fit/rutina'; },
     onReset: () => { saveProf(me.id, { custom: null }); toast('Volviste a la rutina de Remate'); location.hash = '#/fit/rutina'; } });
 }
 
@@ -651,10 +664,35 @@ function profileForm(me, spec, onSave, label = 'Guardar') {
   const vbBox = h('div', { class: 'field' }, h('span', { class: 'label' }, 'Días de voleibol por semana (a mano)'), vbDays);
   const paintVb = () => { vbBox.hidden = auto.checked; }; auto.addEventListener('change', paintVb); paintVb();
   const stepsGoal = h('input', { type: 'number', min: 3000, max: 20000, step: 500, inputmode: 'numeric', value: spec.stepsGoal });
+  // v3.25: tipo de rutina. «Cambia cada semana»: días de gym y de pierna fijos; lo demás rota.
+  const PLAN_DESC = { auto: 'Los mismos días y ejercicios cada semana; subes de peso poco a poco. Si personalizaste tu rutina, se usa la tuya.',
+    rota: 'Todo el cuerpo cada semana. La pierna se queda en sus días fijos y los demás días cambian de músculos y de ejercicios cada lunes (ciclo de 4 semanas). Incluye pantorrilla de adelante y de atrás, glúteo, antebrazo y trapecio.' };
+  const planSel = h('select', {}, options([['auto', 'Fija: la de Remate (o la tuya)'], ['rota', 'Cambia cada semana: todo el cuerpo']], spec.plan));
+  const planDesc = h('span', { class: 'hint' }, PLAN_DESC[spec.plan]);
+  const rot = normRota(spec.plan === 'rota' ? spec : ROT_DEFAULT);
+  const gymSet = new Set(rot.gymWd), legSet = new Set(rot.legWd);
+  const gymBox = h('div', { class: 'cluster', role: 'group', 'aria-label': 'Días de gym' }), legBox = h('div', { class: 'cluster', role: 'group', 'aria-label': 'Días de pierna' });
+  const rotMsg = h('span', { class: 'hint' });
+  const paintRot = () => {
+    for (const d of [...legSet]) if (!gymSet.has(d)) legSet.delete(d);
+    gymBox.replaceChildren(...WD_ORDER.map((d) => h('button', { type: 'button', class: 'chipbtn', 'aria-pressed': gymSet.has(d) ? 'true' : 'false', onclick: () => { if (gymSet.has(d)) gymSet.delete(d); else gymSet.add(d); paintRot(); } }, WD_SHORT[d])));
+    legBox.replaceChildren(...WD_ORDER.filter((d) => gymSet.has(d)).map((d) => h('button', { type: 'button', class: 'chipbtn', 'aria-pressed': legSet.has(d) ? 'true' : 'false', onclick: () => { if (legSet.has(d)) legSet.delete(d); else legSet.add(d); paintRot(); } }, WD_SHORT[d])));
+    const up = gymSet.size - legSet.size;
+    rotMsg.textContent = `${plural(gymSet.size, 'día', 'días')} de gym: ${plural(legSet.size, 'de pierna', 'de pierna')} y ${plural(up, 'de torso', 'de torso')}.`;
+  };
+  paintRot();
+  const rotBox = h('div', { class: 'stack' },
+    h('div', { class: 'field' }, h('span', { class: 'label' }, 'Días de gym'), gymBox),
+    h('div', { class: 'field' }, h('span', { class: 'label' }, 'Días de pierna (siempre los mismos)'), legBox, rotMsg));
+  const daysField = field('Días de gym por semana', days);
+  const paintPlan = () => { const rr = planSel.value === 'rota'; rotBox.hidden = !rr; daysField.hidden = rr; planDesc.textContent = PLAN_DESC[planSel.value]; };
+  planSel.addEventListener('change', paintPlan); paintPlan();
   return h('section', { class: 'panel stack' },
     h('div', { class: 'field' }, h('span', { class: 'label' }, 'Objetivo'), goal, goalDesc),
     field('Experiencia con pesas', exp),
-    h('div', { class: 'grid' }, field('Días de gym por semana', days), field('Minutos por sesión', mins)),
+    h('div', { class: 'field' }, h('span', { class: 'label' }, 'Tipo de rutina'), planSel, planDesc),
+    rotBox,
+    h('div', { class: 'grid' }, daysField, field('Minutos por sesión', mins)),
     field('Dónde entrenas', place),
     h('label', { class: 'check' }, auto, h('span', {}, `Tomar mi voleibol de Remate: ${vb.auto.days} ${vb.auto.days === 1 ? 'día' : 'días'} por semana `, h('span', { class: 'row-sub' }, vb.auto.from === 'equipo' ? '(los días de entrenamiento de tu equipo)' : `(en las últimas 4 semanas: ${vb.auto.train} entrenos y ${vb.auto.games} partidos)`))),
     vbBox,
@@ -663,7 +701,11 @@ function profileForm(me, spec, onSave, label = 'Guardar') {
       const v = Number(vbDays.value), st = Number(stepsGoal.value);
       if (!auto.checked && !(v >= 0 && v <= 7)) { toast('Los días de voleibol van de 0 a 7'); return; }
       if (!(st >= 3000 && st <= 20000)) { toast('La meta de pasos va de 3,000 a 20,000'); return; }
-      onSave({ goal: goal.value, exp: exp.value, days: Number(days.value), minutes: Number(mins.value), place: place.value, vbAuto: auto.checked, vbDays: Math.round(v) || 0, stepsGoal: Math.round(st) });
+      const rr = planSel.value === 'rota';
+      if (rr && (gymSet.size < 2 || gymSet.size > 6)) { toast('Elige de 2 a 6 días de gym'); return; }
+      if (rr && (legSet.size < 1 || legSet.size > 3 || legSet.size >= gymSet.size)) { toast('Elige de 1 a 3 días de pierna y deja por lo menos un día de torso'); return; }
+      onSave({ goal: goal.value, exp: exp.value, days: rr ? gymSet.size : Number(days.value), minutes: Number(mins.value), place: place.value, vbAuto: auto.checked, vbDays: Math.round(v) || 0, stepsGoal: Math.round(st),
+        plan: planSel.value, ...(rr ? { gymWd: [...gymSet], legWd: [...legSet] } : {}) });
     } }, ic('check', 18), label));
 }
 // v3.18: tu semana: días de voleibol, entrenos que das (actividad ligera) y regreso gradual.
@@ -692,7 +734,7 @@ function profileTab(ctx, me, canEdit) {
   const share = h('input', { type: 'checkbox', checked: prof?.share ? true : null, onchange: (e) => { saveProf(me.id, {}, { share: e.target.checked }); toast(e.target.checked ? 'Ahora tu entrenador ve tu Remate Fit' : 'Tu Remate Fit vuelve a ser privado'); } });
   const isCoach = state.role === 'coach';
   return h('div', { class: 'stack' },
-    Array.isArray(spec.custom) && spec.custom.length ? note('Tu rutina está personalizada: estas respuestas cambian tus calorías, las dosis de los ejercicios nuevos que agregues y tu bloque, pero no tus días ni ejercicios. Para que Remate la vuelva a armar, en Rutina → Editar días y ejercicios → «Volver a la de Remate».') : null,
+    spec.plan !== 'rota' && Array.isArray(spec.custom) && spec.custom.length ? note('Tu rutina está personalizada: estas respuestas cambian tus calorías, las dosis de los ejercicios nuevos que agregues y tu bloque, pero no tus días ni ejercicios. Para que Remate la vuelva a armar, en Rutina → Editar días y ejercicios → «Volver a la de Remate».') : null,
     profileForm(me, spec, (data) => { saveProf(me.id, data); toast('Guardado: tu rutina se actualizó'); location.hash = '#/fit/rutina'; }),
     weekPanel(me, spec),
     h('section', { class: 'panel stack' }, h('h3', {}, 'Bloque de 6 semanas'),
@@ -746,7 +788,7 @@ function sharedView(ctx) {
   const { spec, vb, r } = routineOf(p);
   return { title: p.name, sub: 'Remate Fit (compartido)', back, el: h('div', { class: 'page fit' },
     h('section', { class: 'panel stack' }, h('div', { class: 'split' }, h('h3', {}, FIT_GOALS[spec.goal].name), h('span', { class: 'chip' }, `${ageFrom(p.birth_date)} años`)),
-      h('p', { class: 'row-sub', style: { margin: 0 } }, [splitName(spec.days), `${spec.minutes} min`, FIT_EXP[spec.exp].name, PLACES[spec.place].name, `${vb.days} días de voleibol`].join(' · ')),
+      h('p', { class: 'row-sub', style: { margin: 0 } }, [r.custom ? `personalizada, ${plural(r.days.length, 'día', 'días')}` : r.rota ? `cambia cada semana; esta: ${r.rota.name.toLowerCase()}` : splitName(spec.days), `${spec.minutes} min`, FIT_EXP[spec.exp].name, PLACES[spec.place].name, `${vb.days} días de voleibol`].join(' · ')),
       h('ul', { class: 'plain' }, r.days.map((d) => h('li', {}, `Día ${d.key}, ${d.name}: ${d.items.map((x) => fitName(x.ex)).join(', ')}`)))),
     foodShared(p),
     h('div', { class: 'cluster' }, h('a', { class: 'btn sm', href: `#/imprimir/fit/${p.id}` }, ic('printer', 16), 'Imprimir su rutina'),

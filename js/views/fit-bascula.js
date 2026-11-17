@@ -316,7 +316,7 @@ function manyForm(rows, existing, onSave, rawText = '') {
 }
 
 // v3.16: la actividad de un día: pasos, puntos cardio (Google Fit) y minutos de cardio.
-export const CARDIO_TYPES = [['caminadora', 'Caminadora'], ['caminar', 'Caminar rápido'], ['correr', 'Correr'], ['bici', 'Bici o spinning'], ['eliptica', 'Elíptica o escaladora'], ['nadar', 'Nadar'], ['clase', 'Clase o baile'], ['cuerda', 'Cuerda o circuito'], ['trineo', 'Trineo (empujar o jalar)'], ['box', 'Saco de box'], ['otro', 'Otro']];
+export const CARDIO_TYPES = [['caminadora', 'Caminadora'], ['caminar', 'Caminar rápido'], ['correr', 'Correr'], ['bici', 'Bici o spinning'], ['eliptica', 'Elíptica o escaladora'], ['remo', 'Remo (máquina)'], ['nadar', 'Nadar'], ['clase', 'Clase o baile'], ['cuerda', 'Cuerda o circuito'], ['trineo', 'Trineo (empujar o jalar)'], ['box', 'Saco de box'], ['otro', 'Otro']];
 export function activitySheet({ day = todayStr(), cur = () => ({}), onSave, onDelete = null, title = 'Actividad del día' }) {
   const inp = (step, label, min, max) => h('input', { type: 'number', inputmode: 'numeric', step, min, max, 'aria-label': label });
   const n = inp(1, 'Pasos', 0, 80000), pc = inp(1, 'Puntos cardio', 0, 500), cmin = inp(1, 'Minutos de cardio', 0, 600);

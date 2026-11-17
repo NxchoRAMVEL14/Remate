@@ -3,6 +3,7 @@
 // Son esquemas para entender la forma del movimiento, no una lección de técnica fina.
 import { pose as P } from '../figura.js';
 import { MACHINE_MOVES } from './maquinas-dibujos.js';
+import { FIT_MOVES } from './movimientos-fit.js';
 
 const G = 176;                                   // altura del piso en el dibujo
 const box = (x, w, h2) => ({ k: 'box', x, w, h: h2 });
@@ -148,6 +149,7 @@ export const MOVES = {
   pica: { name: 'Lagartija en pica', frames: [P({ t: 128, L: [-48, -48, 0], R: [-48, -48, 0], A: [28, 28], B: [28, 28] }), P({ t: 145, L: [-55, -55, 0], R: [-55, -55, 0], A: [-25, 55], B: [-25, 55] })], hold: [0.3, 0.3], ms: 2400 },
 };
 Object.assign(MOVES, MACHINE_MOVES);   // v3.14: máquinas y poleas
+Object.assign(MOVES, FIT_MOVES);      // v3.25: pantorrilla, tibial, antebrazo, trapecio y glúteo
 for (const [id, m] of Object.entries(MOVES)) m.id = id;
 export const move = (id) => MOVES[id] || null;
 
