@@ -1,4 +1,5 @@
 // Piezas de interfaz compartidas por varias pantallas.
+import { convertDraft, setUnitFor } from '../peso.js';
 import { h, ic, initials, fmtDate, relDay, fmtTime } from '../util.js';
 import { POSITION_NAME, BRANCHES } from '../content/skills.js';
 import { LEVELS } from '../content/levels.js';
@@ -93,4 +94,11 @@ export function radarSVG({ values, target = [], labels, before = null }, label =
 export function brandBand(text = 'Voleibol de sala para CETAC: entrenos, partidos, laboratorio y gym en un solo lugar.') {
   return h('section', { class: 'brandband' }, h('img', { src: 'icons/icon-192.png', alt: '', width: 84, height: 84 }),
     h('div', {}, h('h2', {}, 'Remate'), h('p', {}, text), h('span', { class: 'bb-ver' }, `v${VERSION}`)));
+}
+
+// v3.27: «Kilos | Libras» para un ejercicio del registro de gym. Convierte lo ya escrito y recuerda la elección en este celular.
+export function unitSeg(entry, onChange) {
+  const cur = entry.u === 'lb' ? 'lb' : 'kg';
+  return h('div', { class: 'seg gx-unit', role: 'group', 'aria-label': 'Unidad de peso de este ejercicio' }, [['kg', 'Kilos'], ['lb', 'Libras']].map(([k, t]) =>
+    h('button', { type: 'button', 'aria-pressed': cur === k ? 'true' : 'false', onclick: () => { if (cur === k) return; convertDraft(entry, k); setUnitFor(entry.ex, k); onChange?.(); } }, t)));
 }

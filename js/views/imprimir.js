@@ -60,7 +60,7 @@ function routineSheet(ui, { title, who, lines, days, byId, roleName, week, notes
       h('dl', {}, h('dt', {}, '3 × 8-10'), h('dd', {}, '3 series de 8 a 10 repeticiones.'),
         h('dt', {}, 'Te sobran 2'), h('dd', {}, 'Termina la serie cuando todavía podrías hacer 2 más con buena técnica.'),
         h('dt', {}, 'Cuándo subir'), h('dd', {}, 'Cuando completes el máximo de repeticiones en todas las series, sube un poco el peso y vuelve al mínimo.'),
-        cols ? [h('dt', {}, 'Sem 1 a 4'), h('dd', {}, 'Anota el peso y las repeticiones que hiciste, por ejemplo «20 kg × 10».')] : null)),
+        cols ? [h('dt', {}, 'Sem 1 a 4'), h('dd', {}, 'Anota el peso y las repeticiones que hiciste, por ejemplo «20 kg × 10» (o en libras: «45 lb × 10»).')] : null)),
     ui.how ? h('section', { class: 'pr-sec pr-how' }, h('h2', {}, 'Cómo se hace cada ejercicio'),
       seen.map((id) => { const ex = byId[id]; return h('div', { class: 'pr-ex' }, h('h3', {}, ex.name), ex.why ? h('p', {}, ex.why) : null,
         h('ol', {}, (ex.how || []).map((x) => h('li', {}, x))), ex.cues?.length ? h('p', {}, h('strong', {}, 'Claves: '), ex.cues.join(' · ')) : null,

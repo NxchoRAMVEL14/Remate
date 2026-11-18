@@ -1,6 +1,7 @@
 // Remate Fit (v3.11): gym para adultos (18+). Usa la biblioteca del Gym de los chavos y le suma ejercicios
 // para músculo (aislados, máquinas, en casa y en la cancha). Las series, repeticiones y «te sobran» son
 // propuestas de Remate basadas en las fuentes de FIT_SOURCES, no cifras de un estudio en particular.
+import { fromKg, unitLabel, incIn } from '../peso.js';
 import { GYM, NEED, TIER, topReps, lowReps } from './gym.js';
 import { MAQ } from './maquinas.js';
 import { musOf, MUS_BY } from './musculos.js';
@@ -687,7 +688,7 @@ const WD_LONG = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes'
 // ---------- progresión doble: primero repeticiones, luego peso ----------
 const incFor = (ex, kg) => (ex.need === 'barra' ? (kg < 60 ? 2.5 : 5) : ex.need === 'maquina' || ex.need === 'polea' ? 2.5 : kg < 10 ? 1 : 2);
 const fmtKg = (x) => `${Math.round(x * 10) / 10}`;
-export function nextFitStep(rx, last) {
+export function nextFitStep(rx, last, u = 'kg') {   // v3.27: u = unidad en que se muestra (kg o lb)
   const ex = FIT_BY_ID[rx.ex]; if (!ex) return '';
   if (rx.role === 'pow' || ex.unit === 'saltos') return 'Cada repetición a la máxima velocidad. Si pierdes altura o velocidad, para.';
   const sets = (last?.s || []).filter((x) => x && Number(x[1]) > 0);
@@ -695,10 +696,10 @@ export function nextFitStep(rx, last) {
   const top = topReps(rx.reps), done = sets.length >= rx.sets && sets.every((x) => Number(x[1]) >= top);
   if (ex.unit === 's') return done ? 'Aguantaste todo: súmale 5 a 10 segundos o pasa a la versión más difícil.' : 'Repite el mismo tiempo hasta completarlo en todas las series.';
   if (ex.unit === 'pc') return done ? `Llegaste a ${top} en todas: pasa a la versión más difícil (${ex.harder.toLowerCase()})` : `Busca llegar a ${top} en todas las series.`;
-  const kg = Math.max(...sets.map((x) => Number(x[0]) || 0));
+  const kg = Math.max(...sets.map((x) => Number(x[0]) || 0)), U = unitLabel(u), now = fromKg(kg, u), up = u === 'lb' ? now + incIn(u, incFor(ex, kg)) : fmtKg(kg + incFor(ex, kg));
   if (!kg) return done ? 'Completaste todo: agrega un poco de peso.' : `Busca llegar a ${top} en todas las series.`;
-  if (done) return `La vez pasada hiciste ${top} en todas con ${fmtKg(kg)} kg: sube a ${fmtKg(kg + incFor(ex, kg))} kg y vuelve a ${lowReps(rx.reps)}.`;
-  return `Repite ${fmtKg(kg)} kg y busca ${top} repeticiones en todas las series.`;
+  if (done) return `La vez pasada hiciste ${top} en todas con ${now} ${U}: sube a ${up} ${U} y vuelve a ${lowReps(rx.reps)}.`;
+  return `Repite ${now} ${U} y busca ${top} repeticiones en todas las series.`;
 }
 
 // Semana del bloque: bloques de 6 semanas; la 6 es de descarga (una serie menos, sin subir peso).

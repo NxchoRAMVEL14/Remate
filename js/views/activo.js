@@ -2,6 +2,7 @@
 // pasando de ejercicio a descanso y de descanso al siguiente. Tiene pausa, regresar y saltar; se pueden cambiar series,
 // repeticiones y kilos sobre la marcha. Pita, vibra, dice en voz lo que sigue y deja la pantalla encendida.
 // Lo que haces se va anotando en el registro de la sesión (el mismo borrador de «Registrar»): al terminar solo revisas y guardas.
+import { convertDraft, setUnitFor, unitLabel, maxFor } from '../peso.js';
 import { h, ic, toast, confirmSheet, plural, openSheet } from '../util.js';
 import { buildCircuit, CIRCUIT_LEVELS, CIRCUIT_MINUTES } from '../content/gym.js';
 import { figure } from '../figura.js';
@@ -110,11 +111,14 @@ export function openActive({ title = 'Sesión', entries, byId, rxOf, persist = (
   const setReps = (st, n) => { const e = entries[st.k]; e.s[st.i] = e.s[st.i] || ['', '']; e.s[st.i][1] = String(Math.max(1, Math.min(600, n))); persist(); };
   const kgOf = (st) => { const e = entries[st.k]; return e.s[st.i]?.[0] ?? ''; };
   const setKg = (st, v) => { const e = entries[st.k]; e.s[st.i] = e.s[st.i] || ['', '']; e.s[st.i][0] = v; for (let j = st.i + 1; j < e.s.length; j++) if (e.s[j][0] === '' || e.s[j][0] == null) e.s[j][0] = v; persist(); };
-  function kgBox(st, label = 'Kilos') {
+  function kgBox(st, label = 'Peso') {
     const ex = exOf(st); if (!ex || ex.unit !== 'kg' || circuit) return null;
-    const inp = h('input', { type: 'number', inputmode: 'decimal', min: 0, max: 500, step: 0.5, value: kgOf(st), 'aria-label': `${label} de ${ex.name}`, class: 'act-kg',
-      oninput: (e) => setKg(st, e.target.value) });
-    return h('label', { class: 'act-kgl' }, inp, h('small', {}, ex.each ? 'kg c/u' : 'kg'));
+    const e = entries[st.k], u = e.u === 'lb' ? 'lb' : 'kg';
+    const inp = h('input', { type: 'number', inputmode: 'decimal', min: 0, max: maxFor(u), step: u === 'lb' ? 1 : 0.5, value: kgOf(st), 'aria-label': `${label} de ${ex.name} en ${u === 'lb' ? 'libras' : 'kilos'}`, class: 'act-kg',
+      oninput: (ev) => setKg(st, ev.target.value) });
+    // v3.27: toca la unidad para cambiar entre kilos y libras (convierte lo ya escrito).
+    const sw = h('button', { type: 'button', class: 'act-unit', 'aria-label': `Cambiar a ${u === 'lb' ? 'kilos' : 'libras'}`, onclick: (ev) => { ev.preventDefault(); const to = u === 'lb' ? 'kg' : 'lb'; convertDraft(e, to); setUnitFor(e.ex, to); persist(); paint(); } }, unitLabel(u, ex.each), ' ⇄');
+    return h('div', { class: 'act-kgl' }, inp, sw);
   }
   function setsBox(st) {
     if (circuit) return null;

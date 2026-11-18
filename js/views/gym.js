@@ -1,6 +1,7 @@
 // Físico en el gym: rutina de pesas según lo que quieres lograr, registro de cargas y cómo llegar bien al entreno.
 // El jugador arma su rutina (se guarda en su celular) o usa la que le asigna el entrenador (columna gym_plan de su ficha).
 // Las sesiones que registra se guardan en la nube (gym_logs): las ven él y su entrenador.
+import { unitFor, prefill, fromKg, toKg, unitLabel, maxFor } from '../peso.js';
 import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr, addDays, plural, DAYS, DAYS_LONG, nextWeekday, weeklyRule } from '../util.js';
 import { lazyFig } from '../figura.js';
 import { figFor } from '../content/movimientos.js';
@@ -10,7 +11,7 @@ import { GYM, GYM_BY_ID, GROUPS, NEED, EQUIP, EXP, TIER, PHASE, MINUTES, GOALS, 
   nextStep, blockWeek, topReps, lowReps, available, groupOf, gymName, WARMUP, COOLDOWN, READ, RULES, ARRIVE, GYM_SOURCES, gymDefaultRx, cleanCustom, GYM_ALL, swapForEquip, HOME_EQUIP } from '../content/gym.js';
 import { openActive, activeButton, circuitSheet, circuitDraft } from './activo.js';
 import { editorPage, pickExercise } from './rutina-editor.js';
-import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
+import { sectionTitle, note, empty, field, options, jersey, unitSeg } from './ui.js';
 import { lineChart } from './chart.js';
 import { calItemSheet } from './sheets-session.js';
 import { shareSheet, shareBtn, packRoutine, unpackRoutine, routineLink, routineText, firstName } from './compartir.js';
@@ -111,7 +112,7 @@ function exItem(ex, { rx = null, last, n } = {}) {
       h('ol', { class: 'plain' }, ex.how.map((x) => h('li', {}, x))),
       h('div', { class: 'cluster' }, ex.cues.map((c) => h('span', { class: 'chip info' }, c))),
       h('dl', { class: 'gx-dl' }, h('dt', {}, 'Error común'), h('dd', {}, ex.err), h('dt', {}, 'Más fácil'), h('dd', {}, ex.easier), h('dt', {}, 'Más difícil'), h('dd', {}, ex.harder)),
-      rx && last !== undefined && nextStep(rx, last) ? note(`La siguiente vez: ${nextStep(rx, last)}`) : null,
+      rx && last !== undefined && nextStep(rx, last, unitFor(rx.ex, last)) ? note(`La siguiente vez: ${nextStep(rx, last, unitFor(rx.ex, last))}`) : null,
       ex.safety ? note(`Seguridad: ${ex.safety}`, 'warn') : null,
       h('p', { class: 'row-sub', style: { margin: 0 } }, `${ex.body} · ${NEED[ex.need]} · ${TIER[ex.tier]}${ex.each ? ' · peso por mano' : ''}`)));
 }
@@ -333,20 +334,20 @@ function historyTab(ctx, me, canLog) {
   ui.ex = exIds.includes(ui.ex) ? ui.ex : exIds[0];
   let chart = null;
   if (ui.ex) {
-    const ex = GYM_BY_ID[ui.ex], useKg = ex.unit === 'kg' && seen.get(ui.ex).some(({ e }) => (e.s || []).some((x) => Number(x[0]) > 0));
-    const pts = seen.get(ui.ex).map(({ l, e }) => ({ x: l.done_on, y: Math.max(...(e.s || []).map((x) => Number(useKg ? x[0] : x[1]) || 0)), tip: `Día ${l.day}` })).filter((p) => p.y > 0);
+    const ex = GYM_BY_ID[ui.ex], useKg = ex.unit === 'kg' && seen.get(ui.ex).some(({ e }) => (e.s || []).some((x) => Number(x[0]) > 0)), wu = unitFor(ui.ex, seen.get(ui.ex).at(-1)?.e);
+    const pts = seen.get(ui.ex).map(({ l, e }) => ({ x: l.done_on, y: Math.max(...(e.s || []).map((x) => (useKg ? Number(fromKg(x[0], wu)) : Number(x[1])) || 0)), tip: `Día ${l.day}` })).filter((p) => p.y > 0);
     const pick = h('select', { 'aria-label': 'Ejercicio' }, options(exIds.map((id) => [id, gymName(id)]), ui.ex));
     pick.addEventListener('change', () => { ui.ex = pick.value; ctx.rerender(); });
     chart = h('section', { class: 'stack' }, sectionTitle('Tu avance'), pick,
-      pts.length >= 2 ? lineChart(pts, { unit: useKg ? 'kg' : ex.unit === 's' ? 's' : 'reps', label: ex.name, digits: useKg ? 1 : 0, bestLabel: 'Mejor' }) : note('Registra este ejercicio un par de veces más para ver la gráfica.'));
+      pts.length >= 2 ? lineChart(pts, { unit: useKg ? wu : ex.unit === 's' ? 's' : 'reps', label: ex.name, digits: useKg ? 1 : 0, bestLabel: 'Mejor' }) : note('Registra este ejercicio un par de veces más para ver la gráfica.'));
   }
   return h('div', { class: 'stack' }, kpis, chart,
     h('section', { class: 'stack' }, sectionTitle('Tus sesiones'), h('div', { class: 'rows' }, logs.slice(0, 30).map((l) => logRow(l, canLog)))));
 }
 
-function setsText(e) {
+function setsText(e, u = e.u === 'lb' ? 'lb' : 'kg') {
   const ex = GYM_BY_ID[e.ex];
-  const parts = (e.s || []).map((x) => (ex?.unit === 'kg' && Number(x[0]) > 0 ? `${x[0]}×${x[1]}` : `${x[1]}${ex?.unit === 's' ? ' s' : ''}`));
+  const parts = (e.s || []).map((x) => (ex?.unit === 'kg' && Number(x[0]) > 0 ? `${fromKg(x[0], u)}${u === 'lb' ? ' lb' : ''}×${x[1]}` : `${x[1]}${ex?.unit === 's' ? ' s' : ''}`));
   return `${gymName(e.ex)}: ${parts.join(', ')}`;
 }
 function logRow(l, canDelete, who) {
@@ -378,7 +379,7 @@ function logPage(ctx) {
     const saved = readJSON(KEY.draft(me.id));
     if (saved && saved.key === day.key && saved.goal === goal && saved.at && Date.now() - saved.at < 12 * 3600e3) { ui.draft = saved; ui.recovered = !saved.circuit; }
     else ui.draft = { key: day.key, goal, date: todayStr(), minutes: day.min, rpe: null, pain: false, note: '', at: Date.now(),
-      entries: day.items.map((rx) => { const last = lastFor(me.id, rx.ex); return { ex: rx.ex, s: Array.from({ length: rx.sets }, (_, i) => [last?.s?.[i]?.[0] ?? last?.s?.[0]?.[0] ?? '', '']) }; }) };
+      entries: day.items.map((rx) => { const last = lastFor(me.id, rx.ex), u = unitFor(rx.ex, last); return { ex: rx.ex, u, s: prefill(last, rx.sets, u) }; }) };
   }
   const dr = ui.draft;
   let timer;
@@ -398,7 +399,7 @@ function logPage(ctx) {
       if (want !== e.ex) {
         const n = e.s.length, was = e.ex;
         if (want === orig) { delete e.orig; delete e.rx; } else { e.orig = orig; e.rx = { ...gymDefaultRx(want, sp), sets: n }; }
-        e.ex = want; e.s = Array.from({ length: n }, () => ['', '']);
+        e.ex = want; e.s = Array.from({ length: n }, () => ['', '']); e.u = unitFor(want, lastFor(me.id, want));
         changed.push([gymName(was), gymName(want)]);
       }
       used.add(e.ex);
@@ -418,20 +419,21 @@ function logPage(ctx) {
   const exBlock = (entry, k) => {
     const rx = rxOf(entry), ex = GYM_BY_ID[entry.ex];
     if (!ex || !rx) return null;
-    const last = lastFor(me.id, rx.ex), tip = nextStep(rx, last);
+    const last = lastFor(me.id, rx.ex), u = entry.u === 'lb' ? 'lb' : 'kg', tip = nextStep(rx, last, u);
     const kgOn = ex.unit === 'kg';
     const repsLabel = ex.repsLabel || (ex.unit === 's' ? 'Segundos' : 'Reps');
     const list = h('div', { class: 'gx-sets' });
     const paintSets = () => list.replaceChildren(...entry.s.map((x, i) => h('div', { class: 'gx-set' },
       h('span', { class: 'gx-sn' }, `Serie ${i + 1}`),
-      kgOn ? h('label', { class: 'gx-in' }, h('input', { type: 'number', inputmode: 'decimal', min: 0, max: 400, step: 0.5, value: x[0] ?? '', 'aria-label': `${ex.name}, serie ${i + 1}: kilos${ex.each ? ' por mano' : ''}`,
-        oninput: (e) => { x[0] = e.target.value; persist(); } }), h('span', {}, ex.each ? 'kg c/u' : 'kg')) : null,
+      kgOn ? h('label', { class: 'gx-in' }, h('input', { type: 'number', inputmode: 'decimal', min: 0, max: maxFor(u, 400), step: u === 'lb' ? 1 : 0.5, value: x[0] ?? '', 'aria-label': `${ex.name}, serie ${i + 1}: ${u === 'lb' ? 'libras' : 'kilos'}${ex.each ? ' por mano' : ''}`,
+        oninput: (e) => { x[0] = e.target.value; persist(); } }), h('span', {}, unitLabel(u, ex.each))) : null,
       h('label', { class: 'gx-in' }, h('input', { type: 'number', inputmode: 'numeric', min: 0, max: 600, step: 1, value: x[1] ?? '', placeholder: String(rx.reps).replace(/\s*(s|m)$/, ''), 'aria-label': `${ex.name}, serie ${i + 1}: ${repsLabel.toLowerCase()}`,
         oninput: (e) => { x[1] = e.target.value; persist(); } }), h('span', {}, repsLabel.toLowerCase())))));
     paintSets();
     return h('section', { class: 'panel stack' },
       h('div', { class: 'split' }, h('h3', {}, `${k + 1}. ${ex.name}`), h('span', { class: 'row-sub' }, rxText(rx))),
-      last ? h('p', { class: 'row-sub', style: { margin: 0 } }, `La vez pasada: ${setsText(last).replace(`${ex.name}: `, '')}`) : null,
+      kgOn ? unitSeg(entry, () => { persist(); ctx.rerender(); }) : null,
+      last ? h('p', { class: 'row-sub', style: { margin: 0 } }, `La vez pasada: ${setsText(last, u).replace(`${gymName(last.ex)}: `, '')}`) : null,
       tip ? note(tip) : null,
       list,
       h('div', { class: 'cluster' },
@@ -441,8 +443,8 @@ function logPage(ctx) {
         (() => { const lf = lazyFig(figFor(ex), { size: 'sm' }); return h('details', { class: 'gx-how', ontoggle: lf.ontoggle }, h('summary', {}, '¿Cómo se hace?'), lf.slot, h('ol', { class: 'plain' }, ex.how.map((x) => h('li', {}, x)))); })()));
   };
   const addEx = () => pickExercise({ lib: { ...GYM_LIB, recent: me ? recentGym(me.id) : [] }, exclude: dr.entries.map((e) => e.ex), title: 'Agregar a esta sesión', onPick: (id) => {
-    const rx = gymDefaultRx(id, act.spec || {}), last = lastFor(me.id, id);
-    dr.entries.push({ ex: id, rx, s: Array.from({ length: rx.sets }, (_, i) => [last?.s?.[i]?.[0] ?? last?.s?.[0]?.[0] ?? '', '']) }); persist(); ctx.rerender();
+    const rx = gymDefaultRx(id, act.spec || {}), last = lastFor(me.id, id), u = unitFor(id, last);
+    dr.entries.push({ ex: id, rx, u, s: prefill(last, rx.sets, u) }); persist(); ctx.rerender();
   } });
 
   const date = h('input', { type: 'date', min: addDays(todayStr(), -7), max: todayStr(), value: dr.date, oninput: (e) => { dr.date = e.target.value; persist(); } });
@@ -464,13 +466,13 @@ function logPage(ctx) {
       const ex = GYM_BY_ID[e.ex]; if (!ex) continue;
       const rows = [];
       for (const x of e.s) {
-        const reps = num(x[1]), kg = ex.unit === 'kg' ? num(x[0]) : null;
+        const reps = num(x[1]), kg = ex.unit === 'kg' ? toKg(x[0], e.u) : null;   // v3.27: se guarda en kilos aunque lo anotes en libras
         if (reps == null && kg == null) continue;
         if (reps == null || reps < 1 || reps > 600) return fail(`Revisa ${ex.name}: escribe cuántas ${ex.unit === 's' ? 'segundos' : 'repeticiones'} hiciste en cada serie (o déjala vacía si no la hiciste).`);
-        if (kg != null && (kg < 0 || kg > 400)) return fail(`Revisa los kilos de ${ex.name}.`);
-        rows.push([kg != null ? Math.round(kg * 10) / 10 : null, Math.round(reps)]);
+        if (kg != null && (kg < 0 || kg > 400)) return fail(`Revisa el peso de ${ex.name} (hasta ${maxFor(e.u === 'lb' ? 'lb' : 'kg', 400)} ${e.u === 'lb' ? 'lb' : 'kg'}).`);
+        rows.push([kg, Math.round(reps)]);
       }
-      if (rows.length) sets.push({ ex: e.ex, s: rows.slice(0, 8) });
+      if (rows.length) sets.push({ ex: e.ex, s: rows.slice(0, 8), ...(e.u === 'lb' && ex.unit === 'kg' ? { u: 'lb' } : {}) });
     }
     if (!sets.length) return fail('Anota por lo menos una serie.');
     const m = dr.minutes === '' || dr.minutes == null ? null : Math.round(Number(dr.minutes));

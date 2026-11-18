@@ -11,6 +11,7 @@ import { FIT_BY_ID, fitName, PLACES, FIT_GOALS, FIT_EXP, FIT_MINUTES, normFit, b
   MEASURES, MEASURE_TIPS, STEP_NOTE, vbFromRemate, FIT_SOURCES, MUSCLES, VOLUME_TARGET, ROLE, NEED, TIER, splitName, ALL_EX, fitDefaultRx, cleanFitCustom,
   registerOwn, cleanOwn, OWN_MUS, rampOf, applyRamp, e1rm, dayMinutes, fitAvailable, fitSwap, SMALL_MUS, SMALL_TARGET, ROT_DEFAULT, ROT_NAMES, normRota } from '../content/fit.js';
 import { cardioTab, cardioTodayCard } from './cardio.js';
+import { unitFor, prefill, fromKg, toKg, wText, unitLabel, maxFor } from '../peso.js';
 import { openActive, activeButton, circuitSheet, circuitDraft } from './activo.js';
 import { TEMPLATES, proposeDay, musOf, MUS_BY } from '../content/musculos.js';
 import { WD_NAMES } from './rutina-editor.js';
@@ -20,7 +21,7 @@ import { readShotSheet, entryForm, dailyReminderSheet, dayPicker, dayWord, activ
 import { chartsTab } from './fit-graficas.js';
 const FIT_LIB = { list: ALL_EX, byId: FIT_BY_ID };
 import { WARMUP, COOLDOWN } from '../content/gym.js';
-import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
+import { sectionTitle, note, empty, field, options, jersey, unitSeg } from './ui.js';
 import { lineChart } from './chart.js';
 import { enterSelf } from './mas.js';
 import { foodTab, recipePage, foodSummary, foodShared } from './fit-comida.js';
@@ -131,7 +132,7 @@ const RPE = { 1: 'Muy fácil', 2: 'Muy fácil', 3: 'Fácil', 4: 'Fácil', 5: 'Mo
 
 function exItem(ex, { rx = null, last, n } = {}) {
   const lf = lazyFig(figFor(ex), { size: 'md' });
-  const tip = rx && last !== undefined ? nextFitStep(rx, last) : '';
+  const tip = rx && last !== undefined ? nextFitStep(rx, last, unitFor(rx.ex, last)) : '';
   return h('details', { class: 'hx', ontoggle: lf.ontoggle },
     h('summary', {}, n ? h('span', { class: 'gx-n', 'aria-hidden': 'true' }, String(n)) : null,
       h('span', { class: 'row-main' }, h('strong', {}, ex.name), h('span', { class: 'row-sub' }, rx ? `${ROLE[rx.role]} · ${rxText(rx)}` : `${TIER[ex.tier]} · ${NEED[ex.need]}`)), ic('chevron-down', 18)),
@@ -423,7 +424,7 @@ function logPage(ctx, me) {
     let saved = null; try { saved = JSON.parse(ls.get(DRAFT(me.id)) || 'null'); } catch { saved = null; }
     if (saved && saved.key === day.key && saved.goal === spec.goal && Date.now() - (saved.at || 0) < 12 * 3600e3) { ui.draft = saved; ui.recovered = !saved.circuit; }
     else ui.draft = { key: day.key, goal: spec.goal, date: todayStr(), minutes: day.min, rpe: null, pain: false, note: '', at: Date.now(),
-      entries: day.items.map((rx) => { const last = lastFor(me.id, rx.ex); return { ex: rx.ex, s: Array.from({ length: rx.sets }, (_, i) => [last?.s?.[i]?.[0] ?? last?.s?.[0]?.[0] ?? '', '']) }; }) };
+      entries: day.items.map((rx) => { const last = lastFor(me.id, rx.ex), u = unitFor(rx.ex, last); return { ex: rx.ex, u, s: prefill(last, rx.sets, u) }; }) };
   }
   const dr = ui.draft;
   let timer;
@@ -442,7 +443,7 @@ function logPage(ctx, me) {
       if (want !== e.ex) {
         const n = e.s.length, nr = fitDefaultRx(want, spec), was = e.ex;
         if (want === orig) { delete e.orig; delete e.rx; } else { e.orig = orig; e.rx = { ...nr, sets: n }; }
-        e.ex = want; e.s = Array.from({ length: n }, () => ['', '']);
+        e.ex = want; e.s = Array.from({ length: n }, () => ['', '']); e.u = unitFor(want, lastFor(me.id, want));
         if (was !== want) changed.push([FIT_BY_ID[was]?.name, FIT_BY_ID[want]?.name]);
       }
       used.add(e.ex);
@@ -463,8 +464,8 @@ function logPage(ctx, me) {
   const exBlock = (entry, k) => {
     const rx = rxOf(entry), ex = FIT_BY_ID[entry.ex];
     if (!ex || !rx) return null;
-    const last = lastFor(me.id, rx.ex), tip = nextFitStep(rx, last), kgOn = ex.unit === 'kg';
-    const sameAsLast = () => { entry.s = last.s.map((x) => [x[0] ?? '', x[1] ?? '']); persist(); paint(); toast('Igual que la vez pasada: ajusta lo que cambie'); };
+    const last = lastFor(me.id, rx.ex), u = entry.u === 'lb' ? 'lb' : 'kg', tip = nextFitStep(rx, last, u), kgOn = ex.unit === 'kg';
+    const sameAsLast = () => { entry.s = last.s.map((x) => [x[0] == null || x[0] === '' ? '' : String(fromKg(x[0], u)), x[1] ?? '']); persist(); paint(); toast('Igual que la vez pasada: ajusta lo que cambie'); };
     // «Me molestó»: alternativas del mismo músculo, mejor en máquina o polea (más guiadas).
     const alts = () => { const have = new Set(dr.entries.map((e) => e.ex)); const ids = [...new Set(musOf(entry.ex).flatMap((m) => MUS_BY[m].ids))]
       .filter((id) => id !== entry.ex && !have.has(id) && FIT_BY_ID[id] && fitAvailable(FIT_BY_ID[id], spec.place));
@@ -472,20 +473,21 @@ function logPage(ctx, me) {
     const painBox = h('div', { class: 'stack', hidden: !entry.pain });
     const paintPain = () => { painBox.hidden = !entry.pain; const a = alts();
       painBox.replaceChildren(note('Si duele la articulación (no es cansancio del músculo), no sigas con este ejercicio hoy. Prueba uno parecido que no cargue esa zona o baja el peso y el rango.', 'warn'),
-        a.length ? h('div', { class: 'cluster' }, a.map((id) => h('button', { type: 'button', class: 'btn sm', onclick: () => { const r2 = fitDefaultRx(id, spec), l2 = lastFor(me.id, id);
-          dr.entries[k] = { ex: id, rx: r2, s: Array.from({ length: r2.sets }, (_, i) => [l2?.s?.[i]?.[0] ?? '', '']) }; persist(); ctx.rerender(); toast(`Cambiado por ${FIT_BY_ID[id].name}`); } }, ic('refresh-cw', 14), FIT_BY_ID[id].name))) : null); };
+        a.length ? h('div', { class: 'cluster' }, a.map((id) => h('button', { type: 'button', class: 'btn sm', onclick: () => { const r2 = fitDefaultRx(id, spec), l2 = lastFor(me.id, id), u2 = unitFor(id, l2);
+          dr.entries[k] = { ex: id, rx: r2, u: u2, s: prefill(l2, r2.sets, u2) }; persist(); ctx.rerender(); toast(`Cambiado por ${FIT_BY_ID[id].name}`); } }, ic('refresh-cw', 14), FIT_BY_ID[id].name))) : null); };
     paintPain();
     const repsLabel = ex.repsLabel || (ex.unit === 's' ? 'Segundos' : 'Reps');
     const list = h('div', { class: 'gx-sets' });
     const paint = () => list.replaceChildren(...entry.s.map((x, i) => h('div', { class: 'gx-set' }, h('span', { class: 'gx-sn' }, `Serie ${i + 1}`),
-      kgOn ? h('label', { class: 'gx-in' }, h('input', { type: 'number', inputmode: 'decimal', min: 0, max: 500, step: 0.5, value: x[0] ?? '', 'aria-label': `${ex.name}, serie ${i + 1}: kilos`, oninput: (e) => { x[0] = e.target.value; persist(); } }), h('span', {}, ex.each ? 'kg c/u' : 'kg')) : null,
+      kgOn ? h('label', { class: 'gx-in' }, h('input', { type: 'number', inputmode: 'decimal', min: 0, max: maxFor(u), step: u === 'lb' ? 1 : 0.5, value: x[0] ?? '', 'aria-label': `${ex.name}, serie ${i + 1}: ${u === 'lb' ? 'libras' : 'kilos'}`, oninput: (e) => { x[0] = e.target.value; persist(); } }), h('span', {}, unitLabel(u, ex.each))) : null,
       h('label', { class: 'gx-in' }, h('input', { type: 'number', inputmode: 'numeric', min: 0, max: 600, step: 1, value: x[1] ?? '', placeholder: String(rx.reps).replace(/\s*s$/, ''), 'aria-label': `${ex.name}, serie ${i + 1}: ${repsLabel.toLowerCase()}`, oninput: (e) => { x[1] = e.target.value; persist(); },
         onchange: (e) => { if (autoRest && e.target.value && i < entry.s.length - 1 + (k < dr.entries.length - 1 ? 1 : 0)) restTimer(rx.rest, ex.name); } }), h('span', {}, repsLabel.toLowerCase())))));
     paint();
     const lf = lazyFig(figFor(ex), { size: 'sm' });
     return h('section', { class: 'panel stack' },
       h('div', { class: 'split' }, h('h3', {}, `${k + 1}. ${ex.name}`), h('span', { class: 'row-sub' }, rxText(rx))),
-      last ? h('div', { class: 'split gx-last' }, h('p', { class: 'row-sub', style: { margin: 0 } }, `La vez pasada: ${last.s.map((x) => (x[0] ? `${x[0]} kg × ${x[1]}` : `${x[1]}`)).join(', ')}`),
+      kgOn ? unitSeg(entry, () => { persist(); ctx.rerender(); }) : null,
+      last ? h('div', { class: 'split gx-last' }, h('p', { class: 'row-sub', style: { margin: 0 } }, `La vez pasada: ${last.s.map((x) => (x[0] ? `${wText(x[0], u)} × ${x[1]}` : `${x[1]}`)).join(', ')}`),
         h('button', { type: 'button', class: 'btn sm ghost', onclick: sameAsLast }, ic('copy', 14), 'Igual')) : null,
       tip ? note(tip) : null, list,
       h('div', { class: 'cluster' },
@@ -498,8 +500,8 @@ function logPage(ctx, me) {
       painBox);
   };
   const addEx = () => pickExercise({ lib: libFor(me, spec, canSave), exclude: dr.entries.map((e) => e.ex), title: 'Agregar a esta sesión', onPick: (id) => {
-    const rx = fitDefaultRx(id, spec), last = lastFor(me.id, id);
-    dr.entries.push({ ex: id, rx, s: Array.from({ length: rx.sets }, (_, i) => [last?.s?.[i]?.[0] ?? last?.s?.[0]?.[0] ?? '', '']) }); persist(); ctx.rerender();
+    const rx = fitDefaultRx(id, spec), last = lastFor(me.id, id), u = unitFor(id, last);
+    dr.entries.push({ ex: id, rx, u, s: prefill(last, rx.sets, u) }); persist(); ctx.rerender();
   } });
   const date = h('input', { type: 'date', min: addDays(todayStr(), -14), max: todayStr(), value: dr.date, oninput: (e) => { dr.date = e.target.value; persist(); } });
   const mins = h('input', { type: 'number', inputmode: 'numeric', min: 1, max: 240, value: dr.minutes ?? '', oninput: (e) => { dr.minutes = e.target.value; persist(); } });
@@ -514,7 +516,7 @@ function logPage(ctx, me) {
   const cmin = h('input', { type: 'number', inputmode: 'numeric', min: 0, max: 180, value: dr.cmin ?? '', placeholder: '0', 'aria-label': 'Minutos de cardio al terminar', oninput: (e) => { dr.cmin = e.target.value; persist(); } });
   const ctipo = h('select', { 'aria-label': 'Tipo de cardio', onchange: (e) => { dr.ctipo = e.target.value; persist(); } }, options(CARDIO_TYPES, dr.ctipo || 'caminadora'));
   const autoCb = h('input', { type: 'checkbox', checked: autoRest ? true : null, onchange: (e) => { ls.set('remate.fit.autorest', e.target.checked ? '1' : '0'); toast(e.target.checked ? 'El descanso arranca solo al anotar una serie' : 'Arranca el descanso con su botón'); } });
-  const fillAll = () => { let n = 0; for (const e of dr.entries) { const l = lastFor(me.id, e.ex); if (l) { e.s = l.s.map((x) => [x[0] ?? '', x[1] ?? '']); n++; } } persist(); ctx.rerender(); toast(n ? `Llené ${plural(n, 'ejercicio', 'ejercicios')} como la vez pasada` : 'Todavía no hay una vez pasada'); };
+  const fillAll = () => { let n = 0; for (const e of dr.entries) { const l = lastFor(me.id, e.ex); if (l) { e.s = l.s.map((x) => [x[0] == null || x[0] === '' ? '' : String(fromKg(x[0], e.u === 'lb' ? 'lb' : 'kg')), x[1] ?? '']); n++; } } persist(); ctx.rerender(); toast(n ? `Llené ${plural(n, 'ejercicio', 'ejercicios')} como la vez pasada` : 'Todavía no hay una vez pasada'); };
   const save = () => {
     err.hidden = true;
     const fail = (m) => { err.textContent = m; err.hidden = false; err.scrollIntoView({ block: 'center', behavior: 'smooth' }); };
@@ -523,13 +525,13 @@ function logPage(ctx, me) {
       const ex = FIT_BY_ID[e.ex]; if (!ex) continue;
       const rows = [];
       for (const x of e.s) {
-        const reps = num(x[1]), kg = ex.unit === 'kg' ? num(x[0]) : null;
+        const reps = num(x[1]), kg = ex.unit === 'kg' ? toKg(x[0], e.u) : null;   // v3.27: se guarda en kilos aunque lo anotes en libras
         if (reps == null && kg == null) continue;
         if (reps == null || reps < 1 || reps > 600) return fail(`Revisa ${ex.name}: escribe las ${ex.unit === 's' ? 'segundos' : 'repeticiones'} de cada serie (o déjala vacía).`);
-        if (kg != null && (kg < 0 || kg > 500)) return fail(`Revisa los kilos de ${ex.name}.`);
-        rows.push([kg != null ? r1(kg) : null, Math.round(reps)]);
+        if (kg != null && (kg < 0 || kg > 500)) return fail(`Revisa el peso de ${ex.name} (hasta ${maxFor(e.u === 'lb' ? 'lb' : 'kg')} ${e.u === 'lb' ? 'lb' : 'kg'}).`);
+        rows.push([kg, Math.round(reps)]);
       }
-      if (rows.length) sets.push({ ex: e.ex, s: rows.slice(0, 8), ...(e.pain ? { pain: true } : {}) });
+      if (rows.length) sets.push({ ex: e.ex, s: rows.slice(0, 8), ...(e.u === 'lb' && ex.unit === 'kg' ? { u: 'lb' } : {}), ...(e.pain ? { pain: true } : {}) });
     }
     if (!sets.length) return fail('Anota por lo menos una serie.');
     const m = dr.minutes === '' || dr.minutes == null ? null : Math.round(Number(dr.minutes));
@@ -597,13 +599,13 @@ export function progressTab(ctx, me, canEdit) {
   ui.ex = exIds.includes(ui.ex) ? ui.ex : exIds[0];
   let exChart = null;
   if (ui.ex) {
-    const ex = FIT_BY_ID[ui.ex], useKg = ex.unit === 'kg', est = useKg && ui.e1 !== false;
-    const pts = seen.get(ui.ex).map(({ l, e }) => ({ x: l.day, y: est ? Math.max(...(e.s || []).map((x) => e1rm(Number(x[0]) || 0, Number(x[1]) || 0))) : Math.max(...(e.s || []).map((x) => Number(useKg ? x[0] : x[1]) || 0)),
-      tip: `${l.data?.key === 'L' ? 'Sesión libre' : `Día ${l.data?.key || ''}`}${est ? ` · ${(e.s || []).map((x) => `${x[0]}×${x[1]}`).join(', ')}` : ''}` })).filter((p) => p.y > 0);
+    const ex = FIT_BY_ID[ui.ex], useKg = ex.unit === 'kg', est = useKg && ui.e1 !== false, wu = unitFor(ui.ex, lastFor(me.id, ui.ex)), cv = (v) => (useKg ? Number(fromKg(v, wu)) || 0 : v);
+    const pts = seen.get(ui.ex).map(({ l, e }) => ({ x: l.day, y: cv(est ? Math.max(...(e.s || []).map((x) => e1rm(Number(x[0]) || 0, Number(x[1]) || 0))) : Math.max(...(e.s || []).map((x) => Number(useKg ? x[0] : x[1]) || 0))),
+      tip: `${l.data?.key === 'L' ? 'Sesión libre' : `Día ${l.data?.key || ''}`}${est ? ` · ${(e.s || []).map((x) => `${fromKg(x[0], wu)}×${x[1]}`).join(', ')}` : ''}` })).filter((p) => p.y > 0);
     const pick = h('select', { 'aria-label': 'Ejercicio' }, options(exIds.map((id) => [id, fitName(id)]), ui.ex));
     pick.addEventListener('change', () => { ui.ex = pick.value; ctx.rerender(); });
     const seg = useKg ? h('div', { class: 'seg', role: 'group', 'aria-label': 'Qué ver' }, [[true, 'Máximo estimado'], [false, 'Peso más alto']].map(([v, t]) => h('button', { type: 'button', 'aria-pressed': est === v ? 'true' : 'false', onclick: () => { ui.e1 = v; ctx.rerender(); } }, t))) : null;
-    exChart = h('div', { class: 'stack' }, pick, seg, pts.length >= 2 ? lineChart(pts, { unit: useKg ? 'kg' : 'reps', label: est ? `${ex.name}, máximo estimado a 1 repetición` : ex.name, digits: useKg ? 1 : 0, bestLabel: 'Récord' }) : null,
+    exChart = h('div', { class: 'stack' }, pick, seg, pts.length >= 2 ? lineChart(pts, { unit: useKg ? wu : 'reps', label: est ? `${ex.name}, máximo estimado a 1 repetición` : ex.name, digits: useKg ? 1 : 0, bestLabel: 'Récord' }) : null,
       est ? h('p', { class: 'row-sub', style: { margin: 0 } }, 'Máximo estimado a 1 repetición: lo que podrías levantar una sola vez, calculado con tu peso y tus repeticiones (fórmula de Epley). Es aproximado; más confiable con series de 10 repeticiones o menos. No hace falta probarlo.') : null);
   }
   // v3.18: récords por ejercicio (peso más alto y máximo estimado).
@@ -618,7 +620,7 @@ export function progressTab(ctx, me, canEdit) {
     return best ? { id, best, top } : null;
   }).filter(Boolean).sort((a, b) => b.best.day.localeCompare(a.best.day));
   const recSec = recs.length ? h('details', {}, h('summary', {}, `Tus récords (${recs.length})`), h('div', { class: 'rows' }, recs.slice(0, 40).map((x) => h('div', { class: 'row' },
-    h('span', { class: 'row-main' }, h('strong', {}, fitName(x.id)), h('span', { class: 'row-sub' }, `Más pesado: ${x.top.kg} kg × ${x.top.reps} (${fmtDate(x.top.day, { day: 'numeric', month: 'short' })}) · máximo estimado ${x.best.v} kg`)),
+    h('span', { class: 'row-main' }, h('strong', {}, fitName(x.id)), h('span', { class: 'row-sub' }, (() => { const wu = unitFor(x.id, lastFor(me.id, x.id)); return `Más pesado: ${wText(x.top.kg, wu)} × ${x.top.reps} (${fmtDate(x.top.day, { day: 'numeric', month: 'short' })}) · máximo estimado ${wText(x.best.v, wu)}`; })())),
     x.best.day >= addDays(todayStr(), -7) ? h('span', { class: 'chip ok' }, 'Nuevo') : null)))) : null;
   // Agregar medidas (un registro por día, junto con el peso si lo hay).
   const mIns = MEASURES.map(([k, name]) => [k, h('input', { type: 'number', inputmode: 'decimal', min: 20, max: 250, step: 0.1, 'aria-label': `${name} en cm`, placeholder: 'cm' })]);

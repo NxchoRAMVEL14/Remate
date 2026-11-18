@@ -1,5 +1,6 @@
 // Físico: pruebas físicas (antes en pruebas.js) y Gym (ejercicios con pesas y máquinas, objetivos y el generador de rutinas).
 // Las series, repeticiones y descansos son propuestas de Remate basadas en las fuentes de abajo (GYM_SOURCES), no cifras de un estudio.
+import { fromKg, unitLabel, incIn } from '../peso.js';
 import { addDays, diffDays, todayStr } from '../util.js';
 import { MAQ } from './maquinas.js';
 
@@ -19,6 +20,11 @@ export const PTESTS = {
     how: ['Apoyado en antebrazos y puntas, cuerpo recto de cabeza a talones.', 'Termina cuando la cadera baja o sube y no la puede corregir.', 'Un solo intento.'] },
   estatura: { name: 'Estatura', short: 'Estatura', unit: 'cm', better: 'up', min: 120, max: 230, step: 0.5,
     how: ['Descalzo, talones, glúteos y espalda contra la pared.', 'Útil para entender cambios de salto y alcance mientras crecen.'] },
+  // v3.26: para «Mi posición ideal» (necesitan el SQL de la v3.26)
+  alcance_pie: { name: 'Alcance de pie', short: 'Alcance pie', unit: 'cm', better: 'up', min: 120, max: 300, step: 1,
+    how: ['Descalzo, de lado a la pared, talones en el piso.', 'Estira hacia arriba el brazo más cercano a la pared y marca lo más alto que toques con la punta de los dedos.', 'Mide del piso a la marca, en centímetros.'] },
+  envergadura: { name: 'Envergadura', short: 'Envergadura', unit: 'cm', better: 'up', min: 100, max: 240, step: 0.5,
+    how: ['De espaldas a la pared, brazos abiertos en cruz a la altura de los hombros, palmas al frente.', 'Mide de la punta de un dedo medio a la punta del otro.', 'Si es mayor que tu estatura, tus brazos te ayudan a bloquear y alcanzar.'] },
 };
 
 // =====================================================================
@@ -882,7 +888,7 @@ export function weekPlan(n, train = []) {
 const incFor = (ex, kg) => (ex.need === 'barra' ? (kg < 80 ? 2.5 : 5) : kg < 10 ? 1 : 2);
 const fmtKg = (x) => `${Math.round(x * 10) / 10}`;
 // last: { s: [[kg, reps], ...] } de la última vez que hiciste ese ejercicio.
-export function nextStep(rx, last) {
+export function nextStep(rx, last, u = 'kg') {   // v3.27: u = unidad en que se muestra (kg o lb)
   const ex = GYM_BY_ID[rx.ex]; if (!ex) return '';
   if (rx.role === 'pow' || ex.unit === 'saltos') return 'Cada repetición a la máxima velocidad. Si pierdes altura o velocidad, para.';
   const sets = (last?.s || []).filter((x) => x && Number(x[1]) > 0);
@@ -890,10 +896,10 @@ export function nextStep(rx, last) {
   const top = topReps(rx.reps), done = sets.length >= rx.sets && sets.every((x) => Number(x[1]) >= top);
   if (ex.unit === 's') return done ? 'La vez pasada aguantaste todo: súmale 5 a 10 segundos o pasa a la versión más difícil.' : 'Repite el mismo tiempo hasta completarlo en todas las series.';
   if (ex.unit === 'pc' || ex.unit === 'saltos') return done ? 'La vez pasada completaste todo: pasa a la versión más difícil o haz la bajada más lenta.' : `Busca llegar a ${top} en todas las series.`;
-  const kg = Math.max(...sets.map((x) => Number(x[0]) || 0));
+  const kg = Math.max(...sets.map((x) => Number(x[0]) || 0)), U = unitLabel(u), now = fromKg(kg, u), up = u === 'lb' ? now + incIn(u, incFor(ex, kg)) : fmtKg(kg + incFor(ex, kg));
   if (!kg) return done ? 'Completaste todo: agrega un poco de peso.' : `Busca llegar a ${top} en todas las series.`;
-  if (done) return `La vez pasada completaste todo con ${fmtKg(kg)} kg: prueba con ${fmtKg(kg + incFor(ex, kg))} kg y vuelve a ${lowReps(rx.reps)} repeticiones.`;
-  return `Repite ${fmtKg(kg)} kg y busca llegar a ${top} en todas las series.`;
+  if (done) return `La vez pasada completaste todo con ${now} ${U}: prueba con ${up} ${U} y vuelve a ${lowReps(rx.reps)} repeticiones.`;
+  return `Repite ${now} ${U} y busca llegar a ${top} en todas las series.`;
 }
 
 // Semana del bloque (bloques de 6 semanas: la 6 es ligera).
