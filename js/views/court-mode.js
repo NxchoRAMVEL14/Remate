@@ -6,6 +6,7 @@ import { exerciseSheet } from './ejercicio.js';
 import { figCard } from '../figura.js';
 import { figFor, stepFigs } from '../content/movimientos.js';
 import { courtSVG, animateArrows } from '../court.js';
+import { splitOf, versionsOf } from './grupos.js';
 
 // v3.9: partes de un bloque. Si los pasos empiezan con «2 min · Tobillo: …» o «3 min: …», cada parte lleva su tiempo y su dibujo.
 const PART_RE = /^\s*(\d+(?:[.,]\d+)?)\s*min\s*[·:\-–]\s*/i;
@@ -27,9 +28,9 @@ export function partsOf(ex, secs) {
 const fmt = (s) => { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
 export function openCourtMode(session) {
-  const plan = (session.plan || []).filter((b) => Number(b.min) > 0);
+  const plan = (session.plan || []).filter((b) => Number(b.min) > 0), split = !!splitOf(session);   // v3.28: dos grupos
   if (!plan.length) { toast('Este entrenamiento no tiene plan'); return; }
-  const items = plan.map((b) => { const ex = b.ex ? getExercise(b.ex, state.data.customEx) : null; const secs = Math.round(b.min * 60); return { ex, name: ex?.name || b.text || 'Bloque', secs, note: b.note || '', parts: partsOf(ex, secs) }; });
+  const items = plan.map((b) => { const ex = b.ex ? getExercise(b.ex, state.data.customEx) : null; const secs = Math.round(b.min * 60); return { ex, name: ex?.name || b.text || 'Bloque', secs, note: b.note || '', parts: partsOf(ex, secs), vs: split ? versionsOf(b) : null }; });
   const total = items.reduce((n, x) => n + x.secs, 0);
   let idx = 0, left = items[0].secs, running = false, last = 0, beeped = false, finished = false, spent = 0, wake = null, audio = null, timer = null;
   const returnTo = document.activeElement, root = document.getElementById('root');
@@ -99,6 +100,7 @@ export function openCourtMode(session) {
     info.replaceChildren(...(finished ? [h('p', {}, 'Terminaste todos los bloques. Pasa lista si aún no lo haces.')] : [
       part ? h('p', { class: 'cm-part' }, part.text) : null,
       x.note ? h('p', { style: { fontWeight: 700 } }, x.note) : null,
+      x.vs && x.vs.A.ex ? h('div', { class: 'cm-split' }, ['A', 'B'].map((k) => h('p', {}, h('b', { class: `bs-tag ${k.toLowerCase()}` }, k), ' ', x.vs[k].other ? h('strong', {}, `${x.vs[k].ex.name}. `) : null, x.vs[k].text))) : null,
       !part && x.ex?.cues?.length ? h('ul', { style: { textAlign: 'left', display: 'inline-grid', gap: '4px', margin: 0 } }, x.ex.cues.slice(0, 3).map((c) => h('li', {}, c))) : null].filter(Boolean)));
     const n = items[idx + 1], np = part && x.parts[pi + 1];
     nextUp.textContent = finished ? '' : np ? `Sigue: ${np.title}` : !n ? 'Último bloque' : `Sigue: ${n.name}, ${Math.round(n.secs / 60)} min`;

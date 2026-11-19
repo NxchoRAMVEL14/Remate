@@ -12,6 +12,7 @@ import { noticeSheet } from './avisos.js';
 import { openCourtMode } from './court-mode.js';
 import { azarButton } from './azar.js';
 import { planToqueButton } from './plan-toque.js';
+import { splitBox, blockSplitLines, printableSplit, splitOf } from './grupos.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
 
@@ -75,7 +76,7 @@ export default function sesion(ctx) {
       s.status !== 'cancelada' && s.session_date === todayStr() ? h('a', { class: 'btn ball', href: `#/lista-qr/${s.id}` }, ic('qr-code', 18), 'Lista con QR') : null,
       plan.length && s.status !== 'cancelada' ? h('button', { class: 'btn', type: 'button', onclick: () => openCourtMode(s) }, ic('timer', 18), 'Modo cancha') : null,
       s.status !== 'cancelada' ? azarButton(s.id) : null,
-      plan.length ? h('button', { class: 'btn', type: 'button', onclick: () => window.print() }, ic('printer', 18), 'Imprimir plan') : null),
+      plan.length ? h('button', { class: 'btn', type: 'button', onclick: () => window.print() }, ic('printer', 18), splitOf(s) ? 'Imprimir (una hoja por grupo)' : 'Imprimir plan') : null),
     h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: s.published ? true : null, onchange: (e) => { patch('sessions', s.id, { published: e.target.checked }); toast(e.target.checked ? 'Publicado: tus jugadores ya lo ven' : 'Oculto para los jugadores'); } }),
       'Visible para los jugadores (plan y horario)'),
     s.published && s.status === 'planeada' ? h('button', { class: 'btn sm', type: 'button', style: { justifySelf: 'start' }, onclick: () => noticeSheet(sessionNotice(s)) }, ic('megaphone', 16), 'Avisar al equipo') : null,
@@ -117,11 +118,11 @@ export default function sesion(ctx) {
   const att = marks.length ? (() => { const c = { presente: 0, retardo: 0, falta: 0, justificada: 0 }; marks.forEach((m) => c[m.status]++); return c; })() : null;
 
   return { title: s.title || 'Entrenamiento', back: '#/sesiones', actions: plan.length ? [{ label: 'Imprimir plan', icon: 'printer', onClick: () => window.print() }] : [],
-    el: h('div', { class: 'page' }, h('div', { class: 'no-print stack' }, head, conv), planBox,
+    el: h('div', { class: 'page' }, h('div', { class: 'no-print stack' }, head, conv, splitBox(s)), planBox,
       att ? h('section', { class: 'no-print' }, sectionTitle('Asistencia'), h('div', { class: 'cluster' }, ['presente', 'retardo', 'falta', 'justificada'].map((k) => h('span', { class: `chip ${{ presente: 'ok', retardo: 'warn', falta: 'bad', justificada: 'info' }[k]}` }, `${STATUS_LABEL[k]} ${att[k]}`)),
         h('span', { class: 'chip' }, `Sin lista ${convocados(s).filter((p) => !marks.some((m) => m.player_id === p.id)).length}`))) : null,
       h('section', { class: 'no-print' }, sectionTitle('Notas'), h('div', { class: 'field' }, notes, h('span', { class: 'hint' }, 'Los jugadores las ven cuando el entrenamiento está publicado. Para algo privado usa las notas de cada jugador.'))),
-      printable(s, plan)) };
+      splitOf(s) ? printableSplit(s, plan, longDate) : printable(s, plan)) };
 }
 
 // ---------- un bloque del plan ----------
@@ -140,7 +141,8 @@ function blockRow(s, plan, i, b, setPlan) {
       h('button', { class: 'iconbtn', type: 'button', 'aria-label': 'Bajar bloque', disabled: i === plan.length - 1 ? true : null, onclick: () => move(i + 1) }, ic('arrow-down', 18)),
       h('button', { class: 'iconbtn', type: 'button', 'aria-label': 'Nota del bloque', onclick: () => noteSheet(b, (t) => edit({ note: t })) }, ic('pencil', 18)),
       h('button', { class: 'iconbtn', type: 'button', 'aria-label': 'Quitar bloque', onclick: () => { setPlan(plan.filter((_, k) => k !== i)); toast('Bloque quitado'); } }, ic('x', 18))),
-    b.note ? h('span', { class: 'bnote' }, b.note) : null);
+    b.note ? h('span', { class: 'bnote' }, b.note) : null,
+    blockSplitLines(s, b, edit));
 }
 
 function noteSheet(b, onSave) {

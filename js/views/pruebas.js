@@ -1,6 +1,6 @@
 // Pruebas físicas: registro por jugador o de todo el equipo, y la gráfica de avance de cada quien.
 import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr } from '../util.js';
-import { state, add, patch, remove, players, teamReady, torneosReady, settings } from '../store.js';
+import { state, add, patch, remove, players, teamReady, torneosReady, sql326Ready, settings } from '../store.js';
 import { PTESTS, testTrend } from '../content/gym.js';
 import { sectionTitle, note, empty, field, options, jersey } from './ui.js';
 import { lineChart } from './chart.js';
@@ -8,7 +8,7 @@ import { lineChart } from './chart.js';
 const fmtV = (v, kind) => `${Number(v).toFixed(PTESTS[kind].step < 1 ? (PTESTS[kind].step < 0.1 ? 2 : 1) : 0).replace(/\.0+$/, '')} ${PTESTS[kind].unit}`;
 const testsOf = (pid) => state.data.playerTests.filter((t) => t.player_id === pid);
 // Pruebas que se pueden capturar: la de 10 m necesita el SQL de la v3.3.
-export const testKinds = () => Object.keys(PTESTS).filter((k) => k !== 'vel10' || torneosReady());
+export const testKinds = () => Object.keys(PTESTS).filter((k) => (k !== 'vel10' || torneosReady()) && (!['alcance_pie', 'envergadura'].includes(k) || sql326Ready()));
 // Recordatorio: cada cuántas semanas medir (Ajustes) y cuándo fue la última prueba del equipo.
 export const testsEvery = () => Number(settings().tests_every) || 10;
 export function testsDue() {

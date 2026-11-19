@@ -14,9 +14,10 @@ import { required } from '../content/levels.js';
 import { CHALLENGE_BY_ID } from '../content/challenges.js';
 import { dots, statusChip, sectionTitle, empty, note } from './ui.js';
 import { playerCard, playerStats, badgesEl } from './card.js';
+import { profileTab } from './perfiles.js';
 import { playerFormSheet, deletePlayer, evaluateSheet, examSheet, codeSheet, noteSheet } from './sheets-player.js';
 
-const TABS = [['resumen', 'Resumen'], ['habilidades', 'Habilidades'], ['pruebas', 'Pruebas'], ['asistencia', 'Asistencia'], ['carga', 'Carga'], ['videos', 'Videos'], ['lesiones', 'Lesiones'], ['notas', 'Notas']];
+const TABS = [['resumen', 'Resumen'], ['habilidades', 'Habilidades'], ['pruebas', 'Pruebas'], ['asistencia', 'Asistencia'], ['carga', 'Carga'], ['videos', 'Videos'], ['lesiones', 'Lesiones'], ['perfil', 'Perfil'], ['notas', 'Notas']];
 
 export default function jugador(ctx) {
   const p = getPlayer(ctx.args[0]);
@@ -60,7 +61,7 @@ export default function jugador(ctx) {
     h('button', { type: 'button', role: 'tab', 'aria-selected': String(ui.tab === id), onclick: () => { ui.tab = id; paint(); } }, label)));
   function paint() {
     [...tabs.children].forEach((b, i) => b.setAttribute('aria-selected', String(TABS[i][0] === ui.tab)));
-    panel.replaceChildren(({ resumen, habilidades, pruebas: (pp) => testsPanel(pp, { canEdit: true }), asistencia, carga: (pp) => loadSection(pp), videos: (pp) => videosOf(pp, { coach: true }), lesiones: (pp) => playerSection(pp, { ...ctx, rerender: paint }) || note('Falta correr en Supabase el bloque «v3.23» de sql/instalar.sql para registrar lesiones.', 'bad'), notas })[ui.tab](p, stats));
+    panel.replaceChildren(({ resumen, habilidades, pruebas: (pp) => testsPanel(pp, { canEdit: true }), asistencia, carga: (pp) => loadSection(pp), videos: (pp) => videosOf(pp, { coach: true }), lesiones: (pp) => playerSection(pp, { ...ctx, rerender: paint }) || note('Falta correr en Supabase el bloque «v3.23» de sql/instalar.sql para registrar lesiones.', 'bad'), perfil: (pp) => profileTab(pp), notas })[ui.tab](p, stats));
   }
   paint();
   return { title: p.name, back: '#/jugadores', el: h('div', { class: 'page' }, playerCard(p, stats), actions, h('div', { class: 'stack' }, tabs, panel)) };

@@ -20,6 +20,7 @@ import { rpeCard, myLoadLine } from './carga.js';
 import { videoCardFor } from './tecnica.js';
 import { fitCard } from './fit.js';
 import { fraseCard } from './frase.js';
+import { retroCard, monthCard, conocemeCard } from './conoceme.js';
 import { PTESTS, testTrend } from '../content/gym.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
@@ -35,7 +36,7 @@ export default function inicio(ctx) {
     todayS ? h('a', { class: 'labcard checkin-card', href: '#/llegue' }, h('span', { class: 'lc-ic' }, ic('qr-code', 26)),
       h('span', { class: 'lc-t' }, h('strong', {}, 'Marcar mi llegada'), h('span', {}, `Hoy hay entreno${todayS.start_time ? ` a las ${String(todayS.start_time).slice(0, 5)}` : ''}. Al llegar, escanea el QR de tu entrenador.`)), ic('chevron-right', 20)) : null,
     unseenBanner(ctx),
-    rpeCard(me, { readonly: ctx.readonly }),
+    rpeCard(me, { readonly: ctx.readonly }) || retroCard(me, ctx),
     isStaff() ? h('a', { class: 'labcard', href: '#/asistir' }, h('span', { class: 'lc-ic' }, ic('clipboard-check', 26)),
       h('span', { class: 'lc-t' }, h('strong', {}, 'Modo capitán'), h('span', {}, 'Pasa lista y captura los partidos del equipo.')), ic('chevron-right', 20)) : null,
     playerCard(me, stats));
@@ -99,6 +100,9 @@ export default function inicio(ctx) {
     else if (!ctx.readonly) el.append(h('div', { class: 'cluster' }, h('button', { class: 'btn sm', type: 'button', onclick: () => reportSheet(me, ctx.rerender) }, ic('heart-pulse', 16), '¿Te duele algo? Repórtalo'),
       h('a', { class: 'btn sm ghost', href: '#/lesiones' }, 'Prevención')));
   }
+
+  // conóceme (v3.26): tests y encuesta del mes
+  { const mc = monthCard(me); if (mc) el.append(mc); const cc = conocemeCard(me); if (cc) el.append(cc); }
 
   // aprende (v3.21): teoría y práctica de su posición o de lo que más le falta
   el.append(h('a', { class: 'panel', href: '#/aprende', style: { textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '12px' } },

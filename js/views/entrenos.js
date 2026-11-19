@@ -5,12 +5,18 @@ import { getExercise } from '../content/exercises.js';
 import { sectionTitle, empty, note, statusChip, sessionWhen } from './ui.js';
 import { teoriaCard } from './teoria.js';
 import { calendarCard } from './sheets-session.js';
+import { playerSplit } from './grupos.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
 
-function planList(s) {
+function planList(s, me) {
   const plan = s.plan || [];
   if (!plan.length) return h('p', { class: 'muted', style: { margin: 0 } }, 'Todavía no hay plan escrito.');
+  // v3.28: si el entreno va en dos grupos, el jugador ve su grupo y su versión de cada bloque.
+  const ps = playerSplit(s, me);
+  if (ps) return h('div', { class: 'stack' }, h('span', { class: `chip ${ps.k === 'A' ? 'info' : 'ball'}`, style: { alignSelf: 'flex-start' } }, `Vas en el ${ps.name}`),
+    h('ol', { class: 'plain' }, ps.items.map(({ b, v }) => h('li', {}, v.ex ? h('a', { href: `#/ejercicio/${v.ex.id}` }, v.ex.name) : (b.text || 'Bloque'), ` (${b.min} min)`,
+      v.ex ? h('span', { class: 'row-sub', style: { display: 'block' } }, v.text) : null, b.note ? h('span', { class: 'row-sub' }, ` ${b.note}`) : null))));
   return h('ol', { class: 'plain' }, plan.map((b) => { const ex = b.ex ? getEx(b.ex) : null;
     return h('li', {}, ex ? h('a', { href: `#/ejercicio/${ex.id}` }, ex.name) : (b.text || 'Bloque'), ` (${b.min} min)`, b.note ? h('span', { class: 'row-sub' }, ` ${b.note}`) : null); }));
 }
@@ -26,7 +32,7 @@ export default function entrenos(ctx) {
     ? h('div', { class: 'stack' }, upcoming.map((s) => h('details', { class: 'panel', open: s === upcoming[0] ? true : null },
       h('summary', { style: { cursor: 'pointer', display: 'flex', justifyContent: 'space-between', gap: '10px', alignItems: 'center' } },
         h('span', {}, h('strong', {}, s.title || 'Entrenamiento'), h('span', { class: 'row-sub', style: { display: 'block' } }, `${sessionWhen(s)}, ${s.minutes} min`))),
-      h('div', { style: { marginTop: '10px' } }, planList(s)))))
+      h('div', { style: { marginTop: '10px' } }, planList(s, me)))))
     : note('Tu entrenador todavía no publica entrenamientos por venir.')));
   if (past.length) el.append(h('section', {}, sectionTitle('Anteriores'), h('div', { class: 'rows' }, past.map((s) => h('div', { class: 'row' },
     h('span', { class: 'row-main' }, h('strong', {}, s.title || 'Entrenamiento'), h('span', { class: 'row-sub' }, fmtDate(s.session_date))),

@@ -50,6 +50,7 @@ export default function mas() {
   const ideasPending = state.data.ideas.filter((x) => ['idea', 'lista'].includes(x.status)).length;
   const me = myPlayer();
   return { title: 'Más', el: h('div', { class: 'page' }, brandBand(), h('div', { class: 'labcards' },
+    item('#/perfiles', 'target', 'Conocer a mis jugadores', 'Su posición ideal, mente en la cancha, por qué juegan, su rol y cómo corregirlos. Y lo que opinan de tus entrenos.'),
     item('#/lesiones', 'heart-pulse', 'Lesiones', 'Quién está lesionado, su regreso en 5 fases y ejercicios de prevención por zona.'),
     item('#/video', 'video', 'Video con dibujos', 'Analiza un video de tu celular (por ejemplo, el partido): cámara lenta, cuadro por cuadro y dibujar encima. No sube nada.'),
     item('#/panel', 'chart-column', 'Panel del grupo', 'Asistencia por semana, a quién atender, lo que más le falta al grupo y sus niveles.'),
