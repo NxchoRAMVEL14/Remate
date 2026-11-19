@@ -20,14 +20,14 @@ const span = (e) => e.levels[1] - e.levels[0];
 const TRAIN = ['saque', 'recepcion', 'colocacion', 'remate', 'bloqueo', 'defensa', 'fisico'];
 
 // Candidatos para una habilidad, del que mejor le queda al grupo al que menos. variant rota entre los 3 mejores.
-function pick(skill, level, used, variant = 0) {
+export function pick(skill, level, used, variant = 0) {
   const kinds = skill === 'fisico' ? ['fisico'] : ['tecnica', 'juego'];
   const ok = BUILTIN.filter((e) => e.skills.includes(skill) && kinds.includes(e.kind) && !used.has(e.id))
     .sort((a, b) => fit(a, level) - fit(b, level) || (a.skills[0] !== skill) - (b.skills[0] !== skill) || (a.kind !== kinds[0]) - (b.kind !== kinds[0]) || span(a) - span(b));
   const top = ok.filter((e) => fit(e, level) <= 1).slice(0, 3);
   return (top.length ? top[variant % top.length] : ok[0]) || null;
 }
-function pickGame(level, want, used, variant = 0) {
+export function pickGame(level, want, used, variant = 0) {
   const hits = (e) => e.skills.filter((s) => want.includes(s)).length;
   const ok = BUILTIN.filter((e) => e.kind === 'juego' && !used.has(e.id)).sort((a, b) => fit(a, level) - fit(b, level) || hits(b) - hits(a) || span(a) - span(b));
   const top = ok.filter((e) => fit(e, level) <= 1).slice(0, 2);

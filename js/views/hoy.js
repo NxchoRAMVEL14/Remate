@@ -2,8 +2,10 @@
 import { h, ic, plural, toast, todayStr, fmtDate, sum } from '../util.js';
 import { retoCard, syncReto } from './reto.js';
 import { planToqueButton } from './plan-toque.js';
+import { delDiaButton } from './del-dia.js';
 import { syncRanking } from './ranking.js';
 import { hoyBand as injuryBand } from './lesiones.js';
+import { retroHoyLine } from './perfiles.js';
 import { spikes } from './carga.js';
 import { unseenVideos } from './tecnica.js';
 import { azarButton } from './azar.js';
@@ -67,13 +69,14 @@ export default function hoy() {
         next.session_date === todayStr() ? h('a', { class: 'btn', href: `#/lista-qr/${next.id}` }, ic('qr-code', 18), 'Lista con QR') : null,
         h('a', { class: 'btn', href: `#/sesion/${next.id}` }, ic('book-open', 18), blocks ? 'Ver plan' : 'Armar plan'),
         planToqueButton({ session: next }, blocks ? 'btn' : 'btn primary'),
+        !blocks ? delDiaButton({ session: next }) : null,
         blocks ? h('button', { class: 'btn', type: 'button', onclick: () => openCourtMode(next) }, ic('timer', 18), 'Modo cancha') : null,
         next.session_date === todayStr() ? azarButton(next.id) : null)));
   } else {
     el.append(h('section', { class: 'panel stack' },
       h('h2', {}, 'No hay entrenamientos por venir'),
       h('p', { style: { margin: 0 } }, `Tus días configurados son ${(st.days || []).length ? 'los marcados en Ajustes' : 'ninguno todavía'}. Crea el siguiente y arma el plan con una plantilla.`),
-      h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', onclick: () => sessionFormSheet(null, (s) => { location.hash = `#/sesion/${s.id}`; }) }, ic('plus', 18), 'Nuevo entrenamiento'), planToqueButton({}, 'btn'))));
+      h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', onclick: () => sessionFormSheet(null, (s) => { location.hash = `#/sesion/${s.id}`; }) }, ic('plus', 18), 'Nuevo entrenamiento'), planToqueButton({}, 'btn'), delDiaButton({}))));
   }
   if (overdue.length) {
     el.append(note(`${plural(overdue.length, 'entrenamiento pasado sigue', 'entrenamientos pasados siguen')} sin lista. Pasa lista o cancélalos para que la asistencia sea correcta.`, 'warn'),
@@ -101,6 +104,7 @@ export default function hoy() {
   el.append(h('a', { class: 'btn', href: '#/panel', style: { justifySelf: 'start' } }, ic('chart-column', 18), 'Panel del grupo'));
   // ---- reto del equipo (v3.8) ----
   { const b = injuryBand(); if (b) el.append(b); }
+  { const r = retroHoyLine(); if (r) el.append(r); }   // v3.26: lo que opinaron del último entreno
   syncReto(); syncRanking();
   el.append(retoCard({ coach: true }));
 
