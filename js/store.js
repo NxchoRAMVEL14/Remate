@@ -26,12 +26,14 @@ export const TABLES = {
   fitProfiles: 'fit_profiles', fitLogs: 'fit_logs',
   // v3.23: lesiones y regreso por fases (solo entrenador y el propio jugador)
   injuries: 'injuries',
+  // v3.26: tests para conocer al jugador y su retroalimentación al entrenador
+  surveys: 'player_surveys',
 };
 export const KEYS = Object.keys(TABLES);
 // Qué pide cada quien a la nube (lo demás ni lo intenta). El capitán además pide el registro de partidos.
 const FETCH = {
   coach: KEYS,
-  player: ['groups', 'players', 'sessions', 'attendance', 'ratings', 'exams', 'claims', 'customEx', 'matches', 'matchStats', 'homeLogs', 'rsvps', 'playerTests', 'notices', 'tournaments', 'tRsvps', 'calFeeds', 'gymLogs', 'sessionRpe', 'techVideos', 'fitProfiles', 'fitLogs', 'injuries'],
+  player: ['groups', 'players', 'sessions', 'attendance', 'ratings', 'exams', 'claims', 'customEx', 'matches', 'matchStats', 'homeLogs', 'rsvps', 'playerTests', 'notices', 'tournaments', 'tRsvps', 'calFeeds', 'gymLogs', 'sessionRpe', 'techVideos', 'fitProfiles', 'fitLogs', 'injuries', 'surveys'],
   assistant: ['staff', 'groups', 'sessions', 'attendance', 'matches', 'matchLogs', 'matchStats', 'rsvps', 'notices', 'tournaments', 'tRsvps', 'calFeeds', 'checkins'],
 };
 // Lo que solo ve el entrenador (el jugador ni lo pide) y lo que llegó con la fase 2 (puede faltar si aún no corren el SQL nuevo).
@@ -46,6 +48,7 @@ const PHASE8 = new Set(['checkins']);
 const PHASE9 = new Set(['sessionRpe', 'techVideos']);
 const PHASE11 = new Set(['fitProfiles', 'fitLogs']);
 const PHASE23 = new Set(['injuries']);
+const PHASE26 = new Set(['surveys']);
 const isMissingTable = (e) => ['PGRST205', 'PGRST202', '42P01', '42883'].includes(e?.code) || /could not find the (table|function)|schema cache|does not exist/i.test(e?.message || '');
 const emptyData = () => ({ ...Object.fromEntries(KEYS.map((k) => [k, []])), roster: [] });   // roster: lista del equipo para ayudantes (sin códigos)
 
@@ -67,7 +70,8 @@ export const state = {
   sql39: true,                       // false si aún no corre el SQL de la v3.9 (carga semanal, videos de técnica, dos celulares)
   sql311: true,                      // false si aún no corre el SQL de la v3.11 (fecha de nacimiento y Remate Fit)
   sql313: true,                      // false si aún no corre el SQL de la v3.13 (hora de los partidos y horarios de torneos)
-  sql323: true,                      // false si aún no corre el SQL de la v3.23 (lesiones)
+  sql323: true,
+  sql326: true,                      // false si aún no corre el SQL de la v3.26 (tests y retroalimentación)                      // false si aún no corre el SQL de la v3.23 (lesiones)
 };
 
 // ---------- almacenamiento seguro ----------
@@ -124,6 +128,7 @@ const DEFAULTS = {
   fitProfiles: () => ({ data: {}, share: false, updated_at: new Date().toISOString() }),
   fitLogs: () => ({ day: todayStr(), data: {} }),
   injuries: () => ({ zone: 'otra', kind: 'molestia', pain: null, started_on: todayStr(), status: 'activa', stage: 0, note: '', coach_note: '', reported_by: 'entrenador', seen_at: null, ended_on: null, updated_at: new Date().toISOString(), created_at: new Date().toISOString() }),
+  surveys: () => ({ kind: 'mente', session_id: null, period: '', answers: {}, comment: '' }),
 };
 // Enlace secreto del calendario: 64 caracteres al azar.
 export function randomToken() { const b = new Uint8Array(32); crypto.getRandomValues(b); return [...b].map((x) => x.toString(16).padStart(2, '0')).join(''); }
@@ -248,6 +253,7 @@ export const sql39Ready = () => state.mode !== 'cloud' || state.sql39;
 export const sql311Ready = () => state.mode !== 'cloud' || state.sql311;
 export const sql313Ready = () => state.mode !== 'cloud' || state.sql313;
 export const sql323Ready = () => state.mode !== 'cloud' || state.sql323;
+export const sql326Ready = () => state.mode !== 'cloud' || state.sql326;
 // ---------- equipos del grupo (v3.5): settings.teams = [{ id, name, branch }] ----------
 export const teams = () => (settings().teams || []).filter((t) => t && t.id && t.name);
 export const multiTeam = () => equiposReady() && teams().length > 1;
@@ -359,7 +365,7 @@ export async function refresh() {
   await flush();
   if (outbox.length) return false;                      // no pisar cambios que aún no se envían
   try {
-    let missing = false, missing3 = false, missing4 = false, missing5 = false, missing6 = false, missing7 = false, missing9 = false, missing39 = false, missing311 = false, missing323 = false;
+    let missing = false, missing3 = false, missing4 = false, missing5 = false, missing6 = false, missing7 = false, missing9 = false, missing39 = false, missing311 = false, missing323 = false, missing326 = false;
     const get = async (k) => {
       try { return await fetchAll(TABLES[k]); }
       catch (e) {
@@ -373,6 +379,7 @@ export async function refresh() {
         if (PHASE9.has(k) && isMissingTable(e)) { missing39 = true; return []; }
         if (PHASE11.has(k) && isMissingTable(e)) { missing311 = true; return []; }
         if (PHASE23.has(k) && isMissingTable(e)) { missing323 = true; return []; }
+        if (PHASE26.has(k) && isMissingTable(e)) { missing326 = true; return []; }
         throw e;
       }
     };
@@ -391,7 +398,7 @@ export async function refresh() {
     // v3.13: hora de los partidos (y horarios de torneos, en el mismo bloque de SQL).
     let missing313 = false;
     if (!missing) { try { const c = await client(); const { error } = await c.from('matches').select('start_time').limit(1); if (error && (error.code === '42703' || /column|start_time/i.test(error.message || ''))) missing313 = true; } catch (e) { if (!isNetworkError(e)) missing313 = true; } }
-    state.data = next; state.online = true; state.lab = !missing; state.equipos = !missing8; state.casa = !missing3; state.team = !missing4; state.torneos = !missing5; state.cal = !missing6; state.gym = !missing7; if (state.role !== 'player') state.sql37 = !missing9; state.sql39 = !missing39; state.sql311 = !missing311; state.sql313 = !missing313; state.sql323 = !missing323; state.syncedAt = new Date().toISOString(); try { ls.set(`remate.synced.${state.user?.id}`, state.syncedAt); } catch { /* */ }
+    state.data = next; state.online = true; state.lab = !missing; state.equipos = !missing8; state.casa = !missing3; state.team = !missing4; state.torneos = !missing5; state.cal = !missing6; state.gym = !missing7; if (state.role !== 'player') state.sql37 = !missing9; state.sql39 = !missing39; state.sql311 = !missing311; state.sql313 = !missing313; state.sql323 = !missing323; state.sql326 = !missing326; state.syncedAt = new Date().toISOString(); try { ls.set(`remate.synced.${state.user?.id}`, state.syncedAt); } catch { /* */ }
     saveCache(); emit();
     return true;
   } catch (e) {
@@ -429,7 +436,7 @@ export function clearLocal() {
   for (const k of ls.keys()) if (k.startsWith('remate.cache.') || k.startsWith('remate.outbox.')) ls.del(k);
   ls.del(MODE_KEY);
   outbox = [];
-  Object.assign(state, { ready: false, mode: null, role: null, user: null, email: '', me: null, viewAs: null, self: false, data: emptyData(), pending: 0, lastError: null, lab: true, casa: true, team: true, torneos: true, cal: true, equipos: true, gym: true, sql37: true, sql39: true, sql311: true, sql313: true, sql323: true, syncedAt: null });
+  Object.assign(state, { ready: false, mode: null, role: null, user: null, email: '', me: null, viewAs: null, self: false, data: emptyData(), pending: 0, lastError: null, lab: true, casa: true, team: true, torneos: true, cal: true, equipos: true, gym: true, sql37: true, sql39: true, sql311: true, sql313: true, sql323: true, sql326: true, syncedAt: null });
 }
 export const pendingCount = () => outbox.length;
 

@@ -44,7 +44,8 @@ export function makeDemoData() {
   for (const p of players) {
     const goal = LEVELS[p.level - 1].profile;
     for (const s of SKILL_IDS) {
-      const base = Math.min(4, Math.max(1, (goal[s] || 1) + (R() < 0.3 ? -1 : 0) + (R() < 0.12 ? 1 : 0)));
+      const posB = { colocador: { colocacion: 2 }, central: { bloqueo: 1, remate: 1 }, punta: { recepcion: 1, remate: 1 }, opuesto: { remate: 1, bloqueo: 1 }, libero: { recepcion: 1, defensa: 2 } }[p.position]?.[s] || 0;   // v3.26: su fuerte según su posición
+      const base = Math.min(4, Math.max(1, (goal[s] || 1) + posB + (R() < 0.3 ? -1 : 0) + (R() < 0.12 ? 1 : 0)));
       if ((p.position === 'libero') && (s === 'remate' || s === 'bloqueo')) continue;
       ratings.push({ id: `demo-r-${p.id}-${s}-0`, owner_id: 'demo', player_id: p.id, skill: s, score: Math.max(1, base - 1), note: '', rated_at: addDays(today, -50), created_at: iso(Date.now() - 50 * 864e5) });
       ratings.push({ id: `demo-r-${p.id}-${s}-1`, owner_id: 'demo', player_id: p.id, skill: s, score: base, note: '', rated_at: addDays(today, -9), created_at: iso(Date.now() - 9 * 864e5) });
@@ -105,11 +106,55 @@ export function makeDemoData() {
   }
   return { groups, players, sessions, attendance, ratings, exams, claims, notes: [
     { id: 'demo-n1', owner_id: 'demo', player_id: 'demo-p9', body: 'Platicar con ella: ha faltado dos veces seguidas.', created_at: iso(Date.now() - 864e5) },
-  ], customEx: [], gymLogs, sessionRpe, techVideos: [], ...fit, ...phase, injuries: [
+  ], customEx: [], gymLogs, sessionRpe, techVideos: [], ...fit, ...phase, surveys: demoSurveys(players, sessions, attendance, today, iso), injuries: [
     // v3.23: una molestia que reportó la jugadora (sin ver) y un esguince en regreso, fase 3.
     { id: 'demo-inj1', owner_id: 'demo', player_id: 'demo-p4', zone: 'hombro', kind: 'molestia', pain: 4, started_on: addDays(today, -1), status: 'activa', stage: 0, note: 'Me duele al rematar desde el entreno del jueves.', coach_note: '', reported_by: 'jugador', seen_at: null, ended_on: null, updated_at: iso(Date.now() - 864e5), created_at: iso(Date.now() - 864e5) },
     { id: 'demo-inj2', owner_id: 'demo', player_id: 'demo-p7', zone: 'tobillo', kind: 'lesion', pain: 2, started_on: addDays(today, -16), status: 'regreso', stage: 3, note: '', coach_note: 'Esguince leve al caer en el bloqueo. El médico dijo 2 semanas.', reported_by: 'entrenador', seen_at: iso(Date.now() - 15 * 864e5), ended_on: null, updated_at: iso(Date.now() - 2 * 864e5), created_at: iso(Date.now() - 16 * 864e5) },
   ] };
+}
+
+// ---------- v3.26: tests «Conóceme» y retroalimentación al entrenador (deterministas) ----------
+function demoSurveys(players, sessions, attendance, today, iso) {
+  const out = [], own = 'demo';
+  let seed = 326; const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+  const pick = (lo, hi) => Math.max(1, Math.min(5, Math.round(lo + rnd() * (hi - lo))));
+  const GUST = {   // gustos por posición: organizar, rematar, bloquear, recibir, defender, atrás, rápido, saltar
+    colocador: [5, 2, 2, 3, 4, 3, 5, 2], opuesto: [2, 5, 4, 2, 2, 1, 3, 5], punta: [2, 5, 3, 4, 4, 2, 4, 4], central: [1, 4, 5, 1, 2, 1, 2, 5], libero: [2, 1, 1, 5, 5, 5, 5, 1],
+  };
+  const row = (pid, kind, answers, d, extra = {}) => out.push({ id: `demo-sv-${pid}-${kind}-${out.length}`, owner_id: own, player_id: pid, kind, session_id: null, period: '', answers, comment: '', created_at: iso(Date.now() - d * 864e5), ...extra });
+  players.slice(0, 9).forEach((p, i) => {
+    const g = GUST[p.position] || GUST.punta, ans = {};
+    g.forEach((v, k) => { ans[k] = Math.max(1, Math.min(5, v + (rnd() < 0.3 ? (rnd() < 0.5 ? -1 : 1) : 0))); });
+    ans.mano = p.hand === 'izq' ? 'izquierda' : 'derecha'; ans.fav = i === 5 ? 'opuesto' : p.position;
+    row(p.id, 'posicion', ans, 12 + i);
+    if (i < 8) { const m = {}; for (let k = 0; k < 21; k++) m[k] = [2, 5, 11, 15, 16, 19].includes(k) ? pick(1, 3 + (i % 3 === 0 ? 1 : 0)) : pick(3, 5 - (i === 2 ? 2 : 0)); row(p.id, 'mente', m, 10 + i); }
+    if (i < 7) { const m = {}; for (let k = 0; k < 12; k++) m[k] = k < 6 ? pick(3, 5) : pick(i % 2 ? 3 : 1, i % 2 ? 5 : 3); row(p.id, 'motivo', m, 9 + i); }
+    if (i < 7) { const m = {}; const fav = ['voz', 'ancla', 'motor', 'estratega'][i % 4], order = ['voz', 'motor', 'estratega', 'ancla']; for (let k = 0; k < 12; k++) m[k] = order[Math.floor(k / 3)] === fav ? pick(4, 5) : pick(2, 4); row(p.id, 'rol', m, 8 + i); }
+    if (i < 6) row(p.id, 'correccion', { donde: i % 2 ? 'privado' : 'igual', como: ['ver', 'hacer', 'video', 'oir'][i % 4], cuando: i % 3 ? 'ejercicio' : 'ya', tono: ['directo', 'positivo', 'pregunta'][i % 3], cuantas: i % 2 ? 'una' : 'dos', animo: 'dicho' }, 7 + i);
+    if (i < 6) row(p.id, 'autoeval', { saque: 3, recepcion: i === 4 ? 4 : 2 + (i % 2), colocacion: i === 0 ? 3 : 2, remate: i === 1 ? 4 : 2 + (i % 2), bloqueo: 2, defensa: i === 4 ? 4 : 3, fisico: 3, juego: 3 }, 6 + i);
+  });
+  // después de cada entreno: los últimos 4 entrenos hechos
+  const COM = ['Me gustó el juego del final.', 'Mucho tiempo en fila en el ejercicio de saque.', 'Aprendí a leer al rematador.', '', '', 'Más juego 6 vs 6, porfa.', '', 'Estuvo pesado pero bien.'];
+  const TAGS = [['aprendi', 'divertido'], ['esperas'], ['claro', 'aprendi'], ['divertido'], ['pesado'], ['juego'], ['claro'], []];
+  sessions.filter((s) => s.status === 'hecha' && s.session_date <= today).sort((a, b) => b.session_date.localeCompare(a.session_date)).slice(0, 4).forEach((s, si) => {
+    attendance.filter((a) => a.session_id === s.id && (a.status === 'presente' || a.status === 'retardo')).slice(0, 8).forEach((a, k) => {
+      const face = Math.max(2, Math.min(5, 4 + (si === 1 && k % 3 === 0 ? -1 : 0) + (k % 4 === 0 && si !== 1 ? 1 : 0)));
+      out.push({ id: `demo-sv-re-${s.id}-${a.player_id}`, owner_id: own, player_id: a.player_id, kind: 'retro_entreno', session_id: s.id, period: '', answers: { face, tags: TAGS[(k + si) % 8] }, comment: COM[(k + si * 3) % 8], created_at: iso(new Date(`${s.session_date}T21:00:00`).getTime()) });
+    });
+  });
+  // encuesta del mes: este mes y el anterior
+  const cur = today.slice(0, 7), prevD = new Date(`${cur}-01T12:00:00`); prevD.setMonth(prevD.getMonth() - 1);
+  const prev = `${prevD.getFullYear()}-${String(prevD.getMonth() + 1).padStart(2, '0')}`;
+  const OPEN = [['Los juegos al final y que nos explicas bien.', 'Menos filas en el saque.', 'Remate desde zona 2.'], ['Que nos tratas igual a todos.', 'Empezar más puntual.', 'Bloqueo.'], ['El ambiente del equipo.', '', 'Saque flotado.'], ['Cuando grabamos video.', 'Más partidos de práctica.', '']];
+  [[prev, 3.6, 6], [cur, 4.1, 7]].forEach(([per, base, n], mi) => {
+    players.slice(0, n).forEach((p, k) => {
+      const a = {}; for (let q = 0; q < 15; q++) a[q] = Math.max(1, Math.min(5, Math.round(base + (q === 2 || q === 13 ? -1 : 0) + (rnd() - 0.4))));
+      a.nps = Math.min(10, Math.max(5, Math.round(7 + mi + rnd() * 3)));
+      const o = OPEN[k % 4]; if (o[0]) a.gusta = o[0]; if (o[1]) a.cambia = o[1]; if (o[2]) a.aprender = o[2];
+      out.push({ id: `demo-sv-mes-${per}-${p.id}`, owner_id: own, player_id: p.id, kind: 'retro_mes', session_id: null, period: per, answers: a, comment: '', created_at: iso(new Date(`${per}-${mi ? String(Math.min(28, Number(today.slice(8, 10)))).padStart(2, '0') : '25'}T20:00:00`).getTime()) });
+    });
+  });
+  return out;
 }
 
 // ---------- partidos, laboratorio, En casa, ayudantes y torneos (antes js/demo-lab.js) ----------
@@ -264,7 +309,8 @@ function makeDemoPhase2({ R, players, sessions, gid }) {
   [['demo-p1', 31, 30.5, 228, 11.9, 55, 2.21], ['demo-p2', 45, 47.5, 302, 10.4, 90, 1.92], ['demo-p3', 34, 36.0, 262, 11.2, 70, 2.12], ['demo-p4', 41, 41.5, 296, 11.0, 60, 1.98], ['demo-p5', 33, 35.5, 245, 10.8, 95, 2.05], ['demo-p6', 38, 40.0, 281, 10.9, 65, 2.01]]
     .forEach(([pid, a, b, reach, agil, plank, v10]) => {
       playerTests.push(PT(pid, -70, 'vel10', Math.round((v10 + 0.09) * 100) / 100), PT(pid, -8, 'vel10', v10),PT(pid, -70, 'cmj', a), PT(pid, -8, 'cmj', b), PT(pid, -70, 'alcance', reach - 4), PT(pid, -8, 'alcance', reach),
-        PT(pid, -70, 'agilidad', Math.round((agil + 0.4) * 100) / 100), PT(pid, -8, 'agilidad', agil), PT(pid, -70, 'plancha', plank - 15), PT(pid, -8, 'plancha', plank));
+        PT(pid, -70, 'agilidad', Math.round((agil + 0.4) * 100) / 100), PT(pid, -8, 'agilidad', agil), PT(pid, -70, 'plancha', plank - 15), PT(pid, -8, 'plancha', plank),
+        PT(pid, -8, 'alcance_pie', Math.round((players.find((x) => x.id === pid)?.height_cm || 170) * 1.32)), PT(pid, -8, 'envergadura', Math.round((players.find((x) => x.id === pid)?.height_cm || 170) + (pid === 'demo-p2' ? 7 : pid === 'demo-p4' ? 5 : 1))));
     });
   const notices = [
     { id: 'demo-nt1', owner_id: own, group_id: gid, title: 'Convocatoria contra Instituto Juárez', body: 'Contesta en Partidos si vas. Llegar 45 minutos antes.', url: '#/partidos', created_at: iso(1) },
