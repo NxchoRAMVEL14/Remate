@@ -1,12 +1,12 @@
 // Modo cancha: pantalla completa con cronómetro por bloques, puntos clave y aviso sonoro. Mantiene la pantalla encendida.
 import { h, ic, toast } from '../util.js';
-import { state } from '../store.js';
+import { state, patch } from '../store.js';
 import { getExercise } from '../content/exercises.js';
 import { exerciseSheet } from './ejercicio.js';
 import { figCard } from '../figura.js';
 import { figFor, stepFigs } from '../content/movimientos.js';
 import { courtSVG, animateArrows } from '../court.js';
-import { splitOf, versionsOf } from './grupos.js';
+import { splitOf, versionsOf, RES, RES_KEYS, rateable } from './grupos.js';
 
 // v3.9: partes de un bloque. Si los pasos empiezan con «2 min · Tobillo: …» o «3 min: …», cada parte lleva su tiempo y su dibujo.
 const PART_RE = /^\s*(\d+(?:[.,]\d+)?)\s*min\s*[·:\-–]\s*/i;
@@ -27,10 +27,21 @@ export function partsOf(ex, secs) {
 
 const fmt = (s) => { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
-export function openCourtMode(session) {
-  const plan = (session.plan || []).filter((b) => Number(b.min) > 0), split = !!splitOf(session);   // v3.28: dos grupos
+// v3.33: { group: 'A' | 'B' } abre la vista de un grupo (para el ayudante); arriba se cambia «Todos | A | B».
+// El entrenador marca «¿Cómo salió?» en cada bloque (se guarda en el plan; el ayudante solo ve).
+export function openCourtMode(session, { group = null } = {}) {
+  const split = !!splitOf(session);   // v3.28: dos grupos
+  let view = split && (group === 'A' || group === 'B') ? group : null;
+  const plan = (session.plan || []).map((b, i) => ({ b, i })).filter((x) => Number(x.b.min) > 0);
   if (!plan.length) { toast('Este entrenamiento no tiene plan'); return; }
-  const items = plan.map((b) => { const ex = b.ex ? getExercise(b.ex, state.data.customEx) : null; const secs = Math.round(b.min * 60); return { ex, name: ex?.name || b.text || 'Bloque', secs, note: b.note || '', parts: partsOf(ex, secs), vs: split ? versionsOf(b) : null }; });
+  const canRate = state.role === 'coach' && !state.viewAs;
+  const build = () => plan.map(({ b, i }) => {
+    const base = b.ex ? getExercise(b.ex, state.data.customEx) : null, vs = split ? versionsOf(b) : null;
+    const ex = view && vs?.[view]?.ex ? vs[view].ex : base;
+    const secs = Math.round(b.min * 60);
+    return { ex, base, at: i, name: ex?.name || b.text || 'Bloque', secs, note: b.note || '', parts: partsOf(ex, secs), vs: view ? null : vs, mine: view && vs ? vs[view] : null };
+  });
+  let items = build();
   const total = items.reduce((n, x) => n + x.secs, 0);
   let idx = 0, left = items[0].secs, running = false, last = 0, beeped = false, finished = false, spent = 0, wake = null, audio = null, timer = null;
   const returnTo = document.activeElement, root = document.getElementById('root');
@@ -40,6 +51,11 @@ export function openCourtMode(session) {
   const info = h('div', { style: { textAlign: 'center', maxWidth: '60ch', margin: '0 auto' } });
   const nextUp = h('div', { style: { textAlign: 'center', opacity: '.85' } });
   const visual = h('div', { class: 'cm-visual' }), partBar = h('div', { class: 'cm-parts', 'aria-hidden': 'true' });
+  const rateBox = h('div', { class: 'cm-rate' });
+  const viewSeg = split ? h('div', { class: 'seg cm-view', role: 'group', 'aria-label': 'Qué grupo ver' }) : null;
+  const paintView = () => viewSeg?.replaceChildren(...[[null, 'Todos'], ['A', 'Grupo A'], ['B', 'Grupo B']].map(([k, t]) =>
+    h('button', { type: 'button', 'aria-pressed': view === k ? 'true' : 'false', onclick: () => { if (view === k) return; view = k; items = build(); visKey = ''; paintView(); paint(); } }, t)));
+  paintView();
   let visKey = '', lastPart = -1;
   const segs = h('div', { class: 'segs', 'aria-hidden': 'true' }, items.map((x) => h('i', { style: { flex: String(x.secs) } })));
   const playBtn = h('button', { class: 'btn ball', type: 'button', style: { minWidth: '150px' }, onclick: toggle });
@@ -47,8 +63,8 @@ export function openCourtMode(session) {
 
   const closeBtn = h('button', { class: 'iconbtn', type: 'button', 'aria-label': 'Cerrar modo cancha', onclick: close }, ic('x', 26));
   const ov = h('div', { class: 'timer', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Modo cancha' },
-    h('div', { class: 'stack' }, h('div', { class: 'split', style: { flexWrap: 'nowrap' } }, count, closeBtn), segs),
-    h('div', { class: 'mid' }, name, partBar, clock, visual, info, nextUp),
+    h('div', { class: 'stack' }, h('div', { class: 'split', style: { flexWrap: 'nowrap' } }, count, closeBtn), viewSeg, segs),
+    h('div', { class: 'mid' }, name, partBar, clock, visual, info, rateBox, nextUp),
     h('div', { class: 'ctrl' },
       btn('Anterior', 'chevron-left', () => go(idx - 1)),
       playBtn,
@@ -100,12 +116,39 @@ export function openCourtMode(session) {
     info.replaceChildren(...(finished ? [h('p', {}, 'Terminaste todos los bloques. Pasa lista si aún no lo haces.')] : [
       part ? h('p', { class: 'cm-part' }, part.text) : null,
       x.note ? h('p', { style: { fontWeight: 700 } }, x.note) : null,
+      x.mine && x.ex ? h('p', { class: 'cm-mine' }, h('b', { class: `bs-tag ${view.toLowerCase()}` }, view), ' ', x.mine.text) : null,
       x.vs && x.vs.A.ex ? h('div', { class: 'cm-split' }, ['A', 'B'].map((k) => h('p', {}, h('b', { class: `bs-tag ${k.toLowerCase()}` }, k), ' ', x.vs[k].other ? h('strong', {}, `${x.vs[k].ex.name}. `) : null, x.vs[k].text))) : null,
       !part && x.ex?.cues?.length ? h('ul', { style: { textAlign: 'left', display: 'inline-grid', gap: '4px', margin: 0 } }, x.ex.cues.slice(0, 3).map((c) => h('li', {}, c))) : null].filter(Boolean)));
     const n = items[idx + 1], np = part && x.parts[pi + 1];
     nextUp.textContent = finished ? '' : np ? `Sigue: ${np.title}` : !n ? 'Último bloque' : `Sigue: ${n.name}, ${Math.round(n.secs / 60)} min`;
     [...segs.children].forEach((s, i) => { s.className = finished || i < idx ? 'done' : i === idx ? 'cur' : ''; });
     playBtn.replaceChildren(ic(running ? 'pause' : 'play', 20), h('span', {}, finished ? 'Reiniciar' : running ? 'Pausa' : 'Iniciar'));
+    paintRate();
+  }
+  // ¿Cómo salió? Un toque guarda. Con grupos: una fila por grupo (o solo el que estás viendo).
+  function paintRate() {
+    const x = items[idx];
+    if (!canRate || finished || !rateable(x.base)) { rateBox.replaceChildren(); rateBox.hidden = true; return; }
+    rateBox.hidden = false;
+    const cur = state.data.sessions.find((z) => z.id === session.id) || session, blk = (cur.plan || [])[x.at] || {};
+    const keys = split ? (view ? [view] : ['A', 'B']) : ['T'];
+    rateBox.replaceChildren(h('span', { class: 'cm-rate-q' }, '¿Cómo salió?'), ...keys.map((g) => {
+      const r = blk.res?.[g] || {};
+      const num = h('input', { type: 'number', inputmode: 'numeric', min: '0', max: '999', placeholder: 'nº', 'aria-label': `Número (opcional)${g !== 'T' ? `, grupo ${g}` : ''}`, value: r.n ?? '',
+        onchange: (e) => save(x.at, g, { n: e.target.value === '' ? null : Math.max(0, Math.round(Number(e.target.value))) }) });
+      return h('div', { class: 'cm-rate-row' }, g !== 'T' ? h('b', { class: `bs-tag ${g.toLowerCase()}` }, g) : null,
+        RES_KEYS.map((k) => h('button', { type: 'button', class: `rb ${RES[k].cls}`, 'aria-pressed': r.r === k ? 'true' : 'false', onclick: () => save(x.at, g, { r: r.r === k ? null : k }) }, RES[k].t)), num);
+    }));
+  }
+  function save(at, g, ch) {
+    const cur = state.data.sessions.find((z) => z.id === session.id) || session;
+    const plan2 = structuredClone(cur.plan || []); const b = plan2[at]; if (!b) return;
+    const res = { ...(b.res || {}) }, next = { ...(res[g] || {}), ...ch };
+    if (!next.r && next.n == null) delete res[g]; else res[g] = next;
+    if (Object.keys(res).length) b.res = res; else delete b.res;
+    patch('sessions', session.id, { plan: plan2 });
+    if (ch.r) toast(`Guardado: ${RES[ch.r].t}${g !== 'T' ? ` (grupo ${g})` : ''}`);
+    paintRate();
   }
   function tick() {
     const now = Date.now(), dt = Math.min(5, (now - last) / 1000); last = now;

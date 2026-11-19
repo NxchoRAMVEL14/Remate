@@ -8,6 +8,7 @@ import { figCard } from '../figura.js';
 import { figFor, stepFigs } from '../content/movimientos.js';
 import { empty, note, field } from './ui.js';
 import { customExerciseSheet } from './sheets-session.js';
+import { exHistoryCard, rateable } from './grupos.js';
 
 const chip = (t, cls = '') => h('span', { class: `chip ${cls}` }, t);
 
@@ -85,5 +86,5 @@ export default function ejercicio(ctx) {
   const video = vid || (coach && !ex.lab) ? h('div', { class: 'cluster' },
     vid ? h('a', { class: 'btn ball', href: vid, target: '_blank', rel: 'noopener' }, ic('video', 18), ytId(vid) ? 'Ver video en YouTube' : 'Ver video') : null,
     coach && !ex.lab ? h('button', { class: 'btn ghost sm', type: 'button', onclick: () => videoExSheet(ex) }, ic(vid ? 'pencil' : 'plus', 16), vid ? 'Cambiar video' : 'Agregar video') : null) : null;
-  return { title: ex.name, back, el: h('div', { class: 'page' }, ex.lab ? note('Ejercicio de tu laboratorio de salto. Tus jugadores no lo ven.') : null, tools, video, exerciseDetail(ex)) };
+  return { title: ex.name, back, el: h('div', { class: 'page' }, ex.lab ? note('Ejercicio de tu laboratorio de salto. Tus jugadores no lo ven.') : null, tools, video, coach && !ex.lab && rateable(ex) ? exHistoryCard(ex) : null, exerciseDetail(ex)) };
 }

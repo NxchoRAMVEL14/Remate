@@ -12,7 +12,7 @@ import { noticeSheet } from './avisos.js';
 import { openCourtMode } from './court-mode.js';
 import { azarButton } from './azar.js';
 import { planToqueButton } from './plan-toque.js';
-import { splitBox, blockSplitLines, printableSplit, splitOf } from './grupos.js';
+import { splitBox, blockSplitLines, printableSplit, splitOf, blockResultLine } from './grupos.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
 
@@ -142,7 +142,8 @@ function blockRow(s, plan, i, b, setPlan) {
       h('button', { class: 'iconbtn', type: 'button', 'aria-label': 'Nota del bloque', onclick: () => noteSheet(b, (t) => edit({ note: t })) }, ic('pencil', 18)),
       h('button', { class: 'iconbtn', type: 'button', 'aria-label': 'Quitar bloque', onclick: () => { setPlan(plan.filter((_, k) => k !== i)); toast('Bloque quitado'); } }, ic('x', 18))),
     b.note ? h('span', { class: 'bnote' }, b.note) : null,
-    blockSplitLines(s, b, edit));
+    blockSplitLines(s, b, edit),
+    blockResultLine(s, b));
 }
 
 function noteSheet(b, onSave) {

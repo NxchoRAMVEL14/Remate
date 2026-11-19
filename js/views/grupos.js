@@ -2,7 +2,7 @@
 // Remate reparte a los convocados por su nivel (tú puedes moverlos), y en cada bloque cada grupo hace su versión:
 // la fácil y la difícil del mismo ejercicio, o un ejercicio distinto para el grupo B. Se guarda en los ajustes del equipo
 // (settings.split), así que no necesita SQL. El plan de siempre no cambia: el grupo B solo agrega «alt» a un bloque.
-import { h, ic, toast, addDays } from '../util.js';
+import { h, ic, toast, addDays, fmtDate } from '../util.js';
 import { state, settings, saveSettings, convocados, patch } from '../store.js';
 import { getExercise, allExercises } from '../content/exercises.js';
 import { note } from './ui.js';
@@ -148,3 +148,61 @@ export function playerSplit(s, me) {
   return { k, name: TIER[k], items: (s.plan || []).map((b) => ({ b, v: versionsOf(b)[k] })) };
 }
 export const _gruposTest = { bestCut, suggestSplit, versionsOf };
+
+// ---------- v3.33: marcador del ejercicio ----------
+// En modo cancha el entrenador marca cómo salió cada bloque (por grupo si hay dos). Se guarda en el bloque del plan:
+// b.res = { T | A | B: { r: 'no'|'reg'|'ok'|'facil', n?: número } }. T = todo el equipo (sin grupos). Sin SQL.
+export const RES = { no: { t: 'No salió', cls: 'r-no' }, reg: { t: 'A medias', cls: 'r-reg' }, ok: { t: 'Salió', cls: 'r-ok' }, facil: { t: 'Muy fácil', cls: 'r-facil' } };
+export const RES_KEYS = ['no', 'reg', 'ok', 'facil'];
+export const rateable = (ex) => !!ex && ex.kind !== 'calentamiento' && ex.kind !== 'cierre';
+// Historial de un ejercicio: lo más reciente primero. g = 'T', 'A' o 'B'.
+export function exHistory(exId, { except = null } = {}) {
+  const out = [];
+  for (const s of state.data.sessions || []) {
+    if (s.id === except) continue;
+    for (const b of s.plan || []) {
+      const res = b.res; if (!res) continue;
+      for (const g of ['T', 'A', 'B']) {
+        const r = res[g]; if (!r?.r) continue;
+        const id = g === 'B' ? b.alt?.ex || b.ex : b.ex;
+        if (id === exId) out.push({ date: s.session_date, sid: s.id, title: s.title, g, r: r.r, n: r.n ?? null });
+      }
+    }
+  }
+  return out.sort((a, b) => b.date.localeCompare(a.date));
+}
+// Sugerencia con los 2 últimos resultados (del mismo grupo si se pide).
+export function exAdvice(exId, opts = {}) {
+  let hist = exHistory(exId, opts); if (opts.g) hist = hist.filter((x) => x.g === opts.g || x.g === 'T');
+  const [a, b] = hist;
+  if (!a || !b) return null;
+  if (a.r === 'facil' && b.r === 'facil') return { k: 'up', t: 'Les quedó muy fácil las 2 últimas veces: usa la versión difícil o un ejercicio del siguiente nivel.' };
+  if (a.r === 'no' && b.r === 'no') return { k: 'down', t: 'No les salió las 2 últimas veces: usa la versión fácil o regresa al ejercicio anterior.' };
+  return null;
+}
+const resText = (x) => `${RES[x.r]?.t || x.r}${x.n != null ? ` (${x.n})` : ''}`;
+// Debajo de un bloque del plan (entrenador): el resultado de este entreno y la sugerencia por historial.
+export function blockResultLine(s, b) {
+  const ex = b.ex ? getEx(b.ex) : null; if (!ex) return null;
+  const res = b.res || {}, have = ['T', 'A', 'B'].filter((g) => res[g]?.r);
+  const advA = exAdvice(b.ex, { except: s.id, g: splitOf(s) ? 'A' : null });
+  const advB = splitOf(s) && b.alt?.ex ? exAdvice(b.alt.ex, { except: s.id, g: 'B' }) : null;
+  if (!have.length && !advA && !advB) return null;
+  return h('span', { class: 'blk-res' },
+    have.length ? h('span', { class: 'cluster', style: { gap: '6px' } }, h('small', { class: 'row-sub' }, 'Cómo salió:'),
+      have.map((g) => h('span', { class: `chip ${RES[res[g].r]?.cls || ''}` }, g === 'T' ? resText(res[g]) : `${g}: ${resText(res[g])}`))) : null,
+    advA ? h('small', { class: `adv ${advA.k}` }, ic(advA.k === 'up' ? 'arrow-up' : 'arrow-down', 14), ` ${splitOf(s) ? 'Grupo A: ' : ''}${advA.t}`) : null,
+    advB ? h('small', { class: `adv ${advB.k}` }, ic(advB.k === 'up' ? 'arrow-up' : 'arrow-down', 14), ` Grupo B: ${advB.t}`) : null);
+}
+// En la página del ejercicio (entrenador): los últimos resultados.
+export function exHistoryCard(ex) {
+  const hist = exHistory(ex.id).slice(0, 8);
+  const adv = exAdvice(ex.id);
+  return h('section', { class: 'panel stack' },
+    h('div', { class: 'split' }, h('h3', { style: { margin: 0 } }, 'Cómo les ha salido'), hist.length ? h('span', { class: 'row-sub' }, `${hist.length === 8 ? 'Últimas 8' : hist.length === 1 ? '1 vez' : `${hist.length} veces`}`) : null),
+    hist.length ? h('div', { class: 'rows' }, hist.map((x) => h('a', { class: 'row', href: `#/sesion/${x.sid}` },
+      h('span', { class: 'row-main' }, h('strong', {}, fmtDate(x.date, { weekday: 'short', day: 'numeric', month: 'short' })), h('span', { class: 'row-sub' }, x.g === 'T' ? (x.title || 'Entrenamiento') : `Grupo ${x.g} · ${x.title || 'Entrenamiento'}`)),
+      h('span', { class: `chip ${RES[x.r]?.cls || ''}` }, resText(x)))))
+      : h('p', { class: 'row-sub', style: { margin: 0 } }, 'Todavía no hay resultados. En el modo cancha, al terminar el bloque, toca «¿Cómo salió?».'),
+    adv ? note(adv.t, adv.k === 'up' ? 'ok' : 'warn') : null);
+}

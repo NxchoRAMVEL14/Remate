@@ -6,7 +6,7 @@
 import { h, ic, toast, openSheet, confirmSheet, todayStr, addDays, fmtDate, append } from '../util.js';
 import { state, add, patch, settings, group, teamPlayers } from '../store.js';
 import { SKILL_BY_ID } from '../content/skills.js';
-import { getExercise } from '../content/exercises.js';
+import { getExercise, BUILTIN } from '../content/exercises.js';
 import { warmupFor } from '../content/templates.js';
 import { pick, pickGame } from './plan-toque.js';
 import { nextTrainingDay } from './sugerido.js';
@@ -28,6 +28,16 @@ export const THEMES = [
 const dayIdx = (date) => Math.floor(Date.parse(`${date}T12:00:00Z`) / 864e5);
 export const themeOf = (date) => THEMES[((dayIdx(date) % 7) + 7) % 7];
 
+// Elige el ejercicio de un fundamento: primero que sea de su nivel, luego que su duración se parezca a la del bloque
+// (para no estirar 25 min un ejercicio de 8), y que el fundamento sea el principal. variant rota entre los 3 mejores.
+const fitLv = (e, lv) => (e.levels[0] <= lv && lv <= e.levels[1] ? 0 : Math.min(Math.abs(e.levels[0] - lv), Math.abs(e.levels[1] - lv)));
+function pickFor(skill, level, used, variant, mins) {
+  const ok = BUILTIN.filter((e) => e.skills.includes(skill) && (e.kind === 'tecnica' || e.kind === 'juego') && !used.has(e.id) && fitLv(e, level) <= 1);
+  const score = (e) => fitLv(e, level) * 3 + Math.abs(e.min - mins) / 6 + (e.skills[0] !== skill ? 1.2 : 0) + (e.kind === 'juego' ? 0.6 : 0);
+  const top = ok.sort((a, b) => score(a) - score(b)).slice(0, 3);
+  return top.length ? top[variant % top.length] : pick(skill, level, used, variant);
+}
+
 // El plan: calentamiento, 2 bloques por fundamento (o 1 si hay poco tiempo), juego reducido y enfriamiento.
 export function dailyPlan(tierId, date = todayStr(), minutes = null, variant = 0) {
   const tier = TIERS.find((x) => x.id === tierId) || TIERS[0], th = themeOf(date);
@@ -37,11 +47,12 @@ export function dailyPlan(tierId, date = todayStr(), minutes = null, variant = 0
   const each = Math.max(10, Math.floor((mins - 10 - 5 - gameMin) / 2 / 5) * 5);
   const used = new Set(), plan = [{ ex: settings().warmup_prev !== false ? warmupFor(date) : 'fi-01', min: 10, note: '' }];
   th.f.forEach((k, n) => {
-    const parts = each > 25 ? 2 : 1;
+    const parts = each >= 20 ? 2 : 1;   // v3.30: bloques de 20 min o más se parten en 2 ejercicios (más variedad para principiantes)
     for (let i = 0; i < parts; i++) {
-      const ex = pick(k, level, used, variant + i + n); if (!ex) break;
+      const m0 = parts === 2 ? (i ? Math.floor(each / 2 / 5) * 5 : each - Math.floor(each / 2 / 5) * 5) : each;
+      const ex = pickFor(k, level, used, variant + i + n, m0); if (!ex) break;
       used.add(ex.id);
-      const m = parts === 2 ? (i ? Math.floor(each / 2 / 5) * 5 : each - Math.floor(each / 2 / 5) * 5) : each;
+      const m = m0;
       plan.push({ ex: ex.id, min: m, note: i ? '' : `Tema del día: ${NAME(k).toLowerCase()}.` });
     }
   });

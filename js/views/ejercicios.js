@@ -16,7 +16,7 @@ export const TIERS = [
   { id: 'i', name: 'Intermedio', range: [3, 4], cls: 't-i' },
   { id: 'a', name: 'Avanzado', range: [5, 6], cls: 't-a' },
 ];
-const SK_IC = { saque: 'send', recepcion: 'shield', colocacion: 'hand', remate: 'zap', bloqueo: 'square', defensa: 'shield-check', fisico: 'dumbbell', juego: 'users' };
+const SK_IC = { saque: 'send', recepcion: 'shield', colocacion: 'hand', remate: 'zap', bloqueo: 'brick-wall', defensa: 'shield-check', fisico: 'dumbbell', juego: 'users' };
 export const skIcon = (k) => SK_IC[k] || 'volleyball';
 const inTier = (e, t) => e.levels[0] <= t.range[1] && e.levels[1] >= t.range[0];
 export const tierOf = (e) => TIERS.find((t) => e.levels[0] >= t.range[0] && e.levels[0] <= t.range[1]) || TIERS[0];
@@ -79,7 +79,7 @@ export default function ejercicios(ctx) {
     chipBox.replaceChildren(h('button', { type: 'button', class: 'skchip', 'aria-pressed': !ui.skill ? 'true' : 'false', onclick: () => { ui.skill = ''; paint(); } }, 'Todos'),
       ...SK.map((x) => { const n = base.filter((e) => byTier(e) && e.skills.includes(x.id)).length, on = ui.skill === x.id;
         return h('button', { type: 'button', class: `skchip sk-${x.id}`, 'aria-pressed': on ? 'true' : 'false', disabled: !n && !on ? true : null, onclick: () => { ui.skill = on ? '' : x.id; paint(); } }, ic(skIcon(x.id), 15), `${x.name} `, h('small', {}, String(n))); }));
-    const list = base.filter((e) => byTier(e) && (!ui.skill || e.skills.includes(ui.skill))).sort((a, b) => order(a) - order(b));
+    const list = base.filter((e) => byTier(e) && (!ui.skill || e.skills.includes(ui.skill))).sort((a, b) => order(a) - order(b) + (tFilter ? ((a.levels[0] < tFilter.range[0]) - (b.levels[0] < tFilter.range[0])) * 1000 : 0));   // v3.31: los que empiezan en el nivel elegido, primero
     count.textContent = list.length === all.length ? plural(list.length, 'ejercicio', 'ejercicios') : `${list.length} de ${all.length}`;
     syncFeat();
     rows.replaceChildren(...(list.length ? list.map((e) => exCard(e)) : [h('div', { class: 'empty' }, 'Ningún ejercicio coincide con esos filtros.')]));

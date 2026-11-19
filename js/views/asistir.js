@@ -4,6 +4,8 @@ import { h, ic, fmtDate, todayStr, addDays, plural, toast, confirmSheet, fmtTime
 import { state, group, sessions, players, isStaff, teamReady, sql37Ready, add, patch, settings, setAttendance, replaceRows, pendingCount, refresh, playerById, convocados } from '../store.js';
 import { client, isNetworkError, friendly } from '../cloud.js';
 import { attendanceSheet } from './sheets-session.js';
+import { openCourtMode } from './court-mode.js';
+import { splitOf } from './grupos.js';
 import { matchSheet, matchesSorted, resultChip } from './partidos.js';
 import { sectionTitle, note, empty, sessionWhen, jersey, field, options } from './ui.js';
 
@@ -18,9 +20,14 @@ export default function asistir(ctx) {
   const live = matchesSorted().filter((m) => m.status !== 'terminado').reverse();
   const n = players().length;
   const sessRow = (s) => h('div', { class: 'row' },
-    h('span', { class: 'row-main' }, h('strong', {}, s.title || 'Entrenamiento'), h('span', { class: 'row-sub' }, `${sessionWhen(s)} · ${marks(s) ? `lista de ${marks(s)} de ${n}` : 'sin lista'}`)),
+    h('span', { class: 'row-main' }, h('strong', {}, s.title || 'Entrenamiento'), h('span', { class: 'row-sub' }, `${sessionWhen(s)} · ${marks(s) ? `lista de ${marks(s)} de ${n}` : 'sin lista'}`),
+      s.session_date === t && courtBtns(s) ? h('span', { class: 'cluster', style: { marginTop: '6px', gap: '6px' } }, courtBtns(s)) : null),
     h('div', { class: 'cluster' }, h('button', { class: `btn sm ${marks(s) ? '' : 'primary'}`, type: 'button', onclick: () => attendanceSheet(s) }, ic('clipboard-check', 16), marks(s) ? 'Corregir' : 'Pasar lista'),
       s.session_date === t && canOpenQr() ? h('a', { class: 'btn sm ball', href: `#/lista-qr/${s.id}` }, ic('qr-code', 16), 'Lista con QR') : null));
+  // v3.33: modo cancha para el ayudante (solo ver; con dos grupos, abre directo en su grupo).
+  const courtBtns = (s) => ((s.plan || []).some((b) => Number(b.min) > 0) ? (splitOf(s)
+    ? [h('button', { class: 'btn sm', type: 'button', onclick: () => openCourtMode(s, { group: 'A' }) }, ic('timer', 16), 'Cancha grupo A'), h('button', { class: 'btn sm', type: 'button', onclick: () => openCourtMode(s, { group: 'B' }) }, ic('timer', 16), 'Cancha grupo B')]
+    : h('button', { class: 'btn sm', type: 'button', onclick: () => openCourtMode(s) }, ic('timer', 16), 'Modo cancha')) : null);
   const who = state.role === 'assistant' ? 'asistente' : 'capitán';
   const el = h('div', { class: 'page' },
     !teamReady() ? note('Tu entrenador todavía no termina de activar esta función. Pídele que actualice Remate.', 'warn') : null,
@@ -30,7 +37,8 @@ export default function asistir(ctx) {
       h('p', { style: { margin: 0 } }, `Puedes pasar lista y capturar partidos de los ${plural(n, 'jugador', 'jugadores')} del equipo. No ves notas, evaluaciones ni datos privados.`)),
     h('section', { class: 'stack' }, sectionTitle('Pasar lista'),
       today.length || recent.length ? h('div', { class: 'rows' }, [...today, ...recent].map(sessRow)) : empty('No hay entrenamientos de hoy ni recientes', null),
-      upcoming.length ? h('p', { class: 'row-sub', style: { margin: 0 } }, `Próximo: ${upcoming.map((s) => `${s.title || 'Entrenamiento'} (${sessionWhen(s)})`).join(', ')}.`) : null),
+      upcoming.length ? h('p', { class: 'row-sub', style: { margin: 0 } }, `Próximo: ${upcoming.map((s) => `${s.title || 'Entrenamiento'} (${sessionWhen(s)})`).join(', ')}.`) : null,
+      upcoming[0] && !today.length && courtBtns(upcoming[0]) ? h('div', { class: 'cluster' }, h('small', { class: 'row-sub' }, 'Ver el plan del próximo:'), courtBtns(upcoming[0])) : null),
     h('section', { class: 'stack' }, sectionTitle('Partidos', h('button', { class: 'btn ghost sm', type: 'button', onclick: () => matchSheet(null, (m) => { location.hash = `#/partido/${m.id}`; }) }, ic('plus', 16), 'Nuevo')),
       live.length ? h('div', { class: 'rows' }, live.map((m) => h('a', { class: 'row', href: `#/partido/${m.id}` },
         h('span', { class: 'row-main' }, h('strong', {}, `Contra ${m.rival}`), h('span', { class: 'row-sub' }, fmtDate(m.match_date, { weekday: 'short', day: 'numeric', month: 'short' }))),
