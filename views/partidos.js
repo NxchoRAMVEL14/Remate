@@ -1,0 +1,185 @@
+// Partidos: lista de la temporada, récord y alta de un partido nuevo. El jugador ve resultados y sus propios números.
+import { h, ic, toast, openSheet, fmtDate, todayStr, plural, rivalKey } from '../util.js';
+import { state, add, patch, group, labReady, isStaff, torneosReady, multiTeam, teams, teamOf, teamName, equiposReady, inTeam, sql313Ready } from '../store.js';
+import { hhmm, addMin, toMin, defaultMinutes, normSchedule, upcomingSlots, slotLabel, timeText, matchTime, scheduleText } from '../horarios.js';
+import { KINDS, result, metrics, addCounts, fmtEff } from '../match-calc.js';
+import { sectionTitle, note, empty, field, options } from './ui.js';
+import { missingSqlNote } from './lab.js';
+import { rsvpCounts, rsvpControl, zoneSection, RSVP, summaryView, playerMatchView } from './partido-summary.js';
+import { capture } from './partido-capture.js';
+import { tournamentsSection, tournamentsSorted, torneoById, myUpcomingTournaments, tRsvpControl, RAMAS } from './torneos.js';
+
+export const matchesSorted = () => state.data.matches.slice().sort((a, b) => `${b.match_date}${b.start_time || ''}${b.created_at}`.localeCompare(`${a.match_date}${a.start_time || ''}${a.created_at}`));
+
+export function matchSheet(m = null, onSaved, { tournament = null } = {}) {
+  const tt = tournament;
+  const rival = h('input', { type: 'text', maxlength: 60, value: m?.rival || '', placeholder: 'Nombre del equipo rival', required: true });
+  const date = h('input', { type: 'date', value: m?.match_date || (tt && tt.start_date > todayStr() ? tt.start_date : todayStr()) });
+  const venue = h('input', { type: 'text', maxlength: 80, value: m?.venue || tt?.venue?.slice(0, 80) || '', placeholder: 'Opcional' });
+  const kind = h('select', {}, options(Object.entries(KINDS), m?.kind || (tt ? 'torneo' : 'amistoso')));
+  // Torneo al que pertenece (solo si ya corriste el SQL de torneos y hay alguno).
+  const tlist = torneosReady() ? tournamentsSorted() : [];
+  const tsel = tlist.length ? h('select', {}, options([['', 'Ninguno'], ...tlist.map((x) => [x.id, `${x.name} (${RAMAS[x.branch].toLowerCase()})`])], m?.tournament_id || tt?.id || '')) : null;
+  tsel?.addEventListener('change', () => { if (tsel.value && kind.value === 'amistoso') kind.value = 'torneo'; });
+  // Cuál de tus equipos juega (solo si tienes más de uno).
+  const team = multiTeam() ? h('select', {}, options(teams().map((t) => [t.id, t.name]), m ? teamOf(m) : (tt?.teams?.[0] || teams()[0].id))) : null;
+  const bestOf = h('select', {}, options([[3, 'A ganar 2 de 3 sets'], [5, 'A ganar 3 de 5 sets']], m?.best_of || 3));
+  const text = h('textarea', { rows: 2, maxlength: 1000, placeholder: 'Opcional. El jugador ve esta nota.' }, m?.note || '');
+  // v3.13: hora de inicio y de término. El término se llena solo con la duración del formato (o la del torneo) hasta que lo cambies a mano.
+  const hasTimes = sql313Ready();
+  const tOf = () => (tsel ? tlist.find((x) => x.id === tsel.value) : tt) || null;
+  const durOf = () => { const t = tOf(); const sc = normSchedule(t?.schedule); return t && sc.days.length && sc.times.length ? sc.minutes : defaultMinutes(bestOf.value); };
+  const startIn = hasTimes ? h('input', { type: 'time', step: 300, value: hhmm(m?.start_time) || '' }) : null;
+  const endIn = hasTimes ? h('input', { type: 'time', step: 300, value: hhmm(m?.end_time) || '' }) : null;
+  let endAuto = hasTimes && (!hhmm(m?.end_time) || addMin(m?.start_time, durOf()) === hhmm(m?.end_time));
+  const syncEnd = () => { if (hasTimes && endAuto && hhmm(startIn.value)) endIn.value = addMin(startIn.value, durOf()); };
+  startIn?.addEventListener('change', syncEnd);
+  endIn?.addEventListener('input', () => { endAuto = !endIn.value; });
+  bestOf.addEventListener('change', syncEnd);
+  const slotsBox = h('div', { class: 'stack' });
+  const paintSlots = () => {
+    const t = tOf();
+    if (!hasTimes || !t) { slotsBox.replaceChildren(); return; }
+    const taken = state.data.matches.filter((x) => x.tournament_id === t.id && x.id !== m?.id);
+    const xs = upcomingSlots(t, taken, { max: 12 }).filter((x) => !x.taken.length).slice(0, 8);
+    if (!xs.length) { slotsBox.replaceChildren(); return; }
+    const cur = `${date.value}|${hhmm(startIn.value) || ''}`;
+    slotsBox.replaceChildren(h('div', { class: 'field' }, h('span', { class: 'label' }, 'Próximos horarios del torneo'),
+      h('div', { class: 'cluster' }, xs.map((x) => h('button', { type: 'button', class: 'chipbtn', 'aria-pressed': cur === `${x.date}|${x.time}` ? 'true' : 'false',
+        onclick: () => { date.value = x.date; startIn.value = x.time; endIn.value = x.end; endAuto = true; paintSlots(); } }, slotLabel(x)))),
+      h('span', { class: 'hint' }, scheduleText(t))));
+  };
+  tsel?.addEventListener('change', () => { paintSlots(); syncEnd(); });
+  date.addEventListener('change', paintSlots); startIn?.addEventListener('change', paintSlots);
+  paintSlots();
+  const err = h('div', { class: 'note bad', role: 'alert', hidden: true });
+  openSheet({
+    title: m ? 'Editar partido' : 'Nuevo partido',
+    body: h('div', { class: 'stack' }, field('Rival', rival), h('div', { class: 'grid' }, field('Fecha', date), field('Tipo', kind)),
+      hasTimes ? h('div', { class: 'grid' }, field('Empieza', startIn), field('Termina', endIn, 'Aproximado. Se llena solo.')) : null,
+      team ? field('Tu equipo', team) : null, tsel ? field('Torneo', tsel) : null, slotsBox, field('Lugar', venue), field('Formato', bestOf, 'El último set (el decisivo) va a 15 puntos; los demás a 25, con diferencia de 2.'), field('Nota', text), err),
+    actions: [{ label: 'Cancelar' }, { label: m ? 'Guardar' : 'Crear partido', kind: 'primary', onClick: () => {
+      if (!rival.value.trim()) { err.textContent = 'Escribe el nombre del rival.'; err.hidden = false; return false; }
+      const row = { rival: rival.value.trim(), match_date: date.value || todayStr(), venue: venue.value.trim(), kind: kind.value, best_of: Number(bestOf.value), note: text.value.trim() };
+      if (hasTimes) {
+        const a = hhmm(startIn.value), b = hhmm(endIn.value);
+        if (b && !a) { err.textContent = 'Pon la hora en que empieza (o borra la de término).'; err.hidden = false; return false; }
+        if (a && b && toMin(b) <= toMin(a)) { err.textContent = 'La hora de término debe ser después de la de inicio.'; err.hidden = false; return false; }
+        row.start_time = a; row.end_time = a ? (b || addMin(a, durOf())) : null;
+      }
+      if (tsel) row.tournament_id = tsel.value || null;
+      if (team) row.team = team.value;
+      if (m) { patch('matches', m.id, row); toast('Partido actualizado'); onSaved?.(m); return true; }
+      const g = group();
+      const nm = add('matches', { ...row, group_id: g?.id, status: row.match_date > todayStr() ? 'planeado' : 'en_juego' });
+      toast('Partido creado'); onSaved?.(nm); return true;
+    } }],
+  });
+}
+
+export const resultChip = (m) => {
+  if (m.status === 'planeado') return h('span', { class: 'chip info' }, 'Próximo');
+  const r = result(m);
+  if (m.status === 'en_juego') return h('span', { class: 'chip warn' }, `En juego ${r.text}`);
+  return h('span', { class: `chip ${r.win ? 'ok' : 'bad'}` }, `${r.win ? 'Ganado' : 'Perdido'} ${r.text}`);
+};
+
+export default function partidos(ctx) {
+  return ctx.role === 'coach' || ctx.role === 'assistant' ? coach(ctx) : jugador(ctx);
+}
+
+// Chips de la convocatoria de un partido por venir.
+const rsvpChips = (m) => { const c = rsvpCounts(m); return c.list.length ? h('span', { class: 'chip' }, `Van ${c.voy}${c.duda ? ` · duda ${c.duda}` : ''}${c.no ? ` · no ${c.no}` : ''}`) : null; };
+
+function coach(ctx) {
+  const rama = ctx.ui.rama || 'todas', mt = multiTeam(); ctx.ui.team ??= '';
+  const tf = mt ? ctx.ui.team : '';
+  // Con un filtro de rama, se ocultan los partidos de torneos de otra rama (los que no son de torneo siempre se ven).
+  const list = matchesSorted().filter((m) => rama === 'todas' || !torneoById(m.tournament_id) || torneoById(m.tournament_id).branch === rama).filter((m) => !tf || teamOf(m) === tf), ro = !labReady(), isCoach = ctx.role === 'coach';
+  const done = list.filter((m) => m.status === 'terminado');
+  const wins = done.filter((m) => result(m).win).length;
+  const sets = done.reduce((a, m) => { const r = result(m); return { us: a.us + r.us, them: a.them + r.them }; }, { us: 0, them: 0 });
+  const team = metrics(addCounts(...state.data.matchStats.filter((s) => done.some((m) => m.id === s.match_id)).map((s) => s.counts)));
+  const el = h('div', { class: 'page' },
+    ro ? missingSqlNote() : null,
+    ro ? null : h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', onclick: () => matchSheet(null, (m) => { location.hash = `#/partido/${m.id}`; }) }, ic('plus', 18), 'Nuevo partido'),
+      isCoach ? h('a', { class: 'btn', href: '#/rivales' }, ic('eye', 18), 'Scouting de rivales') : null,
+      isCoach || state.role === 'assistant' ? h('a', { class: 'btn', href: '#/pizarra' }, ic('move', 18), 'Pizarra') : null),
+    tournamentsSection(ctx),
+    list.length || tf ? sectionTitle('Partidos') : null,
+    mt ? h('div', { class: 'seg', role: 'group', 'aria-label': 'Equipo' }, [['', 'Todos'], ...teams().map((t) => [t.id, t.name])].map(([k, txt]) =>
+      h('button', { type: 'button', 'aria-pressed': ctx.ui.team === k ? 'true' : 'false', onclick: () => { ctx.ui.team = k; ctx.rerender(); } }, txt))) : null,
+    done.length ? h('div', { class: 'kpis' },
+      h('div', { class: 'kpi' }, h('span', { class: 'n' }, `${wins}-${done.length - wins}`), h('span', { class: 'l' }, 'Ganados y perdidos')),
+      h('div', { class: 'kpi' }, h('span', { class: 'n' }, `${sets.us}-${sets.them}`), h('span', { class: 'l' }, 'Sets a favor y en contra')),
+      h('div', { class: 'kpi' }, h('span', { class: 'n' }, fmtEff(team.atEff)), h('span', { class: 'l' }, 'Eficiencia de ataque'))) : null,
+    list.length ? h('div', { class: 'rows' }, list.map((m) => { const r = result(m);
+      return h('a', { class: 'row', href: `#/partido/${m.id}` },
+        h('span', { class: 'jersey off', 'aria-hidden': 'true' }, ic('volleyball', 22)),
+        h('span', { class: 'row-main' }, h('strong', {}, mt ? `${teamName(teamOf(m))} vs ${m.rival}` : `Contra ${m.rival}`), h('span', { class: 'row-sub' }, [fmtDate(m.match_date, { weekday: 'short', day: 'numeric', month: 'short' }), matchTime(m) || null, torneoById(m.tournament_id)?.name || KINDS[m.kind], r.detail || null].filter(Boolean).join(' · ')),
+          m.status !== 'terminado' ? h('span', { class: 'row-chips' }, rsvpChips(m)) : null),
+        h('span', { class: 'row-end' }, resultChip(m), ic('chevron-right', 18)));
+    })) : empty('Sin partidos todavía', 'Crea un partido para llevar el marcador por set y capturar en vivo lo que hace cada jugador: saques, recepciones, ataques, bloqueos y defensas.'),
+    done.length ? zoneSection(state.data.matchLogs.filter((l) => done.some((m) => m.id === l.match_id)).flatMap((l) => l.log || []), ctx, { title: 'Mapa de la temporada' }) : null,
+    isCoach ? note('Tus jugadores ven el resultado de cada partido, contestan la convocatoria y ven solo sus propios números. El registro jugada por jugada lo ven solo tú y tus ayudantes.')
+      : note('Como ayudante puedes crear partidos y capturarlos. El entrenador ve todo lo que captures.'));
+  return { title: 'Partidos', el };
+}
+
+function jugador(ctx) {
+  const me = ctx.me, list = matchesSorted().filter((m) => m.status !== 'planeado' || m.match_date >= todayStr());
+  // Los partidos de un torneo se confirman en el torneo, no uno por uno.
+  // Con varios equipos, cada jugador confirma los partidos de los equipos donde juega.
+  const next = list.filter((m) => m.status !== 'terminado' && m.match_date >= todayStr() && !torneoById(m.tournament_id) && (!multiTeam() || !me || inTeam(me, teamOf(m)))).reverse();
+  const captain = isStaff();
+  const tours = torneosReady() ? myUpcomingTournaments(me) : [];
+  const mine = state.data.matchStats.filter((s) => s.player_id === me?.id);
+  const tot = metrics(addCounts(...mine.map((s) => s.counts)));
+  const el = h('div', { class: 'page' },
+    captain ? h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', onclick: () => matchSheet(null, (m) => { location.hash = `#/partido/${m.id}`; }) }, ic('plus', 18), 'Nuevo partido (capitán)')) : null,
+    (next.length || tours.length) && me ? h('section', { class: 'stack' }, sectionTitle('Convocatoria'),
+      tours.map((t) => h('div', { class: 'panel stack' },
+        h('div', { class: 'split' }, h('a', { href: `#/torneo/${t.id}` }, h('strong', {}, t.name)), h('span', { class: 'chip info' }, 'Torneo')),
+        h('span', { class: 'row-sub' }, [fmtDate(t.start_date, { weekday: 'long', day: 'numeric', month: 'long' }), t.venue].filter(Boolean).join(' · ')),
+        tRsvpControl(t, me, ctx.readonly))),
+      next.map((m) => h('div', { class: 'panel stack' },
+        h('div', { class: 'split' }, h('strong', {}, `Contra ${m.rival}`), h('span', { class: 'row-sub' }, [fmtDate(m.match_date, { weekday: 'long', day: 'numeric', month: 'long' }), matchTime(m)].filter(Boolean).join(', '))),
+        m.venue ? h('span', { class: 'row-sub' }, m.venue) : null,
+        rsvpControl(m, me, ctx.readonly)))) : null,
+    tournamentsSection(ctx),
+    mine.length ? h('section', { class: 'stack' }, sectionTitle('Tu temporada'),
+      h('div', { class: 'kpis' },
+        h('div', { class: 'kpi' }, h('span', { class: 'n' }, String(tot.points)), h('span', { class: 'l' }, 'Puntos (ace, remate y bloqueo)')),
+        h('div', { class: 'kpi' }, h('span', { class: 'n' }, tot.recPos != null ? `${tot.recPos}%` : '—'), h('span', { class: 'l' }, 'Recepción buena o perfecta')),
+        h('div', { class: 'kpi' }, h('span', { class: 'n' }, tot.svIn != null ? `${tot.svIn}%` : '—'), h('span', { class: 'l' }, 'Saques dentro')))) : null,
+    list.length ? h('div', { class: 'rows' }, list.map((m) => {
+      const s = mine.find((x) => x.match_id === m.id), mm = s ? metrics(s.counts) : null, r = result(m);
+      return h('a', { class: 'row', href: `#/partido/${m.id}` }, h('span', { class: 'jersey off', 'aria-hidden': 'true' }, ic('volleyball', 22)),
+        h('span', { class: 'row-main' }, h('strong', {}, `Contra ${m.rival}`),
+          h('span', { class: 'row-sub' }, [fmtDate(m.match_date, { weekday: 'short', day: 'numeric', month: 'short' }), matchTime(m) || null, r.detail || null].filter(Boolean).join(' · ')),
+          mm ? h('span', { class: 'row-sub' }, `Tú: ${plural(mm.points, 'punto', 'puntos')}, ${plural(mm.aces, 'ace', 'aces')}, ${plural(mm.kills, 'remate', 'remates')}, ${plural(mm.blocks, 'bloqueo', 'bloqueos')}${mm.recs ? `, recepción ${mm.recAvg} de 3` : ''}`) : null,
+          m.note ? h('span', { class: 'row-sub' }, m.note) : null),
+        h('span', { class: 'row-end' }, m.video?.url ? ic('video', 18) : null, resultChip(m), ic('chevron-right', 18)));
+    })) : empty('Sin partidos todavía', 'Aquí verás los resultados de tu equipo y tus números en cada partido.'));
+  return { title: 'Partidos', el };
+}
+
+// ---------- Un partido: captura en vivo y resumen (entrenador y ayudantes) o la vista del jugador (antes js/views/partido.js) ----------
+export function partido(ctx) {
+  const m = state.data.matches.find((x) => x.id === ctx.args[0]);
+  if (!m) return { title: 'Partido', back: '#/partidos', el: h('div', { class: 'page' }, empty('No encontré ese partido', 'Puede que se haya borrado.', h('a', { class: 'btn', href: '#/partidos' }, 'Ver partidos'))) };
+  const r = result(m);
+  const tor = torneoById(m.tournament_id);
+  const sub = `${multiTeam() ? `${teamName(teamOf(m))} · ` : ''}${fmtDate(m.match_date, { weekday: 'short', day: 'numeric', month: 'short' })}${matchTime(m) ? `, ${matchTime(m)}` : ''} · ${tor ? tor.name : KINDS[m.kind]}${m.status === 'terminado' ? ` · ${r.win ? 'Ganado' : 'Perdido'} ${r.text}` : ''}`;
+  const backTo = tor ? `#/torneo/${tor.id}` : '#/partidos';
+  const coach = ctx.role === 'coach';
+  const canEdit = (coach || (isStaff() && !ctx.readonly)) && labReady();
+  if (!coach && !canEdit) return { title: `Contra ${m.rival}`, sub, back: backTo, el: playerMatchView(m, ctx) };
+  const ui = ctx.ui;
+  ui.tab = ui.tab || (m.status === 'terminado' || !canEdit ? 'resumen' : 'captura');
+  const tabs = h('div', { class: 'tabs', role: 'tablist' }, [['captura', m.status === 'terminado' ? 'Corregir captura' : 'Captura'], ['resumen', 'Resumen']].map(([id, label]) =>
+    h('button', { type: 'button', role: 'tab', 'aria-selected': ui.tab === id ? 'true' : 'false', disabled: id === 'captura' && !canEdit ? true : null, onclick: () => { ui.tab = id; ctx.rerender(); } }, label)));
+  const body = ui.tab === 'captura' && canEdit ? capture(m, ctx) : summaryView(m, ctx, { canEdit, coach });
+  return { title: `Contra ${m.rival}`, sub, back: backTo,
+    actions: canEdit ? [{ icon: 'printer', label: 'Hoja de alineación para la mesa', href: `#/alineacion/${m.id}` }, { icon: 'pencil', label: 'Editar partido', onClick: () => matchSheet(m) }] : [], el: h('div', { class: 'page' }, h('div', { class: 'split' }, tabs, h('div', { class: 'cluster' }, coach ? h('a', { class: 'btn sm', href: `#/scout/${rivalKey(m.rival)}/${m.id}` }, ic('eye', 16), m.status === 'terminado' ? 'Plan rival' : 'Scouting 1 min') : null, h('a', { class: 'btn sm', href: `#/pizarra/${m.id}` }, ic('move', 16), 'Pizarra'))), body) };
+}
