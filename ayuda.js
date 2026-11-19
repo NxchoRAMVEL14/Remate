@@ -1,0 +1,278 @@
+// Ayuda: cómo usar Remate, cómo funcionan niveles y asistencia, y de dónde sale cada cosa.
+import { h, ic, fmtDate } from '../util.js';
+import { ls } from '../store.js';
+import { sectionTitle, brandBand } from './ui.js';
+import { XP_RULES } from '../calc.js';
+import { VERSION, CHANGELOG } from '../version.js';
+import { GYM_SOURCES, MEDIR_SOURCES } from '../content/gym.js';
+
+const link = (href, text) => h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, text);
+const list = (items) => h('ul', { class: 'plain' }, items.filter(Boolean).map((x) => h('li', {}, x)));
+
+const COACH_STEPS = [
+  'Entra a Ajustes y elige tus días y hora de entrenamiento.',
+  'Agrega a tus jugadores (solo nombre o apodo) y márcales la autorización de su madre, padre o tutor. Al guardar, Remate te muestra su código: se lo das y ellos entran con “Soy jugador”.',
+  'Evalúa a cada jugador con la rúbrica de cuatro fases. Así aparece su radar y se sabe qué le falta para subir.',
+  'Crea un entrenamiento (o programa varias semanas), aplica una plantilla y ajusta los bloques. Publícalo para que los jugadores lo vean.',
+  'El día del entrenamiento usa Modo cancha para llevar el tiempo de cada bloque y pasa lista con un toque por jugador.',
+  'Cuando un jugador cumple las fases de su siguiente nivel, aparece en Hoy como “listo para examen”. El nivel solo sube cuando apruebas el examen.',
+  'En Partidos crea cada partido y captura en vivo: toca al jugador y luego lo que hizo. El marcador por set se lleva solo.',
+  'En Más → Laboratorio está tu espacio: tu programa de salto vertical, tu entrenador de visión de juego y tu bitácora de coaching. Nadie más lo ve.',
+  'En Más → Reportes imprimes o guardas en PDF el reporte de cada jugador o del grupo.',
+  'El foco de arriba (en cualquier pantalla) anota una mejora para la app en tu lista privada de Mejoras. Cuando quieras pedirlas, cópialas y pégalas en el chat.',
+  'En Ejercicios → Para hacer en casa ves las rutinas opcionales que tienen tus jugadores y quién está entrenando en casa. Desde ahí (o la ficha) le dejas a cada uno su tarea de casa.',
+  'Ayudantes: marca a un jugador como Capitán en su ficha, o invita a un asistente adulto en Ajustes → Equipo de apoyo. Pueden pasar lista y capturar partidos; nunca ven notas, evaluaciones, reportes ni tu laboratorio.',
+  'En un partido, pon la alineación de cada set: Remate sigue la rotación y te dice side-out, break point y en qué rotación pierden más puntos.',
+  'En Entrenamientos → Planear temporada divides la temporada en bloques con enfoque; cada bloque crea sus entrenamientos con las plantillas que elijas.',
+  'Avisos: desde Hoy publicas un aviso que aparece en el Inicio de tus jugadores, se puede mandar por WhatsApp y llega como notificación a quien la activó.',
+  'Gym (en Más o en Ejercicios): tus jugadores arman su rutina de pesas según lo que quieren lograr y registran sus cargas. Tú ves quién va al gym, sus sesiones y si reportó molestia, y puedes asignarle una rutina desde su ficha. Se oculta en Ajustes → Entrenamientos.',
+  'Si pasaste lista por error en un entrenamiento que todavía no llega, ábrelo y toca «Regresar a Por hacer»: se borra esa lista y vuelve a pendiente.',
+  'Lista con QR: el día del entrenamiento, en Hoy o en el entrenamiento toca «Lista con QR». Tu celular muestra un QR que cambia cada 20 segundos; cada jugador lo escanea desde su Remate y queda presente (o con retardo después de la tolerancia que eliges en Ajustes). Tú solo revisas a los que faltan y cierras la lista.',
+  'Captura del rival: en la captura de un partido, el panel «Lo que hace el rival» anota a dónde saca, quién ataca (por número) y sus errores. El scouting de ese rival se llena solo y con «Pasar a mi ficha» lo agregas a tus notas.',
+  'Medir con video (Laboratorio o Pruebas físicas): mide el salto, el salto en profundidad, los 10 m y la prueba T con la cámara lenta del celular, cuadro por cuadro, como My Jump pero sin pagar. Su «Guía de pruebas» explica cada prueba.',
+  'Calendario: en Entrenos → «Calendario en el celular» descargas en un solo archivo tus entrenos, partidos, torneos, el programa del laboratorio y las pruebas físicas. Cada entrenamiento, partido, torneo, rutina de gym y programa de salto tiene su botón «Agregar al calendario».',
+  'Entreno sugerido: al terminar un partido con estadística, en el resumen toca «Entreno sugerido». Remate te dice qué costó más y te propone un plan para tu siguiente entreno; lo pones en el que ya tienes o creas uno nuevo (sin publicar), y lo cambias como quieras.',
+  'Alineación sugerida: en la alineación de un set toca «Sugerir alineación». Llena las zonas en 5-1 con el radar, las posiciones y la estadística, y te dice con qué rotación conviene empezar. Tú la revisas antes de guardar.',
+  'Reto del equipo: en Hoy pon una meta semanal de todos (asistencia, minutos en casa o sesiones de gym). Tus jugadores la ven en su Inicio con el avance que guarda tu celular al abrir Remate.',
+  'Dibujos: cada ejercicio de gym, En casa, laboratorio, físico y calentamiento tiene un muñequito animado que enseña el movimiento; tócalo para pausarlo. En el Modo cancha sale en grande y los calentamientos avanzan parte por parte con su tiempo.',
+  'Carga semanal (Más → Carga semanal): después de cada entreno tus jugadores dicen qué tan pesado fue (0 a 10). Ves la carga de cada uno con su gym y un aviso en Hoy si alguien subió mucho.',
+  'Compartir o imprimir: en Gym → Armar rutina y en la rutina que le asignas a un jugador (Gym → Equipo → su nombre) tienes «Compartir o imprimir»: hoja para imprimir o guardar en PDF (con columnas para anotar pesos), texto para WhatsApp o un enlace para que otro la use. Si un adulto te comparte su Remate Fit, imprimes su rutina y su plan de comida. Si alguien te manda un enlace de rutina, al abrirlo puedes asignarla a jugadores.',
+  'Frase del día: la primera vez que abres Remate cada día sale una frase (de autores clásicos o escrita para Remate) con lo que hay hoy; el día de partido, una de partido. La vuelves a ver al final de Hoy y se apaga en Ajustes → Pantalla (en cada celular).',
+  'Videos de técnica (Más → Videos de técnica): tus jugadores te mandan un video corto; lo ves lento o cuadro por cuadro y les dejas comentarios con el segundo exacto. Solo tú los borras.',
+  'Menú de comida de los adultos: si un adulto te comparte su Remate Fit, al imprimir su plan de comida sale también su menú de la semana (recetas de Remate en sus raciones). No calcula precios.',
+  'Remate Fit (Más → Remate Fit): la zona de adultos. Pon la fecha de nacimiento en la ficha de cada jugador; solo a mayores de 18 puedes activarles Remate Fit (la nube lo revisa). Tienen gym de adultos según su objetivo, experiencia, días y lugar, ajustado a su voleibol, y registran cargas, peso, medidas y pasos. Pueden personalizar su rutina (días y ejercicios) y registrar una «Sesión libre» con lo que hicieron ese día. En Hoy pueden leer el peso, % de grasa y masa muscular de una captura de la app de su báscula, y los pasos (y puntos cardio) de una captura de Google Fit en «Semana» con todos los días de un jalón, anotar o corregir cualquier día, su cardio y ponerse un aviso diario en el calendario. En Progreso ven gráficas de todo (pasos, cardio, peso, grasa y músculo, medidas, gym, voleibol y comida) por semana, mes, 3 meses o año. En «Comida» tienen su plan en calorías, macros y porciones del Sistema Mexicano de Equivalentes (3, 4 o 5 comidas), 40 recetas mexicanas, lista del súper, qué comer antes y después de entrenar y suplementos con evidencia. Lo suyo es privado: lo ves solo si activan «Compartir con mi entrenador». Para usarlo tú, ponle fecha de nacimiento a tu perfil de jugador y activa Remate Fit.',
+  'Convocados (v3.20): en cada entrenamiento, «Elegir convocados» marca a quiénes vas a tener. Solo ellos salen al pasar lista y en la lista con QR, y al cerrar la lista solo ellos reciben falta. Si alguien entrena contigo fuera de los entrenos del equipo (por ejemplo en casa), activa «Entrena conmigo aparte» en su ficha: no se convoca, no se le pone falta ni cuenta en las faltas ni en el promedio. Con «Quitar sus faltas» borras las que ya tenía.',
+  'Modo activo (Gym y Remate Fit): al registrar un día, o con «Modo activo» en la rutina, la sesión va a pantalla completa: el ejercicio en grande con su dibujo y el tiempo; pasa sola a descanso y al siguiente. Tiene pausa, saltar y regresar; cambias series, repeticiones y kilos ahí mismo. Pita, vibra y dice en voz lo que sigue. Arriba de «Registrar», «¿Dónde entrenas hoy?» (gym, casa o cancha) cambia lo que no se puede hacer ahí por un equivalente. «Circuito exprés» arma estaciones con tu peso por tiempo.',
+  'Azar y equipos (en Hoy o en el entrenamiento del día, y en Más): el dado elige a alguien al azar sin repetir hasta que pasen todos, si quieres solo de una posición. En «Equipos y cascaritas» armas 6 vs 6, 5 vs 5, cascaritas de 4, 3 o 2, o duelos de 1 vs 1 (entre los de nivel más parecido): parejos por posición y nivel (nivel de la Ruta y radar), solo por nivel o al azar total; con las dos ramas mezcladas parejo, cada rama por su lado o solo una. Usa a los convocados, o a los que vinieron si ya pasaste lista. «Probar otras posiciones» pone a algunos en otra posición para ver otras alineaciones. Toca a dos jugadores para cambiarlos de equipo; «Enseñar en grande», «Compartir» y «Guardar en el entreno».',
+  'Dos grupos (v3.28): en el entrenamiento, «Dividir en dos grupos por nivel» separa a los convocados en A (empiezan) y B (avanzados). Cada bloque te dice qué hace cada grupo; «Ajustar ejercicios a cada grupo» cambia solo lo que no les queda, y al imprimir sale una hoja por grupo.',
+  'Biblioteca (v3.28): arriba toca Principiante, Intermedio o Avanzado y luego un fundamento; «Destacados» te sugiere lo que más necesita tu equipo.',
+  'Kilos o libras (v3.27): al anotar el gym, cada ejercicio con peso tiene «Kilos | Libras» para las máquinas que vienen en libras. Remate guarda en kilos, así la progresión no se rompe. La unidad por omisión está en Ajustes → Pantalla.',
+  'Conocer a mis jugadores (v3.26, Más): tus jugadores contestan en su celular 6 tests cortos (posición ideal, mente en la cancha, por qué juegan, cómo se ven, su rol y cómo les gusta que los corrijan). Ves el mapa del equipo para un 5-1, el perfil de cada uno en su ficha (pestaña Perfil) con cómo ayudarle, y en «Lo que opinan de mí» sus caritas después de cada entreno y la encuesta del mes, con nombre. Para que funcione, corre el bloque «v3.26» de sql/instalar.sql.',
+  'Remate Fit, rutina que cambia cada semana y Cardio (v3.25): un adulto puede elegir en Perfil «Cambia cada semana»: pierna en días fijos (martes y sábado por omisión) y lo demás rota cada lunes. Si te comparte su Remate Fit, ves la rutina de esta semana. En la pestaña Cardio tiene su semana de cardio, sus zonas y un cronómetro de intervalos.',
+  'Teoría visual: las lecciones traen «Míralo» con infografías: zonas de la cancha (toca una zona), rotación animada («Rotar»), las 5 posiciones, sistemas 5-1, 6-2 y 4-2 con quién coloca en cada rotación, formaciones de recepción y cada fundamento paso a paso. Sirven para explicar en el entreno desde tu celular.',
+  'Lesiones (Hoy o Más → Lesiones; en la ficha, pestaña Lesiones): registra la zona, si es molestia o lesión, el dolor y tu nota. «Empezar el regreso» lo lleva por 5 fases: cada una dice qué puede hacer, qué todavía no y qué debe cumplir para pasar. Tus jugadores reportan molestias desde su Inicio y te salen en Hoy. Remate no diagnostica: si ves una señal de alerta, al médico. Necesita el bloque v3.23 de sql/instalar.sql.',
+  'Scouting en 1 minuto: en un partido toca «Scouting 1 min» (o en Scouting de rivales). Marca a dónde sacan, toca sus números y lo que hace cada uno (remata fuerte, recibe mal, colocador…). Abajo sale el plan de juego para «Enseñar en grande» en el tiempo fuera, mandarlo por WhatsApp o abrir la Pizarra con sus números.',
+  'Video con dibujos: en un video de técnica toca «Dibujar», marca encima (flecha, línea, círculo o a mano) y agrega el comentario: el dibujo se queda en ese segundo. En Más → Video con dibujos analizas cualquier video de tu celular (por ejemplo, el partido) sin subirlo.',
+  'Sin internet: la app se guarda completa en tu celular. En Ajustes → Usar sin internet ves si está lista, cuándo se sincronizó y lo que falta por subir. Sin señal puedes pasar lista, capturar partidos y registrar: se sube solo al volver.',
+  'Plan con un toque: en Hoy (o en un entrenamiento) toca «Armar con un toque». Remate arma el plan con lo que más le falta al grupo, lo que falló en el último partido, si hay partido pronto y lo que ya trabajaste, y te explica por qué. «Otros ejercicios» cambia la propuesta; tú lo revisas antes de publicar.',
+  'Panel del grupo (Hoy → Panel del grupo, o Más): asistencia por semana, a quién atender, las habilidades más débiles del grupo («Entreno de esto» arma un plan de esa habilidad), niveles y lo que hacen en casa y en el gym.',
+  'Reporte para la familia: en Reportes (o en la ficha del jugador) toca «Familia». Hoja en palabras sencillas para imprimir, guardar en PDF o «Mandar por WhatsApp». «Reportes para las familias» imprime todos, uno por hoja. Tu mensaje es el mismo comentario del reporte completo.',
+  'Ranking y retos de la semana (Ruta): en «Ranking» ves XP, asistencia, racha, casa, retos y mejora, y eliges si tus jugadores lo ven (solo tú, top 5 o todos); se actualiza cuando abres Hoy. En «Retos», «Elegir retos de la semana» destaca hasta 3 que valen +50 % de XP si los piden esa semana.',
+  'Aprende (Más → Aprende): teoría y práctica juntas por fundamento (saque, remate…) o por posición (central, líbero…): las 3 claves, lecciones con quiz, ejercicios de cancha por nivel, en casa y en el gym.',
+  'Pizarra (en cada partido, en Partidos o en Más): arrastra a tus 6 y a los 6 del rival, dibuja flechas (tu equipo, el rival o el balón), rota, guarda «Pasos» y toca «Reproducir» para verlos animados. «Guardar jugada» la deja en tu lista; «Compartir imagen» la manda por WhatsApp. Desde un partido, tus 6 salen en la rotación de ese momento.',
+  'Notificaciones (Ajustes): «Mandarme una prueba» te manda una a tu celular y «Estado de las notificaciones» revisa pieza por pieza qué falta. Recordatorio de gym, aviso por 2 faltas seguidas y tu resumen del lunes se apagan ahí mismo. Necesitan las funciones «avisos» y «recordatorios» actualizadas (LEEME).',
+  'Dos celulares: en la captura de un partido toca «Dos celulares». Uno es el Marcador (lleva puntos y sets) y el otro el Ayudante (anota acciones sin mover el marcador).',
+];
+const PLAYER_STEPS = [
+  'En Inicio ves tu tarjeta: tu nivel, tu radar de habilidades y lo que falta para subir.',
+  'En Entrenos ves el plan de cada entrenamiento que tu entrenador publica y tu asistencia.',
+  'En Ejercicios hay una explicación de cada ejercicio, con diagrama. Filtra por “Mi nivel” para ver los que te tocan.',
+  'En Ruta ves los seis niveles y los retos. Cuando cumplas un reto, pide la aprobación; tu entrenador lo revisa.',
+  'En Partidos ves los resultados de tu equipo y tus propios números en cada partido. Los de tus compañeros no se muestran.',
+  'En Inicio → Entrena en casa hay rutinas opcionales de físico y de técnica con y sin balón, a tu nivel. Si quieres, registra lo que hiciste: solo tú y tu entrenador lo ven.',
+  'En Partidos contestas la convocatoria (Voy, En duda, No voy) y ves el video y tus números de cada partido.',
+  'En Inicio ves tus insignias, tus pruebas físicas y los avisos del entrenador. En Ajustes puedes activar las notificaciones.',
+  'En Inicio → Físico en el gym armas tu rutina de pesas según lo que quieres mejorar, registras tus pesos y ves cómo llegar bien al entreno. Ve siempre con un instructor o un adulto que sepa.',
+  'Al llegar al entrenamiento, en Inicio toca «Marcar mi llegada» y escanea el QR del celular de tu entrenador. Escanéalo desde Remate (no con la cámara normal). Si no lee, escribe el código de 6 números.',
+  'En Mis pruebas físicas, «Medir con video» mide tu salto, tu velocidad de 10 m o la prueba T con la cámara lenta de tu celular. Mándale el resultado a tu entrenador.',
+  'Calendario: en Entrenos → «Calendario en el celular» agregas a tu calendario los entrenos, partidos, torneos, tu rutina de gym y tu tarea de casa, con aviso.',
+  'En iPhone, instala Remate en tu pantalla de inicio (Safari → Compartir → «Agregar a pantalla de inicio») y ábrelo siempre desde el ícono. Así no te vuelve a pedir el código. Tu código puede estar abierto en hasta 3 lugares a la vez.',
+  'Si tu entrenador puso un reto del equipo, lo ves en Inicio con cuánto llevan entre todos esta semana.',
+  'Cada ejercicio tiene un dibujo animado que enseña el movimiento. Tócalo para pausarlo.',
+  'Teoría visual: en cada lección, «Míralo» te enseña con dibujos: las zonas (tócalas), la rotación (dale «Rotar»), las posiciones, los sistemas y cada fundamento paso a paso. En Aprende, al elegir tu posición ves su tarjeta.',
+  'Lesiones: si algo te duele, en tu Inicio toca «¿Te duele algo? Repórtalo»: le llega a tu entrenador. Si estás en regreso, ahí ves tu fase: qué puedes hacer y qué todavía no. En Prevención hay ejercicios para cada zona.',
+  'Retos de la semana y ranking: en tu Inicio salen los retos de la semana (valen +50 % de XP si los pides antes del domingo). Si tu entrenador lo activa, en Ruta → Ranking ves a los mejores en XP, asistencia, racha, casa, retos y mejora, y tu propio número.',
+  'Aprende: elige un fundamento (saque, remate, recepción…) o tu posición y ves las claves, la teoría con su quiz y los ejercicios para practicar en la cancha, en casa y en el gym. Abre en tu posición o en lo que te falta para subir de nivel.',
+  'Notificaciones: en Ajustes actívalas y toca «Mandarme una prueba». Si no llega, «Estado de las notificaciones» te dice qué falta (en iPhone, instala la app primero).',
+  'Modo activo: en Gym (o en Remate Fit) toca «Modo activo» y entrena sin ver el celular: el ejercicio en grande, su dibujo y el tiempo; pasa solo a descanso y al siguiente, con pausa. Puedes cambiar series, repeticiones y kilos ahí mismo y todo queda anotado. Al registrar, elige «¿Dónde entrenas hoy?»: gym, casa o cancha, y Remate cambia lo que no puedes hacer ahí. «Circuito exprés» es un circuito con tu peso por tiempo, para cuando no puedes ir al gym.',
+  'Menú de la semana (adultos con Remate Fit): en Comida → Menú toca «Armar mi menú». Son 7 días con recetas en tus raciones; «Cambiar» pone otra equivalente, «Me lo comí» la anota y «Lista del súper del menú» arma la lista. En Mi plan → «Mis datos de comida» pones qué tan rápido quieres bajar, tu meta de % de grasa, lo que te gusta y lo que no, y tus horarios. Si tu báscula da el peso sin grasa (OKOK lo da), léelo con la captura: afina tus calorías.',
+  'Dos grupos (v3.28): si tu entrenador divide el entreno, en Entrenos ves «Vas en el Grupo A» o «B» y qué versión de cada ejercicio te toca.',
+  'Ejercicios (v3.28): toca «Mi nivel» para ver solo los de tu nivel, o Principiante, Intermedio o Avanzado.',
+  'Kilos o libras (v3.27): al anotar tu gym, toca «Libras» en el ejercicio si la máquina viene en libras; lo que escribiste se convierte y Remate se acuerda para la próxima. En el modo activo, toca la unidad junto al peso. Tu progreso se guarda en kilos y no se pierde.',
+  'Conóceme (v3.26, en Inicio): 6 tests cortos para conocerte: tu posición ideal, tu mente en la cancha, por qué juegas, cómo te ves, tu rol en el equipo y cómo te gusta que te corrijan. No son exámenes. Ves tu resultado con consejos; solo lo ven tú y tu entrenador. Después de cada entreno puedes decirle con una carita qué tal estuvo, y cada mes hay una encuesta corta (va con tu nombre).',
+  'Remate Fit, rutina que cambia cada semana (adultos): en Perfil → «Tipo de rutina» elige «Cambia cada semana». Marca tus días de gym y tus días de pierna (martes y sábado por omisión). Cada lunes cambian los músculos y los ejercicios de los demás días; en Rutina → «La próxima» ves lo que viene.',
+  'Cardio (adultos con Remate Fit): en la pestaña Cardio ves qué te sirve cada tipo, tus zonas con tu edad (o la prueba de hablar), qué cardio hacer cada día según tu objetivo y tu pierna, y el «Cronómetro de intervalos», que pita y al terminar lo guarda como cardio del día.',
+  'Remate Fit a tu medida (adultos): en Rutina → Personalizar pon cada día en un día de la semana, usa una plantilla o «Armar por músculos», y busca ejercicios con el nombre que usan en tu gym (pec deck, smith, jalón…); si no está, agrégalo como tuyo. En Perfil → «Tu semana» marca tus días de voleibol y los entrenos que das. Al registrar tienes temporizador de descanso, «Igual que la vez pasada», cardio al terminar y «Me molestó».',
+  'Compartir o imprimir tu rutina: en Gym → Mi rutina (y en Remate Fit, en Rutina y en Comida) toca «Compartir o imprimir». Sale una hoja para imprimir o guardar en PDF, el texto para WhatsApp y un enlace: si se lo mandas a un compañero, lo abre en su Remate y toca «Usar esta rutina».',
+  'Frase del día: la primera vez que abres Remate cada día sale una frase para motivarte y lo que hay hoy (entreno o partido). La vuelves a ver al final de Inicio; si no la quieres, apágala en Ajustes → Pantalla.',
+  'Después de cada entreno, en Inicio contesta «¿Qué tan pesado fue para ti?» del 0 al 10. Piensa en todo el entreno. Solo lo ven tú y tu entrenador.',
+  'Si tienes 18 años o más y tu entrenador te activó Remate Fit, en Inicio está la tarjeta «Remate Fit»: tu rutina de gym de adultos, tu plan de comida con recetas y lista del súper, tus cargas, tu peso, tus medidas y tus pasos. En «Comida» palomeas las porciones que comiste o agregas una receta. En Rutina, «Personalizar» cambia tus días y ejercicios, y «Sesión libre» registra lo que hiciste aunque no sea tu día. En Hoy eliges el día (Hoy, Ayer u Otro día); «Leer captura de mi báscula» lee peso, grasa y músculo de una captura de la app de tu báscula (por ejemplo OKOK) y «Leer captura de pasos» lee tus pasos; con Google Fit en «Mi actividad → Semana» guarda todos los días de la captura de una vez (también los puntos cardio). Revisa los números antes de guardar. «Cardio» anota puntos cardio o minutos. En Progreso tienes gráficas de todo por semana, mes, 3 meses o año, y «Corregir día por día». Es privado; tu entrenador lo ve solo si activas «Compartir con mi entrenador» en Perfil.',
+  'En Inicio → Videos de técnica mandas un video corto (máximo 60 s) para que tu entrenador te diga qué mejorar.',
+];
+
+// Manuales en PDF (carpeta manuales/). El jugador ve el suyo; el entrenador, los dos.
+const MANUALS = [
+  { file: 'manuales/manual-jugador.pdf', title: 'Manual del jugador', text: 'Cómo entrar con el código, marcar tu llegada con QR, la tarjeta y el radar, medir tu salto con video, entrenos, teoría, En casa, gym, calendario, partidos y retos.' },
+  { file: 'manuales/manual-entrenador.pdf', title: 'Manual del entrenador', text: 'Jugadores, evaluaciones, entrenamientos, lista con QR, calendario, partidos, captura del rival y torneos, medir con video, gym, reportes, avisos y ayudantes.', coach: true },
+];
+function manualsSection(coach) {
+  const url = (f) => new URL(f, location.href.split('#')[0]).href;
+  return h('section', { class: 'stack' }, h('h2', {}, 'Manuales'),
+    h('p', {}, coach ? 'Con imágenes y en PDF. Manda el del jugador a tus chavos por WhatsApp para que sepan usar Remate.' : 'Todo lo que necesitas para usar Remate, con imágenes y en PDF.'),
+    MANUALS.filter((m) => coach || !m.coach).map((m) => h('div', { class: 'panel stack manual' },
+      h('div', { class: 'cluster' }, ic('file-text', 22), h('strong', {}, m.title)),
+      h('span', { class: 'row-sub' }, m.text),
+      h('div', { class: 'cluster' },
+        h('a', { class: 'btn primary sm', href: m.file, target: '_blank', rel: 'noopener' }, ic('book-open', 16), 'Abrir PDF'),
+        h('a', { class: 'btn sm', href: `https://wa.me/?text=${encodeURIComponent(`${m.title} de Remate (PDF): ${url(m.file)}`)}`, target: '_blank', rel: 'noopener' }, ic('message-circle', 16), 'Mandar por WhatsApp')))));
+}
+
+export default function ayuda(ctx) {
+  const coach = ctx.role === 'coach';
+  const el = h('div', { class: 'page help' },
+    manualsSection(coach),
+    h('section', {}, h('h2', {}, coach ? 'Primeros pasos' : 'Cómo usar Remate'), h('ol', { class: 'plain' }, (coach ? COACH_STEPS : PLAYER_STEPS).map((x) => h('li', {}, x)))),
+    h('section', {}, h('h2', {}, 'Cómo funcionan los niveles'),
+      h('p', {}, 'Cada habilidad (saque, recepción, colocación, remate, bloqueo, defensa, físico y juego) se evalúa en cuatro fases: iniciación, adquisición, consolidación y refinamiento. Cada nivel pide una fase mínima por habilidad y un examen práctico.'),
+      h('p', {}, 'Las fases dicen cuándo conviene presentar el examen; el examen decide si se sube. Así el nivel no cambia solo por cumplir una lista, sino por demostrarlo jugando.'),
+      h('p', {}, 'Las exigencias se ajustan a la posición: un líbero no se mide en remate ni bloqueo, y se le pide una fase más en recepción y defensa; un central, una más en bloqueo.')),
+    h('section', {}, h('h2', {}, coach ? 'El radar de cada jugador' : 'Tu radar'),
+      h('p', {}, 'El radar dibuja las 8 habilidades. Del centro a la orilla van las 4 fases; el relleno amarillo es la última evaluación y la línea punteada, lo que pide el siguiente nivel según la posición.'),
+      h('p', {}, coach ? 'Cada jugador tiene en su tarjeta el botón «¿Qué dice mi radar?», con la explicación detallada de dónde va, qué le falta y cómo mejorar. Desde la ficha del jugador puedes ver exactamente lo que él lee.'
+        : h('span', {}, 'En tu tarjeta de Inicio está el botón ', h('a', { href: '#/radar' }, '«¿Qué dice mi radar?»'), ': te explica habilidad por habilidad en qué vas, qué te falta para el siguiente nivel y qué hacer para mejorar.'))),
+    h('section', {}, h('h2', {}, 'Teoría'),
+      h('p', {}, coach ? 'En Entrenamientos (y en Más) está Teoría: 24 lecciones cortas con quiz para tus jugadores. Al aprobar el examen de un módulo con 8 de 10, el jugador te pide su reto de teoría y tú lo apruebas como cualquier reto. El avance de cada quiz se guarda en el celular de cada jugador.'
+        : h('span', {}, 'En Entrenos está ', h('a', { href: '#/teoria' }, 'Teoría'), ': lecciones cortas de reglas, técnica, sistemas y táctica. Cada una cierra con un quiz. Con 8 de 10 en el examen de un módulo, puedes pedirle a tu entrenador tu reto de teoría.')),
+      h('p', {}, 'Para volver a estudiar todo: «Repaso general» trae 20 preguntas mezcladas de los 4 módulos y «Mis errores» junta las preguntas que fallaste hasta que las contestes bien. «Empezar de nuevo» borra el avance de Teoría en ese celular (los retos aprobados se quedan).'),
+      coach ? h('p', {}, 'Antes y después: en la ficha del jugador compara dos fechas de evaluación. La hoja se imprime o se guarda en PDF para las juntas con familias.') : null,
+      coach ? h('p', {}, 'Mi perfil de jugador (en Más o en Jugadores): si juegas con ellos, por ejemplo en un equipo mixto, crea tu ficha o elige la tuya de la lista. Al entrar tienes tu tarjeta, radar, Teoría con tu propio avance, En casa, retos y convocatorias, como cualquier jugador. «Volver a entrenador» te regresa a tu vista.') : null),
+    h('section', {}, h('h2', {}, 'Asistencia y puntos XP'),
+      list(['Presente suma asistencia completa, retardo también cuenta como asistencia, falta resta y justificada no resta.',
+        'Cada cierto número de retardos (lo eliges en Ajustes) se cuenta como una falta.',
+        'Con la lista con QR, quien escanea después de la hora de inicio más la tolerancia (Ajustes, 10 minutos de inicio) queda con retardo. El código cambia cada 20 segundos y sale de un secreto que solo conoce el celular del entrenador, así que una foto del QR no sirve desde la casa.',
+        coach ? 'En Ajustes → «¿Quién puede abrir la lista con QR?» eliges si solo tú, también el asistente o también el capitán. Ellos ven el QR y quién llegó; cerrar la lista y marcar el entreno como hecho siguen siendo tuyos. Hace falta el SQL de la versión 3.8.' : null,
+        `Los puntos XP son un reconocimiento al compromiso: ${XP_RULES.presente} por entrenamiento a tiempo, ${XP_RULES.retardo} con retardo, los de cada reto aprobado y ${XP_RULES.examen} por cada examen aprobado. No cambian el nivel.`])),
+    h('section', {}, h('h2', {}, 'Partidos y estadística'),
+      list(['Recepción: 3 perfecta (el colocador puede elegir cualquier opción), 2 buena, 1 mala (solo una bola alta), 0 error. El promedio va de 0 a 3.',
+        'Eficiencia de ataque = (remates punto − errores − bloqueados) ÷ remates totales. Un número positivo significa que tu ataque gana más puntos de los que regala.',
+        'Con el marcador automático, cada ace, remate punto, bloqueo punto o error suma el punto solo. Si lo apagas, usa los botones +1.',
+        'Marcador grande (en la captura): pone los puntos del set en toda la pantalla. Toca un lado para sumarle el punto; «Cambiar lados» los acomoda como los ves en la cancha. Acuesta el celular para verlos lado a lado; si no gira (giro automático apagado o iPhone), toca el botón de girar ⟳ arriba: cada toque lo acuesta hacia un lado o lo regresa de pie.',
+        'Los sets van a 25 con diferencia de 2 y el decisivo a 15, como en las reglas FIVB. Si tu liga usa otro formato, cierra el set cuando corresponda y termina el partido a mano.',
+        coach ? 'Hoja para la mesa: en un partido, el ícono de impresora arma una hoja por set con las posiciones I a VI, el líbero y el orden de saque. Si recibes primero, tu primer saque es de la posición II. Puedes dejar listas las alineaciones de todos los sets antes del partido.' : null,
+        coach ? 'Captura del rival: «Lo que hace el rival» guarda su saque (dentro, ace o error, con su número y la zona de tu cancha a donde fue), su ataque (punto, en juego o error) y sus otros errores. Si el punto ya lo sumaste con el error de tu jugador, Remate no lo vuelve a sumar. En el resumen del partido y en la ficha del rival ves a dónde te sacan, quién ataca y cuánto falla.' : null,
+        coach ? 'Scouting de rivales (en Partidos): una ficha privada por rival con sus jugadores clave, a dónde sacan, su sistema, su rotación débil y tu plan, más tu side-out, tu rotación más débil y dónde les haces daño en tus partidos contra ellos.' : null,
+        'Calendario en el celular (en Entrenos): suscríbete una vez y los entrenamientos publicados, partidos y torneos llegan a tu calendario con aviso, aunque no abras Remate. Con «Mi calendario» descargas un archivo con lo que elijas: además del equipo, tu gym, el laboratorio, las pruebas o tu tarea de casa.',
+        coach ? 'Torneos (en Partidos): crea el torneo con sede, fechas y rama, elige a los convocados y ellos confirman desde su celular. Agrega los partidos del torneo, escribe la tabla (tu fila se llena con tus partidos) y al final pon el lugar. Puedes filtrar por rama.' : 'Torneos: en Partidos ves los torneos de tu equipo. Si estás convocado, contesta si vas.',
+        coach ? 'Hora del partido: al crear o editar un partido pones a qué hora empieza; la de término se llena sola (1 hora a 2 de 3 sets) y la puedes cambiar. Con hora, el partido entra a tu calendario con su hora y aviso.' : 'Los partidos con hora llegan a tu calendario con su hora y aviso.',
+        coach ? 'Ligas con días fijos: en «Editar torneo → Días y horarios de juego» marca los días (por ejemplo martes y jueves) y las horas (8 y 9 pm). Al crear un partido del torneo te salen los próximos horarios para elegir con un toque, y con «Programar» creas varios partidos de un jalón: palomeas los horarios en que juegas y escribes el rival.' : null,
+        coach ? 'Categorías por edad (Ajustes → Categorías por edad): en México cuenta la edad que el jugador cumple en el año de la competencia. Vienen las de los Juegos Nacionales CONADE 2026 y las cambias a las de tu liga. En Jugadores filtras por categoría, la ficha dice en cuál juega y, si le pones categoría a un torneo, la convocatoria marca quién no entra por edad.' : null,
+        coach ? 'Quién sale en cada partido: si el torneo tiene convocados, ellos; si no, los del equipo del partido y de su rama (la del torneo o, si no es de torneo, la del equipo en Ajustes → Equipos). En mixto salen todos los del equipo. Para que funcione, cada jugador necesita su rama en «Editar datos»; quien no tiene rama sale en todos. «Ver también a otros» muestra al resto.' : null,
+        coach ? 'Equipos A y B (en Ajustes → Equipos): divide tu grupo en dos o más equipos, por ejemplo «CETAC A» y «CETAC B». Cada jugador y cada partido es de un equipo; en Jugadores y Partidos filtras por equipo y en un torneo eliges cuáles de tus equipos juegan.' : null,
+        coach ? 'Eliminación directa: al crear el torneo elige «Eliminación directa» y arma el cuadro con la primera ronda y los pases directos. Remate arma semifinales y final; toca al ganador de cada partido o captura los tuyos y el ganador avanza solo.' : 'Eliminación directa: en el torneo ves el cuadro con quién va ganando cada partido y quién avanza.',
+        coach ? 'Leer de una imagen (en Partidos → Torneos): sube la foto o captura del cartel o del rol de juegos. El lector de texto corre en tu celular, es gratis y la primera vez descarga unos 5 MB. Propone nombre, rama, partidos, horarios y pases directos; revisa y corrige antes de crear, porque el lector se puede equivocar con letras decoradas.' : null,
+        coach ? 'Tus jugadores ven el marcador y solo sus propios números. El registro jugada por jugada es solo tuyo.' : 'Tu entrenador captura tus acciones durante el partido; tú ves solo las tuyas.'])),
+    coach ? h('section', {}, h('h2', {}, 'Tu laboratorio'),
+      list(['Salto vertical: mide tu salto antes de empezar (semana 1) y en las semanas 5, 9 y 12. El programa es de 12 semanas, dos sesiones por semana, con peso corporal, conos, un escalón y tus polainas.',
+        'Tus polainas de 5 kg por tobillo son solo para ejercicios de fuerza de cadera y pierna sin impacto. Nunca saltes con ellas: el peso en el tobillo aumenta la carga en rodillas y tobillos al aterrizar.',
+        'Visión de juego: rondas cortas de situaciones de partido. Primero busca acertar; después, decidir más rápido. Lleva las mismas preguntas a tus jugadores.',
+        'Coaching: escribe en tu bitácora después de cada entrenamiento y haz tu autoevaluación una vez al mes con un solo foco.'])) : null,
+    h('section', {}, h('h2', {}, 'Gym'),
+      list(['La rutina sale de seis respuestas: objetivo, momento de la temporada, días (de 1 a 6), minutos, experiencia y qué hay en el gym. Tú eliges los días; lo que Remate limita son los días pesados (pierna y saltos): 3 en pretemporada, 2 en temporada y 1 en semana de partido. Los demás días son ligeros: tren de arriba, tronco y prevención.',
+        '«Te sobran 2» quiere decir elegir un peso con el que todavía podrías hacer 2 repeticiones más. Remate nunca pide probar el máximo y sugiere cuándo subir de peso al registrar.',
+        'Pierna pesada y saltos, al menos 48 horas antes de un partido. Si hay partido en los próximos días, Remate lo avisa en la rutina.',
+        coach ? '«Personalizar» (en Gym → Mi rutina, o en la ficha de gym de un jugador al que le asignaste rutina): cambias días y ejercicios a mano, sus series, repeticiones y descanso. «Volver a la de Remate» regresa a la automática. El jugador puede borrar la suya con «Borrar mi rutina».' : '«Personalizar»: cambia los días y ejercicios de tu rutina, sus series, repeticiones y descanso. «Sesión libre» registra lo que hiciste aunque no sea un día de tu rutina, y al registrar puedes agregar o quitar ejercicios. En el buscador están también las máquinas y poleas del gym («Solo máquinas y poleas»). «Borrar mi rutina» la quita (tus sesiones se quedan).',
+        coach ? 'Lo que el jugador registra lo ven él y tú. Si marca «Me dolió algo», te aparece en Gym y en su ficha.' : 'Lo que registras lo ven tú y tu entrenador. Si algo te duele en una articulación, para y avísale.'])),
+    h('section', {}, h('h2', {}, 'Medir con video'),
+      list(['Remate calcula la altura con el tiempo en el aire: altura = 9.81 × t² ÷ 8. Es el mismo principio que My Jump y los tapetes de contacto. Tú marcas el cuadro del despegue y el del aterrizaje.',
+        'Graba en cámara lenta (120 o 240 cuadros por segundo), con el celular firme, de lado y con los pies a la vista. A 240 cps el error por cuadro es de medio centímetro; a 30 cps, de unos 4 cm.',
+        'Si el video se ve lento, elige en «Velocidad del video» cuántas veces (×4 a 120 cps, ×8 a 240 cps). Si te equivocas, Remate te avisa que el vuelo es demasiado largo para un salto.',
+        'También mide el salto en profundidad (contacto e índice de fuerza reactiva) y pruebas de tiempo: 10 m y prueba T. El video no se sube a ningún lado; solo se guarda el resultado.',
+        '«Detectar solo (beta)», para saltos en el lugar: pon un cuadro en que esté parado, toca sus pies y Remate busca cuándo los pies dejan el piso y cuándo vuelven. Funciona mejor con el celular fijo, buena luz y tenis que contrasten con el piso. Siempre revisa las marcas con «Ir» y las flechas antes de guardar; si falla, márcalo a mano.',
+        h('span', {}, 'Todo sobre cada prueba está en la ', h('a', { href: '#/medir/guia' }, 'Guía de pruebas'), '.')])),
+    h('section', {}, h('h2', {}, 'Dibujos de los ejercicios'),
+      list(['Son monitos esquemáticos hechos por la app: enseñan la forma del movimiento (de dónde a dónde va el cuerpo), no los detalles finos. El texto de cada ejercicio y la demostración de tu entrenador siguen siendo la referencia.',
+        'Tócalo para pausarlo. Si el celular tiene activado «reducir movimiento», se ven las posiciones fijas (inicio → final).',
+        'En los diagramas de cancha, las flechas aparecen en el orden en que pasan: primero quién se mueve y luego a dónde va el balón.'])),
+    h('section', {}, h('h2', {}, 'Carga semanal'),
+      list(['Después de cada entreno el jugador da un número del 0 (descanso) al 10 (lo más duro que puede). Carga = ese número × los minutos del entreno. El gym suma igual con el esfuerzo que registran ahí.',
+        coach ? 'Si la carga de esta semana es 1.5 veces o más el promedio de las 4 anteriores, Remate te avisa. Es una señal para platicar con el jugador (sueño, dolor, otras actividades), no una predicción de lesiones: los estudios sobre esa razón no son concluyentes.' : 'Tu entrenador ve tu carga para cuidar que no te pases de entrenamiento. Contesta con honestidad.',
+        'La semana va de lunes a domingo.'])),
+    h('section', {}, h('h2', {}, 'Videos de técnica'),
+      list(['Máximo 60 segundos y 45 MB por video; hasta 10 videos guardados por jugador. Graba de lado o de frente, con buena luz y que se vea todo el cuerpo.',
+        'Solo los ven el jugador y su entrenador. Se guardan en una carpeta privada de Supabase y se quedan hasta que el entrenador los borra.',
+        coach ? 'El plan gratis de Supabase trae 1 GB de almacenamiento y 5 GB de descarga al mes: borra los que ya revisaste. En Videos de técnica ves cuánto llevas.' : null])),
+    coach ? h('section', {}, h('h2', {}, 'Recordatorios y dos celulares'),
+      list(['Recordatorios: la función «recordatorios» de Supabase revisa cada 15 minutos y manda un aviso antes de cada entreno publicado (las horas que elijas en Ajustes) y a las 8:00 el día de cada partido. Cada uno sale una sola vez. Llega solo a quien activó las notificaciones.',
+        'Dos celulares: los dos deben activarlo en el mismo partido y tener internet; se juntan cada 4 segundos. El Marcador lleva puntos y sets; el Ayudante anota acciones sin mover el marcador. Cada celular deshace solo lo suyo.'])) : null,
+    h('section', {}, h('h2', {}, 'Sin internet'),
+      h('p', {}, 'Remate guarda tus cambios en el celular y los envía cuando vuelve la conexión. Si ves “por enviar” arriba, no cierres sesión hasta que desaparezca.'),
+      h('p', {}, 'Desde la versión 3.8 cada pantalla se carga al abrirla y, unos segundos después, todas se guardan en el celular. Si abres Remate sin internet por primera vez después de actualizar, alguna pantalla puede pedirte conexión una vez.')),
+    h('section', {}, h('h2', {}, 'iPhone: que no te pida el código otra vez'),
+      list(['En iPhone, Safari y la app instalada en la pantalla de inicio guardan la sesión por separado (así lo hace Apple). Si a veces entras por Safari, por ejemplo desde un enlace de WhatsApp, te pide el código ahí aunque ya lo hayas puesto en la app.',
+        'Lo mejor: instala Remate (Safari → Compartir → «Agregar a pantalla de inicio») y ábrelo siempre desde el ícono. Remate te avisa con una franja cuando estás en Safari.',
+        'Desde la 3.8, un mismo código puede estar abierto en hasta 3 lugares a la vez (por ejemplo la app, Safari y otro celular). Si entra en un cuarto, el más viejo se cierra. Necesita el SQL de la versión 3.8.',
+        'Te lo vuelve a pedir si borras la app de la pantalla de inicio, si borras los datos de Safari o si tu entrenador te genera un código nuevo.'])),
+    h('section', {}, h('h2', {}, 'Qué tan firmes son los números'),
+      h('p', {}, 'Los ejercicios, las plantillas y los criterios de examen son propuestas de Remate basadas en las fuentes de abajo y en práctica de entrenamiento. Las cifras concretas (cuántos aciertos de 10, cuántas series o minutos) no salen de un estudio: son un punto de partida para ajustar a tu grupo.'),
+      coach ? h('p', {}, 'Puedes cambiar niveles, exámenes y retos editando los archivos de la carpeta js/content; el LEEME explica cómo. Los ejercicios propios se crean desde la pantalla Ejercicios.') : null),
+    h('section', {}, h('h2', {}, 'Fuentes'),
+      h('ul', { class: 'plain srcs' },
+        h('li', {}, 'Fases de aprendizaje (iniciación, adquisición, consolidación, refinamiento): federación de voleibol de Luxemburgo, ', link('https://flvb.lu/federation/ltad', 'modelo de desarrollo a largo plazo del atleta (LTAD)'), '. Los descriptores de cada fase en Remate son propuesta propia.'),
+        h('li', {}, 'Salto con pliometría en voleibolistas: Ramirez-Campillo et al., J Sports Sci Med, 2020, ', link('https://pmc.ncbi.nlm.nih.gov/articles/PMC7429440', 'revisión sistemática con metaanálisis'), '. Base para usar poco volumen y adaptarlo a cada jugador.'),
+        h('li', {}, 'Medición de salto con el celular: ', link('https://pmc.ncbi.nlm.nih.gov/articles/PMC10656545', '“Validity and reliability of My Jump app to assess vertical jump performance”'), ', revisión metaanalítica de 2023.'),
+        h('li', {}, 'Entrenar la toma de decisiones: ', link('https://pmc.ncbi.nlm.nih.gov/articles/PMC7277643', '“The Effect of Decision Training, from a Cognitive Perspective, on Decision-Making in Volleyball”'), ', revisión con metaanálisis de 2020.'),
+        h('li', {}, 'Fuerza en menores de edad: ', link('https://pubmed.ncbi.nlm.nih.gov/19620931/', 'declaración de posición de la NSCA sobre entrenamiento de fuerza en jóvenes (2009)'), '. Por eso los ejercicios usan peso corporal, técnica y progresión, con supervisión.'),
+        h('li', {}, 'Lesiones frecuentes en jóvenes voleibolistas (tobillo, rodilla, espalda baja, hombro): ', link('https://www.childrenscolorado.org/just-ask-childrens/articles/common-volleyball-injuries-in-young-athletes/', 'Children’s Hospital Colorado'), '. Base de los ejercicios de aterrizaje y prevención.'),
+        h('li', {}, 'Reglas de juego: ', link('https://www.fivb.com/volleyball/the-game/official-volleyball-rules/', 'reglas oficiales FIVB 2025-2028'), ' (', link('https://www.fivb.com/wp-content/uploads/2025/01/FIVB-Volleyball_Rules2025_2028-SP-v02.pdf', 'versión en español'), '). Las lecciones de reglas de Teoría citan el número de cada regla; por ejemplo, desde 2025 solo el equipo que recibe tiene que estar en orden de rotación al momento del saque (regla 7.4).'),
+        h('li', {}, 'Tiempos de ataque (primer, segundo y tercer tiempo) y complejos de juego (K1 y K2): J. Bellendier, ', link('https://efdeportes.com/efd51/ataque1.htm', '«Ataque de rotación en el voleibol, un enfoque actualizado»'), ', EFDeportes, 2002.'),
+        h('li', {}, 'Lecciones de técnica, sistemas, táctica y su quiz, y la hoja de antes y después: propuestas de Remate basadas en práctica común de entrenamiento.'),
+        h('li', {}, 'Pruebas de reglas de la FIVB para 2026 (por ejemplo, ocho sustituciones por set en algunas competencias): ', link('https://norceca.info/fivb-board-of-administration-approves-rule-tests-for-2026-competitions/', 'NORCECA'), '.'),
+        h('li', {}, 'Escala de recepción de 0 a 3 y eficiencia de ataque: son las medidas más comunes en la estadística de voleibol; la forma exacta de capturarlas en Remate es propia.'),
+        h('li', {}, 'Calentamiento preventivo: el calentamiento VolleyVeilig redujo las lesiones agudas y de brazo en voleibolistas jóvenes (Verhagen y cols., ', link('https://repository.up.ac.za/items/2d4f3fb9-f759-42d4-beae-174527228417', 'British Journal of Sports Medicine, 2023'), '); el entrenamiento de equilibrio redujo los esguinces de tobillo repetidos en voleibol (', link('https://pubmed.ncbi.nlm.nih.gov/15310562/', 'Verhagen y cols., 2004'), '); y el programa de hombro del OSTRC redujo los problemas de hombro en deportes de lanzamiento (', link('https://bjsm.bmj.com/content/51/14/1073', 'Andersson y cols., 2017'), '). Los tres calentamientos de Remate toman ideas de ellos; no son copia exacta de ningún programa.'),
+        h('li', {}, 'Calendario: formato iCalendar (.ics). En iPhone, un calendario suscrito avisa si no activas «Quitar alarmas»; en Google Calendar, los avisos de un calendario suscrito se eligen en su configuración.'),
+        h('li', {}, 'Prueba de velocidad de 10 m (salida parada, tres intentos con descanso; mejor con fotoceldas que con cronómetro): ', link('https://www.scienceforsport.com/10m-sprint-test/', 'Science for Sport, «10m Sprint Test»'), '.'),
+        h('li', {}, 'Prueba de agilidad T: ', link('https://www.topendsports.com/testing/tests/t-test.htm', 'descripción del protocolo'), ', con la referencia de Pauole y colaboradores (J Strength Cond Res, 2000) sobre su confiabilidad.'),
+        h('li', {}, 'Notificaciones: usan Web Push con una función de Supabase (', link('https://supabase.com/docs/guides/functions', 'Edge Functions'), '). En iPhone solo llegan con la app instalada en la pantalla de inicio.'),
+        h('li', {}, 'Side-out, break point, insignias, bloques de temporada y tareas de casa: propuestas de Remate basadas en práctica común de entrenamiento, no en un estudio.'),
+        GYM_SOURCES.map(([t, u]) => h('li', {}, `Gym. ${t} `, link(u, 'Ver fuente'))),
+        MEDIR_SOURCES.map(([t, u]) => h('li', {}, `Medir con video. ${t} `, link(u, 'Ver fuente'))),
+        h('li', {}, 'Lista con QR: el QR se dibuja con ', link('https://github.com/kazuhikoarase/qrcode-generator', 'qrcode-generator'), ' (licencia MIT) y se lee con el lector del celular o con ', link('https://github.com/cozmo/jsQR', 'jsQR'), ' (licencia Apache 2.0), los dos desde jsDelivr. El código de 6 números es un HMAC-SHA256 que cambia cada 20 segundos; la base de datos lo revisa y frena los intentos fallidos. Diseño propio de Remate.'),
+        h('li', {}, 'Captura del rival y scouting automático: forma de capturar propia de Remate, con las zonas 1 a 6 de las reglas FIVB.'),
+        h('li', {}, 'iPhone: las apps instaladas en la pantalla de inicio guardan sus datos aparte de Safari (', link('https://bugs.webkit.org/show_bug.cgi?id=181849', 'WebKit, reporte 181849'), ') y Safari puede borrar los datos de un sitio que no visitas en 7 días, mientras que las apps instaladas no tienen ese límite (', link('https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/', 'WebKit, 2020'), ').'),
+        h('li', {}, 'Entreno sugerido, alineación sugerida (sistema 5-1), reto del equipo y «Detectar solo» de Medir con video: reglas y umbrales propios de Remate, no salen de un estudio. Son un punto de partida que tú revisas.'),
+        h('li', {}, 'Carga con el esfuerzo de la sesión: Foster y cols., ', link('https://doi.org/10.1519/00124278-200102000-00019', '«A new approach to monitoring exercise training»'), ', Journal of Strength and Conditioning Research, 2001; revisión de su validez: ', link('https://pmc.ncbi.nlm.nih.gov/articles/PMC5673663/', 'Haddad y cols., 2017'), '. Sobre por qué la razón semana actual / promedio no predice lesiones: ', link('https://doi.org/10.1007/s40279-020-01378-6', 'Impellizzeri y cols., Sports Medicine, 2021'), '. El aviso de 1.5 veces es propuesta de Remate.'),
+        h('li', {}, 'Videos de técnica: Supabase Storage, plan gratis de 1 GB y 50 MB por archivo (', link('https://supabase.com/docs/guides/storage/uploads/file-limits', 'límites'), '). Recordatorios: pg_cron y pg_net llamando a una Edge Function (', link('https://supabase.com/docs/guides/functions/schedule-functions', 'guía de Supabase'), ').'),
+        h('li', {}, 'Dibujos de los ejercicios y captura con dos celulares: diseño propio de Remate.'),
+        h('li', {}, 'Gym: las rutinas, la elección de ejercicios y las series y descansos de cada objetivo son propuesta de Remate sobre esas fuentes, no un programa probado en un estudio.'),
+        h('li', {}, 'Leer de una imagen: ', link('https://github.com/naptha/tesseract.js', 'Tesseract.js'), ' (licencia Apache 2.0), el motor de texto Tesseract compilado para el navegador; corre en tu celular y la imagen no se manda a ningún servidor. Los datos de idioma español se descargan de ', link('https://www.jsdelivr.com/package/npm/@tesseract.js-data/spa', 'jsDelivr'), '. La forma de reconocer partidos, horarios y pases directos es propia de Remate.'))),
+    h('section', {}, h('h2', {}, 'Versión'),
+      h('p', {}, `Estás usando Remate ${VERSION}. `, h('a', { href: '#/novedades' }, 'Ver qué cambió en cada versión'), '.')),
+    h('section', { class: 'note warn' }, h('strong', {}, 'Importante: '), 'Remate no sustituye a un médico ni a un entrenador titulado. Si un jugador siente dolor, se detiene. Si dudas de una carga o de una lesión, consulta a un profesional.'));
+  return { title: 'Ayuda', el };
+}
+
+// ---------- Novedades: versión actual y qué cambió en cada versión (antes js/views/novedades.js) ----------
+// Última versión que este celular ya vio. Sirve para avisar una sola vez cuando Remate se actualiza.
+export const SEEN_KEY = 'remate.version.vista';
+export const markSeen = () => ls.set(SEEN_KEY, VERSION);
+export const unseenUpdate = () => { const v = ls.get(SEEN_KEY); return !!v && v !== VERSION; };
+export const firstRun = () => !ls.get(SEEN_KEY);
+
+const when = (f) => fmtDate(f, { day: 'numeric', month: 'long', year: 'numeric' });
+
+// Bloque "Acerca de Remate" para Ajustes (todos los roles).
+export const aboutSection = () => h('section', { class: 'stack' }, sectionTitle('Acerca de Remate'),
+  h('div', { class: 'rows' }, h('div', { class: 'row' }, h('span', { class: 'row-main' }, h('strong', {}, `Versión ${VERSION}`), h('span', { class: 'row-sub' }, `Actualizada el ${when(CHANGELOG[0].f)}`)),
+    h('a', { class: 'btn sm', href: '#/novedades' }, ic('sparkles', 18), 'Ver novedades'))));
+
+// Aviso de una sola vez después de una actualización.
+export function updateBanner(onClose) {
+  const close = () => { markSeen(); onClose(); };
+  return h('div', { class: 'updbar', role: 'status' },
+    h('span', {}, ic('sparkles', 18), ` Remate se actualizó a la versión ${VERSION}.`),
+    h('span', { class: 'cluster' }, h('a', { class: 'btn sm', href: '#/novedades', onclick: () => markSeen() }, 'Ver novedades'),
+      h('button', { class: 'iconbtn', type: 'button', 'aria-label': 'Cerrar aviso', onclick: close }, ic('x', 20))));
+}
+
+export function novedades(ctx) {
+  markSeen();
+  const back = ctx.role === 'coach' ? '#/ajustes' : null;
+  const el = h('div', { class: 'page' },
+    brandBand('Cuando subes una versión nueva a GitHub, cada celular la descarga sola al abrir Remate con internet. Si no la ves, cierra la app por completo y vuelve a abrirla.'),
+    h('section', { class: 'stack' }, sectionTitle('Qué cambió'),
+      h('ol', { class: 'changelog' }, CHANGELOG.map((c, i) => h('li', { class: 'panel' },
+        h('div', { class: 'cl-head' }, h('strong', {}, `Versión ${c.v}`), i === 0 ? h('span', { class: 'chip ball' }, 'Actual') : null, h('span', { class: 'row-sub' }, when(c.f))),
+        h('p', {}, c.t))))),
+    h('p', { class: 'row-sub' }, 'Las versiones siguen la forma mayor.menor.corrección: el primer número cambia con funciones grandes, el segundo con mejoras y el tercero con arreglos.'));
+  return { title: 'Novedades', back, el };
+}
