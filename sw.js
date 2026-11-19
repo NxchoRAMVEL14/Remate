@@ -4,7 +4,7 @@
 // 3.5 s contesta con lo guardado y actualiza por detrás. Los datos (Supabase) nunca pasan por aquí: los guarda la
 // app en el celular y sube los cambios cuando vuelve la señal.
 // El nombre lleva la versión de js/version.js: al subir una versión nueva, cámbialo aquí también.
-const CACHE = 'remate-v3.29.0';
+const CACHE = 'remate-v3.33.0';
 // ASSETS: la lista la genera scripts/assets (no la edites a mano).
 // ASSETS:BEGIN
 const ASSETS = [
@@ -47,10 +47,13 @@ const ASSETS = [
   "./js/content/categorias.js",
   "./js/content/challenges.js",
   "./js/content/coaching.js",
+  "./js/content/ex-avanzado.js",
   "./js/content/ex-bloqueo-defensa.js",
   "./js/content/ex-colocacion.js",
   "./js/content/ex-fisico.js",
+  "./js/content/ex-intermedio.js",
   "./js/content/ex-juego.js",
+  "./js/content/ex-principiante.js",
   "./js/content/ex-recepcion.js",
   "./js/content/ex-remate.js",
   "./js/content/ex-saque.js",

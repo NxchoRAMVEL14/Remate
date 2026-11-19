@@ -1437,3 +1437,24 @@ body.act-on { overflow: hidden; }
 .dd-plan { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .dd-plan li { display: flex; gap: 8px; align-items: center; }
 .dd-ic { flex: none; width: 24px; height: 24px; border-radius: 7px; display: grid; place-items: center; color: #fff; background: var(--skc, #607d8b); }
+
+/* v3.33 · Marcador del ejercicio y vista por grupo en modo cancha */
+.cm-view { align-self: center; background: rgb(255 255 255 / .12); }
+.cm-view button { color: #fff; padding: 6px 12px; min-height: 36px; }
+.cm-view button[aria-pressed="true"] { background: #fff; color: #0C2340; }
+.cm-mine { font-weight: 700; display: flex; gap: 8px; align-items: baseline; justify-content: center; margin: 0; }
+.cm-rate { display: grid; gap: 6px; justify-items: center; margin: 6px auto 0; max-width: 60ch; }
+.cm-rate-q { font-weight: 700; opacity: .9; }
+.cm-rate-row { display: flex; flex-wrap: nowrap; gap: 3px; max-width: 100%; align-items: center; justify-content: center; }
+.cm-rate .rb { border: 1px solid rgb(255 255 255 / .45); background: transparent; color: #fff; border-radius: 999px; padding: 4px 6px; min-height: 40px; min-width: 0; white-space: nowrap; font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; }
+.cm-rate .rb[aria-pressed="true"].r-no { background: #eb5757; border-color: #eb5757; }
+.cm-rate .rb[aria-pressed="true"].r-reg { background: #f2c94c; border-color: #f2c94c; color: #1b1b1b; }
+.cm-rate .rb[aria-pressed="true"].r-ok { background: #27ae60; border-color: #27ae60; }
+.cm-rate .rb[aria-pressed="true"].r-facil { background: #2f80ed; border-color: #2f80ed; }
+.cm-rate input { width: 40px; flex: none; padding: 0; min-height: 40px; border-radius: 10px; border: 1px solid rgb(255 255 255 / .45); background: rgb(255 255 255 / .1); color: #fff; text-align: center; font: inherit; }
+.chip.r-no { background: #f6c0c0; color: #1b1b1b; } .chip.r-reg { background: #f8e3a1; color: #1b1b1b; }
+.chip.r-ok { background: #b9e8c9; color: #1b1b1b; } .chip.r-facil { background: #c4dcf8; color: #1b1b1b; }
+.blk-res { grid-column: 2 / -1; display: grid; gap: 4px; }
+.blk-res .adv { display: flex; gap: 6px; align-items: flex-start; padding: 6px 8px; border-radius: 8px; }
+.blk-res .adv.up { background: color-mix(in srgb, #2f80ed 12%, transparent); }
+.blk-res .adv.down { background: color-mix(in srgb, #eb5757 12%, transparent); }
