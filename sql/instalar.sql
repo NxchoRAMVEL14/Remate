@@ -1815,3 +1815,64 @@ create trigger injuries_set_owner before insert or update on public.injuries
   for each row execute function public.injuries_set_owner();
 revoke all on public.injuries from anon;
 grant select, insert, update, delete on public.injuries to authenticated;
+
+-- =====================================================================
+-- REMATE · v3.26 — Conoce a tus jugadores: tests (posición ideal, mente en la cancha, por qué juego, rol,
+-- cómo me gusta que me corrijan, autoevaluación) y retroalimentación al entrenador (después del entreno y mensual).
+-- Cada jugador solo escribe y lee sus propias respuestas; el entrenador ve las de sus jugadores. Los ayudantes no.
+-- La retroalimentación al entrenador va con nombre (así lo eligió el entrenador).
+-- También agrega a las pruebas físicas «alcance de pie» y «envergadura».
+-- Se puede correr las veces que quieras. No borra nada.
+-- =====================================================================
+create table if not exists public.player_surveys (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,   -- siempre el entrenador
+  player_id uuid not null references public.players(id) on delete cascade,
+  kind text not null check (kind in ('posicion', 'mente', 'motivo', 'rol', 'correccion', 'autoeval', 'retro_entreno', 'retro_mes')),
+  session_id uuid references public.sessions(id) on delete cascade,     -- solo en «retro_entreno»
+  period text not null default '' check (char_length(period) <= 10),     -- «2026-11» en la encuesta mensual
+  answers jsonb not null default '{}'::jsonb check (pg_column_size(answers) < 8000),
+  comment text not null default '' check (char_length(comment) <= 600),
+  created_at timestamptz not null default now()
+);
+create index if not exists player_surveys_player_idx on public.player_surveys (player_id, kind, created_at desc);
+create unique index if not exists player_surveys_session_uq on public.player_surveys (player_id, session_id) where kind = 'retro_entreno';
+create unique index if not exists player_surveys_month_uq on public.player_surveys (player_id, period) where kind = 'retro_mes';
+alter table public.player_surveys enable row level security;
+
+drop policy if exists player_surveys_coach on public.player_surveys;
+create policy player_surveys_coach on public.player_surveys for all to authenticated
+  using (owner_id = auth.uid() and public.is_coach())
+  with check (owner_id = auth.uid() and public.is_coach());
+drop policy if exists player_surveys_player_read on public.player_surveys;
+create policy player_surveys_player_read on public.player_surveys for select to authenticated
+  using (player_id in (select public.my_player_ids()));
+drop policy if exists player_surveys_player_insert on public.player_surveys;
+create policy player_surveys_player_insert on public.player_surveys for insert to authenticated
+  with check (player_id in (select public.my_player_ids()));
+
+create or replace function public.player_surveys_set_owner() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  select owner_id into new.owner_id from public.players where id = new.player_id;
+  if new.owner_id is null then raise exception 'Jugador no encontrado'; end if;
+  return new;
+end $$;
+drop trigger if exists player_surveys_set_owner on public.player_surveys;
+create trigger player_surveys_set_owner before insert on public.player_surveys
+  for each row execute function public.player_surveys_set_owner();
+revoke all on public.player_surveys from anon;
+grant select, insert, update, delete on public.player_surveys to authenticated;
+
+-- Pruebas físicas: + alcance de pie y envergadura (las demás siguen igual)
+do $$
+declare c record;
+begin
+  for c in select conname from pg_constraint
+            where conrelid = 'public.player_tests'::regclass and contype = 'c' and pg_get_constraintdef(oid) ilike '%kind%'
+  loop
+    execute format('alter table public.player_tests drop constraint %I', c.conname);
+  end loop;
+end $$;
+alter table public.player_tests add constraint player_tests_kind_check
+  check (kind in ('cmj', 'alcance', 'agilidad', 'plancha', 'estatura', 'vel10', 'alcance_pie', 'envergadura'));
