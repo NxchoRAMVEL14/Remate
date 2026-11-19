@@ -1,5 +1,6 @@
 // Íconos Lucide (licencia ISC, https://lucide.dev). Solo los que usa la app.
 const P = {
+ "brick-wall": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" /> <path d=\"M12 9v6\" /> <path d=\"M16 15v6\" /> <path d=\"M16 3v6\" /> <path d=\"M3 15h18\" /> <path d=\"M3 9h18\" /> <path d=\"M8 15v6\" /> <path d=\"M8 3v6\" />",
  "split": "<path d=\"M16 3h5v5\" /> <path d=\"M8 3H3v5\" /> <path d=\"M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3\" /> <path d=\"m15 9 6-6\" />",
  "replace": "<path d=\"M14 4a2 2 0 0 1 2-2\" /> <path d=\"M16 10a2 2 0 0 1-2-2\" /> <path d=\"M20 2a2 2 0 0 1 2 2\" /> <path d=\"M22 8a2 2 0 0 1-2 2\" /> <path d=\"m3 7 3 3 3-3\" /> <path d=\"M6 10V5a3 3 0 0 1 3-3h1\" /> <rect x=\"2\" y=\"14\" width=\"8\" height=\"8\" rx=\"2\" />",
  "layers": "<path d=\"m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z\" /> <path d=\"m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65\" /> <path d=\"m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65\" />",

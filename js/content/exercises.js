@@ -6,12 +6,15 @@ import remate from './ex-remate.js';
 import bloqueoDefensa from './ex-bloqueo-defensa.js';
 import fisico from './ex-fisico.js';
 import juego from './ex-juego.js';
+import principiante from './ex-principiante.js';   // v3.30: tanda 1 (24 de Principiante)
+import intermedio from './ex-intermedio.js';       // v3.31: tanda 2 (24 de Intermedio)
+import avanzado from './ex-avanzado.js';           // v3.32: tanda 3 (24 de Avanzado)
 import LAB from './lab-ex.js';
 
 export const MATERIAL = { balones: 'Balones', conos: 'Conos', red: 'Red', pared: 'Pared', cuerpo: 'Peso corporal', polainas: 'Polainas (tobilleras con peso)', escalon: 'Escalón o banca' };
 export const KINDS = { calentamiento: 'Calentamiento', tecnica: 'Técnica', juego: 'Juego', fisico: 'Físico', cierre: 'Cierre' };
 
-export const BUILTIN = [...saque, ...recepcion, ...colocacion, ...remate, ...bloqueoDefensa, ...fisico, ...juego];
+export const BUILTIN = [...saque, ...recepcion, ...colocacion, ...remate, ...bloqueoDefensa, ...fisico, ...juego, ...principiante, ...intermedio, ...avanzado];
 export const BUILTIN_BY_ID = Object.fromEntries(BUILTIN.map((e) => [e.id, e]));
 // Los del laboratorio de salto son solo del entrenador: no salen en la biblioteca ni en lo que ve el jugador.
 const LAB_BY_ID = Object.fromEntries(LAB.map((e) => [e.id, e]));
