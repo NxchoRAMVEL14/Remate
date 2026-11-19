@@ -1,0 +1,1030 @@
+// Físico: pruebas físicas (antes en pruebas.js) y Gym (ejercicios con pesas y máquinas, objetivos y el generador de rutinas).
+// Las series, repeticiones y descansos son propuestas de Remate basadas en las fuentes de abajo (GYM_SOURCES), no cifras de un estudio.
+import { fromKg, unitLabel, incIn } from '../peso.js';
+import { addDays, diffDays, todayStr } from '../util.js';
+import { MAQ } from './maquinas.js';
+
+// =====================================================================
+// Pruebas físicas de los jugadores. Se recomienda repetirlas cada 2 o 3 meses, siempre igual.
+// =====================================================================
+export const PTESTS = {
+  cmj: { name: 'Salto vertical', short: 'Salto', unit: 'cm', better: 'up', min: 5, max: 120, step: 0.1,
+    how: ['Manos en la cadera, baja rápido a media sentadilla y salta lo más alto posible.', 'Mídelo con «Medir con video» de Remate (celular en cámara lenta), con My Jump o con un tapete de salto.', 'Tres intentos con 1 minuto de descanso; anota el mejor.'] },
+  vel10: { name: 'Velocidad 10 m', short: '10 m', unit: 's', better: 'down', min: 1, max: 6, step: 0.01,
+    how: ['Calienta bien. Marca la salida y una línea a 10 m en piso que no resbale.', 'Sale parado, con un pie adelante, a la cuenta de «3, 2, 1, ya». Corre a máxima velocidad hasta pasar la línea.', 'Lo más preciso son las fotoceldas. Sin ellas: graba de lado en cámara lenta y mídelo con «Medir con video» de Remate (del primer movimiento a cuando el tronco cruza la línea), o usa cronómetro, siempre con la misma persona.', 'Tres intentos con 2 a 3 minutos de descanso; anota el mejor (menos segundos es mejor).'] },
+  alcance: { name: 'Alcance de remate', short: 'Alcance', unit: 'cm', better: 'up', min: 150, max: 380, step: 1,
+    how: ['Con aproximación de remate, toca lo más alto posible una pared marcada (o una regla junto a la red).', 'Anota la marca más alta de tres intentos, en centímetros desde el piso.', 'Compárala con la red: 2.24 m femenil y 2.43 m varonil.'] },
+  agilidad: { name: 'Agilidad (prueba T)', short: 'Agilidad', unit: 's', better: 'down', min: 5, max: 30, step: 0.01,
+    how: ['Cuatro conos en forma de T: A en la salida, B a 9.14 m al frente, C y D a 4.57 m a cada lado de B.', 'Sprint de A a B, desplazamiento lateral a C, lateral a D, lateral de regreso a B y de espaldas hasta A. Toca la base de cada cono.', 'Sin cruzar los pies en los desplazamientos laterales. Tres intentos, anota el mejor (menos segundos es mejor).'] },
+  plancha: { name: 'Plancha frontal', short: 'Plancha', unit: 's', better: 'up', min: 5, max: 600, step: 1,
+    how: ['Apoyado en antebrazos y puntas, cuerpo recto de cabeza a talones.', 'Termina cuando la cadera baja o sube y no la puede corregir.', 'Un solo intento.'] },
+  estatura: { name: 'Estatura', short: 'Estatura', unit: 'cm', better: 'up', min: 120, max: 230, step: 0.5,
+    how: ['Descalzo, talones, glúteos y espalda contra la pared.', 'Útil para entender cambios de salto y alcance mientras crecen.'] },
+  // v3.26: para «Mi posición ideal» (necesitan el SQL de la v3.26)
+  alcance_pie: { name: 'Alcance de pie', short: 'Alcance pie', unit: 'cm', better: 'up', min: 120, max: 300, step: 1,
+    how: ['Descalzo, de lado a la pared, talones en el piso.', 'Estira hacia arriba el brazo más cercano a la pared y marca lo más alto que toques con la punta de los dedos.', 'Mide del piso a la marca, en centímetros.'] },
+  envergadura: { name: 'Envergadura', short: 'Envergadura', unit: 'cm', better: 'up', min: 100, max: 240, step: 0.5,
+    how: ['De espaldas a la pared, brazos abiertos en cruz a la altura de los hombros, palmas al frente.', 'Mide de la punta de un dedo medio a la punta del otro.', 'Si es mayor que tu estatura, tus brazos te ayudan a bloquear y alcanzar.'] },
+};
+
+// =====================================================================
+// Medir con video (v3.7): guía de cada prueba que Remate mide cuadro por cuadro, sin apps de paga.
+// type: 'jump' (tiempo de vuelo), 'drop' (contacto + vuelo), 'time' (de la salida a la llegada).
+// lab: tipo de prueba del laboratorio del entrenador; ptest: prueba física del jugador donde se puede guardar.
+// =====================================================================
+export const TEST_GUIDE = {
+  cmj: { name: 'Salto con contramovimiento (CMJ)', short: 'CMJ', type: 'jump', lab: 'cmj', ptest: 'cmj',
+    what: 'La fuerza explosiva de las piernas, sin la ayuda de los brazos. Es la prueba de salto más usada y la más fácil de repetir igual.',
+    how: ['Manos en la cadera todo el salto.', 'Parado, baja rápido a media sentadilla (a donde te salga natural) y sube de inmediato lo más alto que puedas.', 'Piernas estiradas en el aire y cae en el mismo lugar, con las puntas de los pies primero y las piernas casi estiradas.', '3 intentos con 1 minuto de descanso. Remate guarda el mejor.'],
+    errors: ['Doblar las rodillas en el aire o al caer: el vuelo dura más y el salto sale más alto de lo real.', 'Soltar las manos de la cadera.', 'Caer lejos de donde despegaste.'] },
+  cmj_arms: { name: 'Salto con contramovimiento y brazos', short: 'Con brazos', type: 'jump', lab: 'cmj_arms',
+    what: 'Tu salto vertical con el impulso de los brazos, más parecido al bloqueo y al salto de juego.',
+    how: ['Brazos libres: bájalos al hacer la media sentadilla y súbelos con fuerza al saltar.', 'Mismo cuidado al caer: piernas casi estiradas y en el mismo lugar.', '3 intentos con 1 minuto de descanso.'],
+    errors: ['Doblar las rodillas al caer.', 'Dar un paso antes de saltar (eso ya es otra prueba).'] },
+  sj: { name: 'Salto desde sentadilla (SJ)', short: 'Desde sentadilla', type: 'jump', lab: 'sj',
+    what: 'La fuerza de las piernas sin rebote. Comparado con el CMJ te dice qué tanto aprovechas el rebote (ciclo de estiramiento y acortamiento).',
+    how: ['Manos en la cadera. Baja a media sentadilla (rodillas a unos 90°) y quédate quieto 2 a 3 segundos.', 'Sube lo más rápido que puedas sin bajar antes. Si bajas aunque sea un poco, repítelo.', '3 intentos con 1 minuto de descanso.'],
+    errors: ['Hacer un pequeño rebote antes de subir.', 'Doblar las rodillas al caer.'] },
+  block: { name: 'Salto de bloqueo', short: 'Bloqueo', type: 'jump', lab: 'block',
+    what: 'Tu salto de bloqueo sin desplazamiento, con los brazos arriba como en la red.',
+    how: ['Frente a la red o a una pared, manos a la altura de la frente.', 'Media sentadilla rápida y salta con los brazos extendidos hacia arriba.', 'Cae en el mismo lugar, piernas casi estiradas. 3 intentos.'],
+    errors: ['Caer adelante o de lado (pasa con frecuencia junto a la red).', 'Doblar las rodillas al caer.'] },
+  spike: { name: 'Salto de remate (con aproximación)', short: 'Remate', type: 'jump', lab: 'spike',
+    what: 'Tu salto de juego con la aproximación de 3 o 4 pasos. Es el que más se parece al partido.',
+    how: ['Haz tu aproximación normal y salta como para rematar, sin balón o con balón colgado.', 'Graba de lado, lejos (3 a 4 m) para que se vea el despegue y la caída en el cuadro.', '3 intentos con 1 a 2 minutos de descanso.'],
+    errors: ['Con aproximación casi siempre caes adelante y con las rodillas dobladas: toma el resultado como referencia tuya, no para comparar con otros.', 'Que el celular no alcance a ver los pies en la caída.'] },
+  drop: { name: 'Salto en profundidad (drop jump) e índice de fuerza reactiva', short: 'En profundidad', type: 'drop', lab: 'drop',
+    what: 'Qué tan rápido y qué tan alto rebotas después de caer: el índice de fuerza reactiva (altura ÷ tiempo de contacto). Mide la «reactividad» que usas en el segundo salto y en los rebotes.',
+    how: ['Párate en un cajón firme de unos 30 cm, manos en la cadera.', 'Déjate caer (no saltes del cajón) y en cuanto toques el piso rebota lo más alto y lo más rápido posible.', 'Piensa «el piso quema»: el contacto debe ser cortísimo.', '3 intentos con 1 a 2 minutos de descanso. Anota la altura del cajón.'],
+    errors: ['Saltar desde el cajón en lugar de dejarte caer.', 'Hundirte mucho al caer (contacto largo): si pasa de unos 250 ms ya es otro salto.', 'Doblar las rodillas en el aire o al caer.'] },
+  vel10: { name: 'Velocidad 10 m', short: '10 m', type: 'time', ptest: 'vel10',
+    what: 'La aceleración de los primeros pasos, la que usas para llegar a un balón.',
+    how: ['Marca la salida y una línea a 10 m en piso que no resbale.', 'Sale parado, con un pie adelante, cuando quiera (sin señal): el tiempo empieza con su primer movimiento.', 'Graba de lado, a la altura de la línea de llegada, lo suficientemente lejos para ver también la salida (o pide que alguien con otro celular grabe la salida).', '3 intentos con 2 a 3 minutos de descanso.'],
+    errors: ['Arrancar con un rebote o un paso hacia atrás.', 'Frenar antes de la línea.'] },
+  agilidad: { name: 'Agilidad (prueba T)', short: 'Prueba T', type: 'time', ptest: 'agilidad',
+    what: 'Cambios de dirección: sprint, desplazamiento lateral y de espaldas, como en la defensa.',
+    how: ['Cuatro conos en T: A en la salida, B a 9.14 m al frente, C y D a 4.57 m a cada lado de B.', 'Sprint de A a B, lateral a C, lateral a D, lateral de regreso a B y de espaldas hasta A. Toca la base de cada cono.', 'Graba desde atrás de A para ver la salida y la llegada.', '3 intentos con 2 a 3 minutos de descanso.'],
+    errors: ['Cruzar los pies en los desplazamientos laterales.', 'No tocar un cono (el intento no cuenta).'] },
+};
+// Qué cuadros se marcan en cada tipo de prueba.
+export const MARKS = {
+  jump: [['off', 'Despegue', 'El primer cuadro en que los dos pies ya no tocan el piso.'], ['land', 'Aterrizaje', 'El primer cuadro en que un pie vuelve a tocar el piso.']],
+  drop: [['touch', 'Contacto', 'El primer cuadro en que los pies tocan el piso al caer del cajón.'], ['off', 'Despegue', 'El primer cuadro en que ya están en el aire otra vez.'], ['land', 'Aterrizaje', 'El primer cuadro en que vuelven a tocar el piso.']],
+  time: [['start', 'Salida', 'El primer cuadro en que se mueve (pie de atrás o cadera).'], ['end', 'Llegada', 'El cuadro en que el tronco cruza la línea (en la prueba T, cuando pasa por el cono A).']],
+};
+export const FILM_TIPS = [
+  'Graba en cámara lenta: 120 o 240 cuadros por segundo. Entre más cuadros, más precisa la medida.',
+  'Celular firme (en el piso, un banco o un tripié), no en la mano. Para saltos ponlo a la altura de los pies, a 1.5 o 2 m, de lado.',
+  'Que se vean los pies completos todo el salto y que haya buena luz (en luz baja la cámara lenta sale oscura y movida).',
+  'Un intento por video es lo más fácil, pero puedes grabar los 3 seguidos y marcarlos uno por uno.',
+  'Si el video se ve en cámara lenta, en Remate elige «Velocidad del video»: ×4 si grabaste a 120 y ×8 si grabaste a 240.',
+];
+export const MEDIR_SOURCES = [
+  ['Balsalobre-Fernández, Glaister y Lockey (2015), validez y confiabilidad de una app de iPhone para medir el salto vertical (My Jump). Journal of Sports Sciences. Mide el tiempo de vuelo marcando despegue y aterrizaje en video a 120 cuadros por segundo.', 'https://doi.org/10.1080/02640414.2014.996184'],
+  ['Revisión metaanalítica (2023): la app My Jump es válida y confiable para medir el salto vertical con el tiempo de vuelo. Remate usa el mismo principio.', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC10656545/'],
+  ['Flanagan y Comyns (2008), uso del tiempo de contacto y del índice de fuerza reactiva (altura ÷ contacto) en el salto en profundidad. Strength and Conditioning Journal.', 'https://journals.lww.com/nsca-scj/fulltext/2008/10000/the_use_of_contact_time_and_the_reactive_strength.5.aspx'],
+  ['Flanagan, Ebben y Jensen (2008), confiabilidad del índice de fuerza reactiva en saltos en profundidad desde 30 cm. Journal of Strength and Conditioning Research.', 'https://pubmed.ncbi.nlm.nih.gov/18714215/'],
+  ['Romero-Franco y cols. (2017): medir el tiempo de un sprint con el video en cámara lenta del celular coincide casi perfecto con las fotoceldas. European Journal of Sport Science.', 'https://doi.org/10.1080/17461391.2016.1249031'],
+  ['Prueba T de agilidad: protocolo de Semenick (1990) y confiabilidad de Pauole y cols. (2000), Journal of Strength and Conditioning Research.', 'https://www.topendsports.com/testing/tests/t-test.htm'],
+];
+
+// Cambio entre la primera y la última prueba; "mejor" según si conviene subir o bajar.
+export function testTrend(list, kind) {
+  const xs = list.filter((t) => t.kind === kind).sort((a, b) => `${a.test_date}${a.created_at}`.localeCompare(`${b.test_date}${b.created_at}`));
+  if (!xs.length) return null;
+  const first = Number(xs[0].value), last = Number(xs[xs.length - 1].value), d = Math.round((last - first) * 100) / 100;
+  const better = PTESTS[kind].better === 'down' ? d < 0 : d > 0;
+  return { n: xs.length, first, last, d, better: kind === 'estatura' ? null : (d === 0 ? null : better), list: xs };
+}
+
+// =====================================================================
+// GYM
+// =====================================================================
+
+// Material que pide cada ejercicio y qué hay en cada tipo de gym.
+export const NEED = {
+  barra: 'Barra, rack o barra fija', maquina: 'Máquina', polea: 'Polea', mancuerna: 'Mancuernas', liga: 'Liga o polea',
+  cajon: 'Cajón o banco firme', balon: 'Balón medicinal', nada: 'Tu peso',
+};
+export const EQUIP = {
+  completo: { name: 'Gym completo', desc: 'Barras y rack, mancuernas, poleas y máquinas.' },
+  basico: { name: 'Gym básico', desc: 'Mancuernas, poleas y máquinas, sin barra libre ni rack.' },
+  mancuernas: { name: 'Solo mancuernas', desc: 'Mancuernas, un banco, ligas y tu peso.' },
+  // v3.20: sin gym
+  casa: { name: 'En casa', desc: 'Tu peso, una silla o banco firme y una mesa pesada.', where: 'en casa' },
+  cancha: { name: 'En la cancha', desc: 'Tu peso, una banca, ligas y balón medicinal si hay.', where: 'en la cancha' },
+};
+const EQUIP_HAS = {
+  completo: new Set(Object.keys(NEED)),
+  basico: new Set(['maquina', 'polea', 'mancuerna', 'liga', 'cajon', 'balon', 'nada']),
+  mancuernas: new Set(['mancuerna', 'liga', 'cajon', 'nada']),
+  casa: new Set(['cajon', 'nada']),
+  cancha: new Set(['cajon', 'nada', 'liga', 'balon']),
+};
+export const available = (ex, equip) => !!EQUIP_HAS[equip]?.has(ex.need);
+export const HOME_EQUIP = new Set(['casa', 'cancha']);
+
+export const EXP = {
+  nuevo: { name: 'Empiezo', desc: 'Nunca he ido o llevo menos de 3 meses.', tier: 1 },
+  medio: { name: 'Ya sé', desc: 'De 3 a 12 meses, con buena técnica.', tier: 2 },
+  avanzado: { name: 'Avanzado', desc: 'Más de un año y un instructor ya revisó mi técnica.', tier: 3 },
+};
+export const TIER = { 1: 'Básico', 2: 'Intermedio', 3: 'Avanzado' };
+export const PHASE = {
+  pre: { name: 'Pretemporada o vacaciones', desc: 'Sin partidos: el mejor momento para construir fuerza.' },
+  temp: { name: 'Temporada', desc: 'Entrenos y partidos cada semana: mantener y seguir ganando, sin llegar cansado.' },
+  torneo: { name: 'Semana de partido o torneo', desc: 'Una sola sesión corta para mantener.' },
+};
+export const MINUTES = [45, 60, 75];
+
+// Grupos de la biblioteca (pat → grupo).
+export const GROUPS = {
+  potencia: { name: 'Potencia', pats: ['salto', 'lanzamiento', 'lateral', 'aterrizaje'] },
+  piernas: { name: 'Piernas', pats: ['rodilla', 'cadera', 'gluteo', 'unipodal', 'isquios', 'pantorrilla', 'aductor'] },
+  arriba: { name: 'Tren de arriba', pats: ['empuje', 'jalon'] },
+  hombro: { name: 'Hombro sano', pats: ['hombro'] },
+  tronco: { name: 'Tronco', pats: ['tronco'] },
+  resistencia: { name: 'Resistencia', pats: ['resist'] },   // v3.20: cardio con tu peso
+};
+export const PATS = {
+  salto: 'Saltos', lanzamiento: 'Lanzamientos', lateral: 'Lateral', aterrizaje: 'Aterrizaje', rodilla: 'Sentadilla', cadera: 'Cadera',
+  gluteo: 'Glúteo', unipodal: 'Una pierna', isquios: 'Isquiotibiales', pantorrilla: 'Pantorrilla y tobillo', aductor: 'Aductores',
+  empuje: 'Empuje', jalon: 'Jalón y remo', hombro: 'Hombro sano', tronco: 'Tronco', resist: 'Resistencia',
+};
+
+// unit: 'kg' (peso y repeticiones), 'pc' (tu peso: solo repeticiones), 's' (segundos), 'saltos' (repeticiones sin peso).
+// each: el peso es por mano. side: las repeticiones son por lado. dose: dosis propia por experiencia [series, repeticiones].
+const X = (o) => ({ safety: '', side: false, each: false, ...o });
+
+export const GYM = [
+  // ---------- potencia ----------
+  X({ id: 'g-salto-cajon', name: 'Salto al cajón', pat: 'salto', need: 'cajon', tier: 1, unit: 'saltos', body: 'Piernas completas',
+    why: 'Practicas el despegue con todo y aterrizas arriba, con menos impacto que en el piso.',
+    how: ['Cajón a la altura de tu rodilla o más bajo, que no se mueva.', 'Brazos atrás, baja rápido a media sentadilla y salta llevando los brazos arriba.', 'Aterriza suave arriba con los dos pies, rodillas dobladas y sobre los pies.', 'Bájate caminando, nunca saltando hacia atrás.'],
+    cues: ['Brazos fuertes hacia arriba', 'Aterriza en silencio'],
+    err: 'Un cajón tan alto que aterrizas en sentadilla profunda: no saltaste más, solo subiste las rodillas.',
+    easier: 'Cajón más bajo, o salto al frente en el piso quedándote quieto al caer.',
+    harder: 'Salta desde sentado en un banco, sin impulso.',
+    safety: 'Bájate caminando. Si el cajón se mueve o resbala, no lo uses.' }),
+  X({ id: 'g-salto-cargado', name: 'Salto con mancuernas ligeras', pat: 'salto', need: 'mancuerna', tier: 2, unit: 'kg', each: true, body: 'Piernas y cadera',
+    why: 'Enseña a meter fuerza rápido, que es lo que más se pasa al salto de remate y de bloqueo.',
+    how: ['Una mancuerna ligera en cada mano, brazos colgando a los lados.', 'Baja a un cuarto de sentadilla y salta lo más alto que puedas.', 'Aterriza suave, acomódate y vuelve a saltar, sin rebotar.'],
+    cues: ['Ligero: casi tan alto como sin peso', 'Una repetición a la vez'],
+    err: 'Tanto peso que casi no despegas: ya no es potencia.',
+    easier: 'El mismo salto sin peso.',
+    harder: 'Un poco más de peso, solo si saltas casi igual de alto.',
+    safety: 'Nunca con una barra sobre la espalda.' }),
+  X({ id: 'g-jalon-alto', name: 'Jalón alto desde colgado', pat: 'salto', need: 'barra', tier: 3, unit: 'kg', body: 'Cadera, piernas y espalda',
+    why: 'Viene de la halterofilia: extiendes cadera, rodillas y tobillos con fuerza y rapidez, como en el despegue.',
+    how: ['De pie con la barra a la mitad del muslo, manos un poco más abiertas que la cadera, espalda recta.', 'Extiende piernas y cadera de golpe y sube en puntas.', 'La barra sube pegada al cuerpo y los codos van altos, hasta el pecho.', 'Baja controlado a la mitad del muslo.'],
+    cues: ['La cadera empuja, los brazos solo guían', 'Barra pegada al cuerpo'],
+    err: 'Jalar con los brazos antes de extender la cadera.',
+    easier: 'Salto con mancuernas ligeras.',
+    harder: 'Más peso, solo con un instructor que revise tu técnica.',
+    safety: 'Solo si un instructor ya revisó tu técnica. Peso ligero y técnica perfecta.' }),
+  X({ id: 'g-lanz-arriba', name: 'Lanzamiento de balón medicinal por arriba', pat: 'lanzamiento', need: 'balon', tier: 1, unit: 'kg', body: 'Tronco, hombros y piernas',
+    why: 'Une piernas, tronco y brazos, como en el remate y el saque.',
+    how: ['De frente a una pared, a 2 o 3 metros, con un balón de 2 a 4 kg sobre la cabeza.', 'Da un paso y lánzalo con todo el cuerpo contra la pared, como un saque de banda de fútbol.', 'Atrapa el rebote o recógelo y vuelve a empezar.'],
+    cues: ['El tronco arranca, los brazos terminan', 'Cada lanzamiento al máximo'],
+    err: 'Lanzar solo con los brazos, sin meter el tronco.',
+    easier: 'Balón más ligero, o de rodillas.',
+    harder: 'Balón un poco más pesado, sin perder velocidad.' }),
+  X({ id: 'g-lanz-giro', name: 'Lanzamiento con giro', pat: 'lanzamiento', need: 'balon', tier: 1, unit: 'kg', side: true, body: 'Tronco y cadera',
+    why: 'Potencia de rotación: es la que hace que el remate y el saque salgan rápidos.',
+    how: ['De lado a la pared, a 1 o 2 metros, con el balón a la altura de la cadera.', 'Gira la cadera y luego el pecho, y lanza el balón contra la pared.', 'Atrapa, acomódate y repite. Luego cambia de lado.'],
+    cues: ['La cadera gira primero', 'Brazos casi estirados'],
+    err: 'Girar solo los brazos y dejar la cadera quieta.',
+    easier: 'Balón más ligero y más cerca de la pared.',
+    harder: 'Da un paso al lanzar.' }),
+  X({ id: 'g-slam', name: 'Golpe al piso con balón medicinal', pat: 'lanzamiento', need: 'balon', tier: 1, unit: 'kg', body: 'Tronco y hombros',
+    why: 'Potencia de arriba hacia abajo, como el brazo del remate.',
+    how: ['De pie, con el balón arriba de la cabeza y en puntas.', 'Azótalo contra el piso frente a tus pies doblando la cadera.', 'Recógelo con la espalda recta y repite.'],
+    cues: ['Estírate alto antes de lanzar', 'Golpea con todo el cuerpo'],
+    err: 'Encorvar la espalda al recoger el balón.',
+    easier: 'Balón más ligero.',
+    harder: 'Menos tiempo entre repeticiones, sin perder la postura.',
+    safety: 'Usa un balón que no rebote fuerte hacia tu cara.' }),
+  X({ id: 'g-skater', name: 'Salto lateral de patinador', pat: 'lateral', need: 'nada', tier: 1, unit: 'saltos', side: true, body: 'Piernas y cadera',
+    why: 'Fuerza para empujar y frenar de lado, como al desplazarte al bloqueo o a defender.',
+    how: ['Párate en una pierna.', 'Salta de lado hacia la otra pierna y aterriza en ella.', 'Quédate quieto 1 segundo y regresa.'],
+    cues: ['Rodilla sobre el pie al aterrizar', 'Pausa de 1 segundo'],
+    err: 'Aterrizar con la rodilla hacia adentro.',
+    easier: 'Saltos más cortos, apoyando la otra punta al caer.',
+    harder: 'Más distancia y rebote más rápido, sin pausa.' }),
+  X({ id: 'g-aterrizaje', name: 'Caída desde escalón', pat: 'aterrizaje', need: 'cajon', tier: 1, unit: 'saltos', body: 'Rodillas y tobillos',
+    why: 'Aprender a frenar bien protege tus rodillas y tobillos. Practicar el aterrizaje es parte de los programas que bajan las lesiones de rodilla en jóvenes.',
+    how: ['Súbete a un escalón o cajón de 20 a 30 cm.', 'Da un paso al frente (no saltes) y cae con los dos pies.', 'Rodillas dobladas y sobre los pies, cadera atrás y pecho al frente.', 'Quédate quieto 2 segundos.'],
+    cues: ['Silencio al caer', 'Rodillas hacia afuera, nunca hacia adentro'],
+    err: 'Caer con las piernas rígidas o con las rodillas juntándose.',
+    easier: 'Desde un escalón más bajo.',
+    harder: 'Cae en una sola pierna, desde un escalón bajo.' }),
+
+  // ---------- sentadilla y rodilla ----------
+  X({ id: 'g-sent-trasera', name: 'Sentadilla con barra', pat: 'rodilla', need: 'barra', tier: 3, unit: 'kg', body: 'Piernas, glúteos y tronco',
+    why: 'El ejercicio rey de fuerza de piernas: más fuerza para empujar el piso en cada salto.',
+    how: ['En el rack, barra sobre la parte alta de la espalda (no en el cuello), manos firmes.', 'Saca la barra, pies al ancho de hombros, puntas un poco afuera.', 'Baja con el pecho arriba hasta que el muslo quede paralelo al piso, o un poco más si lo controlas.', 'Sube empujando el piso con todo el pie.'],
+    cues: ['Rodillas en la dirección de los pies', 'Espalda neutra, mirada al frente'],
+    err: 'Que se te levanten los talones o se te redondee la espalda abajo.',
+    easier: 'Sentadilla frontal o goblet.',
+    harder: 'Pausa de 2 segundos abajo, con el mismo peso.',
+    safety: 'Siempre dentro del rack con las barras de seguridad a la altura correcta, o con alguien que te cuide. Seguros en la barra.' }),
+  X({ id: 'g-sent-frontal', name: 'Sentadilla frontal con barra', pat: 'rodilla', need: 'barra', tier: 2, unit: 'kg', body: 'Piernas y tronco',
+    why: 'Fuerza de piernas con el tronco más derecho: cuida la espalda baja y te obliga a una buena postura.',
+    how: ['Barra apoyada al frente sobre los hombros, codos altos (o brazos cruzados).', 'Pies al ancho de hombros.', 'Baja con el pecho alto y los codos arriba.', 'Sube empujando el piso.'],
+    cues: ['Codos altos todo el tiempo', 'Rodillas sobre los pies'],
+    err: 'Bajar los codos: la barra se va al frente.',
+    easier: 'Sentadilla goblet.',
+    harder: 'Pausa de 2 segundos abajo.',
+    safety: 'Dentro del rack con barras de seguridad. Si pierdes la barra, suéltala al frente y da un paso atrás.' }),
+  X({ id: 'g-goblet', name: 'Sentadilla goblet', pat: 'rodilla', need: 'mancuerna', tier: 1, unit: 'kg', body: 'Piernas y glúteos',
+    why: 'La mejor forma de aprender sentadilla con peso: la mancuerna al pecho te mantiene derecho.',
+    how: ['Sostén una mancuerna vertical pegada al pecho, con las dos manos.', 'Pies un poco más abiertos que los hombros.', 'Baja entre las rodillas con el pecho alto.', 'Sube empujando el piso.'],
+    cues: ['Codos por dentro de las rodillas al bajar', 'Talones en el piso'],
+    err: 'Inclinarte al frente y despegar los talones.',
+    easier: 'Sentadilla a un banco, con menos peso.',
+    harder: 'Más peso, o 3 segundos al bajar.' }),
+  X({ id: 'g-prensa', name: 'Prensa de piernas', pat: 'rodilla', need: 'maquina', tier: 1, unit: 'kg', body: 'Piernas',
+    why: 'Fuerza de piernas con la espalda apoyada: puedes cargar sin preocuparte del equilibrio.',
+    how: ['Espalda y cadera pegadas al respaldo; pies al ancho de hombros, a media plataforma.', 'Quita los seguros y baja hasta que las rodillas lleguen a unos 90 grados.', 'Empuja sin bloquear las rodillas al final.'],
+    cues: ['La cadera no se despega del asiento', 'No bloquees las rodillas'],
+    err: 'Bajar tanto que la cadera se levanta del asiento.',
+    easier: 'Menos peso y menos recorrido.',
+    harder: 'Una pierna a la vez, con menos peso.',
+    safety: 'Pon los seguros de la máquina al terminar.' }),
+  X({ id: 'g-sent-espanola', name: 'Sentadilla española (sostenida)', pat: 'rodilla', need: 'liga', tier: 1, unit: 's', body: 'Tendón de la rodilla',
+    why: 'Fortalece el tendón de abajo de la rodilla, el que más sufre con muchos saltos («rodilla del saltador»), sin impacto.',
+    how: ['Amarra una liga fuerte a algo fijo y pásala por detrás de tus rodillas.', 'Echa la cadera atrás y baja a media sentadilla con las espinillas verticales; la liga te sostiene.', 'Quédate quieto el tiempo indicado.'],
+    cues: ['Espinillas verticales', 'Siente el trabajo arriba de la rodilla'],
+    err: 'Dejar que las rodillas se vayan al frente.',
+    easier: 'Menos profundo y menos tiempo.',
+    harder: 'Más profundo o más tiempo.',
+    safety: 'Si ya te duele la rodilla, pregúntale primero a tu entrenador o a un fisioterapeuta.' }),
+
+  // ---------- cadera y glúteo ----------
+  X({ id: 'g-hex', name: 'Peso muerto con barra hexagonal', pat: 'cadera', need: 'barra', tier: 2, unit: 'kg', body: 'Glúteos, piernas y espalda',
+    why: 'Mucha fuerza de cadera y piernas con una postura más fácil que el peso muerto con barra recta.',
+    how: ['Párate en medio de la barra hexagonal, pies al ancho de cadera.', 'Baja la cadera, toma las agarraderas y pon la espalda recta, pecho arriba.', 'Empuja el piso y párate derecho apretando glúteos.', 'Baja controlado por el mismo camino.'],
+    cues: ['Espalda recta de principio a fin', 'Empuja el piso, no jales con la espalda'],
+    err: 'Redondear la espalda al despegar la barra.',
+    easier: 'Peso muerto rumano con mancuernas.',
+    harder: 'Pausa de 1 segundo justo después de despegar.',
+    safety: 'Si tu gym no tiene barra hexagonal, usa el peso muerto rumano.' }),
+  X({ id: 'g-rumano-barra', name: 'Peso muerto rumano con barra', pat: 'cadera', need: 'barra', tier: 2, unit: 'kg', body: 'Isquiotibiales y glúteos',
+    why: 'Fortalece la parte de atrás del muslo y la cadera, que dan potencia al salto y cuidan la rodilla.',
+    how: ['De pie con la barra a la altura de la cadera, rodillas un poco dobladas.', 'Lleva la cadera atrás y baja la barra pegada a los muslos.', 'Baja hasta un poco abajo de la rodilla o hasta sentir el estirón atrás, sin redondear la espalda.', 'Regresa empujando la cadera al frente.'],
+    cues: ['Cadera atrás, como si cerraras una puerta con la cola', 'Barra pegada a las piernas'],
+    err: 'Doblar mucho las rodillas (se vuelve sentadilla) o redondear la espalda.',
+    easier: 'Con mancuernas y menos recorrido.',
+    harder: 'Bajada de 3 segundos.' }),
+  X({ id: 'g-rumano-mancuernas', name: 'Peso muerto rumano con mancuernas', pat: 'cadera', need: 'mancuerna', tier: 1, unit: 'kg', each: true, body: 'Isquiotibiales y glúteos',
+    why: 'La versión para aprender la bisagra de cadera: atrás del muslo y glúteos fuertes para saltar y frenar.',
+    how: ['Una mancuerna en cada mano frente a los muslos, rodillas un poco dobladas.', 'Lleva la cadera atrás y baja las mancuernas pegadas a las piernas.', 'Baja hasta sentir el estirón atrás del muslo, con la espalda recta.', 'Regresa empujando la cadera al frente.'],
+    cues: ['Cadera atrás', 'Espalda recta'],
+    err: 'Redondear la espalda para bajar más.',
+    easier: 'Menos recorrido, hasta las rodillas.',
+    harder: 'Peso muerto rumano con barra o a una pierna.' }),
+  X({ id: 'g-hipthrust', name: 'Empuje de cadera con barra (hip thrust)', pat: 'gluteo', need: 'barra', tier: 1, unit: 'kg', body: 'Glúteos',
+    why: 'Glúteos fuertes: más potencia en el salto y rodillas mejor protegidas.',
+    how: ['Espalda alta apoyada en un banco, barra sobre la cadera con un cojín.', 'Pies apoyados al ancho de la cadera, rodillas dobladas.', 'Sube la cadera hasta formar una mesa de hombros a rodillas y aprieta 1 segundo.', 'Baja controlado.'],
+    cues: ['Barbilla abajo, costillas abajo', 'Aprieta glúteos arriba'],
+    err: 'Arquear la espalda baja en lugar de subir con la cadera.',
+    easier: 'Con una mancuerna o sin peso.',
+    harder: 'Pausa de 2 segundos arriba, o a una pierna.' }),
+  X({ id: 'g-hipthrust-m', name: 'Empuje de cadera con mancuerna', pat: 'gluteo', need: 'mancuerna', tier: 1, unit: 'kg', body: 'Glúteos',
+    why: 'Glúteos fuertes con poco equipo: potencia para el salto y rodillas más estables.',
+    how: ['Espalda alta apoyada en un banco, una mancuerna sobre la cadera (detenla con las manos).', 'Pies apoyados, rodillas dobladas.', 'Sube la cadera, aprieta 1 segundo y baja lento.'],
+    cues: ['Costillas abajo', 'Aprieta arriba'],
+    err: 'Subir arqueando la espalda.',
+    easier: 'Sin peso, en el piso (puente de glúteo).',
+    harder: 'A una pierna.' }),
+
+  // ---------- una pierna ----------
+  X({ id: 'g-bulgara', name: 'Sentadilla búlgara', pat: 'unipodal', need: 'mancuerna', tier: 2, unit: 'kg', each: true, side: true, body: 'Piernas y glúteos',
+    why: 'Fuerza de una pierna: en la cancha casi todo se hace cargando más una pierna que la otra.',
+    how: ['Pie de atrás apoyado en un banco, pie de adelante un paso largo al frente.', 'Una mancuerna en cada mano.', 'Baja recto hasta que la rodilla de atrás casi toque el piso.', 'Sube empujando con la pierna de adelante.'],
+    cues: ['Rodilla de adelante sobre el pie', 'Tronco un poco al frente'],
+    err: 'Pie de adelante muy cerca del banco: se te despega el talón.',
+    easier: 'Zancada hacia atrás, o sin peso.',
+    harder: 'Más peso, o 3 segundos al bajar.' }),
+  X({ id: 'g-subida', name: 'Subida al cajón con mancuernas', pat: 'unipodal', need: 'cajon', tier: 1, unit: 'kg', each: true, side: true, body: 'Piernas y glúteos',
+    why: 'Fuerza de una pierna con poca carga para la rodilla, parecida al último paso de la aproximación.',
+    how: ['Cajón o banco firme a la altura de tu rodilla.', 'Pie completo arriba; sube empujando con esa pierna, sin impulsarte con la de abajo.', 'Baja lento con la misma pierna.'],
+    cues: ['Empuja con el talón de arriba', 'Rodilla sobre el pie'],
+    err: 'Impulsarte con la pierna de abajo.',
+    easier: 'Cajón más bajo o sin peso.',
+    harder: 'Cajón un poco más alto o más peso.' }),
+  X({ id: 'g-zancada', name: 'Zancada hacia atrás con mancuernas', pat: 'unipodal', need: 'mancuerna', tier: 1, unit: 'kg', each: true, side: true, body: 'Piernas y glúteos',
+    why: 'Fuerza y equilibrio de una pierna, con frenado controlado como al llegar a la red.',
+    how: ['De pie con una mancuerna en cada mano.', 'Da un paso largo hacia atrás y baja hasta que la rodilla de atrás casi toque el piso.', 'Regresa empujando con la pierna de adelante.'],
+    cues: ['Tronco erguido', 'Rodilla de adelante sobre el pie'],
+    err: 'Que la rodilla de adelante se vaya hacia adentro.',
+    easier: 'Sin peso, apoyándote en algo.',
+    harder: 'Sentadilla búlgara.' }),
+  X({ id: 'g-rumano-1', name: 'Peso muerto rumano a una pierna', pat: 'unipodal', need: 'mancuerna', tier: 2, unit: 'kg', side: true, body: 'Isquiotibiales, glúteo y tobillo',
+    why: 'Atrás del muslo, glúteo y equilibrio del tobillo al mismo tiempo.',
+    how: ['Una mancuerna en la mano contraria a la pierna de apoyo.', 'Inclínate al frente llevando la otra pierna atrás, en línea con el tronco.', 'Baja hasta sentir el estirón y regresa apretando el glúteo.'],
+    cues: ['Cadera nivelada, no la abras', 'Rodilla de apoyo un poco doblada'],
+    err: 'Girar la cadera hacia afuera.',
+    easier: 'Sin peso, tocando la pared con una mano.',
+    harder: 'Más peso o pausa abajo.' }),
+
+  // ---------- isquiotibiales ----------
+  X({ id: 'g-nordico', name: 'Nórdico de isquiotibiales', pat: 'isquios', need: 'nada', tier: 2, unit: 'pc', body: 'Parte de atrás del muslo',
+    why: 'Los programas que incluyen el nórdico bajaron cerca de la mitad las lesiones de isquiotibiales en varios deportes.',
+    how: ['De rodillas sobre un tapete; un compañero te sujeta los talones (o mételos bajo algo firme).', 'Cuerpo recto de rodillas a cabeza.', 'Déjate caer al frente lo más lento que puedas, frenando con la parte de atrás del muslo.', 'Cuando ya no aguantes, cae con las manos y empújate para regresar.'],
+    cues: ['Cadera estirada, no te dobles', 'Lo más lento posible'],
+    err: 'Doblar la cadera para no caer.',
+    easier: 'Recorrido corto, o con una liga en el pecho que te ayude.',
+    harder: 'Bajar más y más lento.',
+    dose: { nuevo: [2, '3-4'], medio: [2, '4-5'], avanzado: [3, '5-6'] },
+    safety: 'Las primeras veces deja agujetas fuertes: empieza con pocas.' }),
+  X({ id: 'g-curl-femoral', name: 'Curl femoral en máquina', pat: 'isquios', need: 'maquina', tier: 1, unit: 'kg', body: 'Parte de atrás del muslo',
+    why: 'Isquiotibiales fuertes protegen la rodilla y aguantan los arranques y frenos.',
+    how: ['Acomoda la máquina para que la rodilla quede alineada con el eje.', 'Dobla las rodillas llevando los talones hacia la cadera.', 'Regresa lento en 3 segundos.'],
+    cues: ['Regreso lento', 'Cadera pegada al asiento'],
+    err: 'Levantar la cadera para ayudarte.',
+    easier: 'Menos peso.',
+    harder: 'A una pierna.' }),
+  X({ id: 'g-puente-1', name: 'Puente de isquios a una pierna', pat: 'isquios', need: 'cajon', tier: 1, unit: 'pc', side: true, body: 'Isquiotibiales y glúteos',
+    why: 'Atrás del muslo y glúteo sin máquinas.',
+    how: ['Acostado boca arriba, un talón sobre un banco y la otra pierna arriba.', 'Sube la cadera empujando con el talón.', 'Baja lento.'],
+    cues: ['Empuja con el talón', 'Cadera nivelada'],
+    err: 'Empujar con la espalda baja.',
+    easier: 'Con los dos talones en el banco.',
+    harder: 'Pausa de 2 segundos arriba.' }),
+
+  // ---------- pantorrilla, tobillo y aductores ----------
+  X({ id: 'g-talones-pie', name: 'Elevación de talones de pie', pat: 'pantorrilla', need: 'mancuerna', tier: 1, unit: 'kg', body: 'Pantorrilla y tendón de Aquiles',
+    why: 'Pantorrillas y tendón de Aquiles fuertes aguantan cientos de saltos por semana.',
+    how: ['Puntas en el borde de un escalón, una mancuerna en la mano (o en la máquina de pantorrilla).', 'Sube lo más alto que puedas.', 'Baja lento en 3 segundos hasta sentir el estirón.'],
+    cues: ['Sube alto, baja despacio', 'Sin rebotar'],
+    err: 'Rebotar abajo.',
+    easier: 'Sin peso, con las dos piernas.',
+    harder: 'A una pierna con peso.' }),
+  X({ id: 'g-talones-sentado', name: 'Elevación de talones sentado', pat: 'pantorrilla', need: 'mancuerna', tier: 1, unit: 'kg', body: 'Sóleo (pantorrilla)',
+    why: 'Trabaja el sóleo, el músculo de la pantorrilla que más carga al aterrizar y al correr.',
+    how: ['Sentado, puntas sobre un disco o escalón, mancuernas sobre las rodillas (o en la máquina).', 'Sube los talones lo más alto que puedas.', 'Baja lento.'],
+    cues: ['Rodillas a 90 grados', 'Pausa arriba'],
+    err: 'Rebotar.',
+    easier: 'Menos peso.',
+    harder: 'Pausa de 2 segundos arriba.' }),
+  X({ id: 'g-tibial', name: 'Elevación de puntas contra la pared', pat: 'pantorrilla', need: 'nada', tier: 1, unit: 'pc', body: 'Frente de la espinilla',
+    why: 'Fortalece el frente de la espinilla: ayuda al tobillo a frenar.',
+    how: ['Espalda apoyada en la pared, talones a un pie de distancia.', 'Sube las puntas de los pies lo más alto que puedas.', 'Baja lento.'],
+    cues: ['Talones en el piso', 'Sube y baja controlado'],
+    err: 'Despegar la espalda de la pared.',
+    easier: 'Pies más cerca de la pared.',
+    harder: 'Pies más lejos de la pared.' }),
+  X({ id: 'g-copenhague', name: 'Plancha Copenhague', pat: 'aductor', need: 'cajon', tier: 2, unit: 's', side: true, body: 'Aductores (parte interna del muslo)',
+    why: 'Aductores fuertes para frenar y cambiar de dirección. En otros deportes se usa para prevenir lesiones de ingle.',
+    how: ['Plancha lateral con el antebrazo en el piso.', 'La pierna de arriba apoyada en un banco (rodilla o tobillo) y la de abajo libre.', 'Sube la cadera y aguanta el tiempo indicado.'],
+    cues: ['Cuerpo recto', 'Empuja el banco con la pierna de arriba'],
+    err: 'Dejar caer la cadera.',
+    easier: 'Rodilla en el banco en lugar del tobillo.',
+    harder: 'Tobillo en el banco y mueve la pierna de abajo.' }),
+
+  // ---------- empuje ----------
+  X({ id: 'g-press-banca', name: 'Press de banca con barra', pat: 'empuje', need: 'barra', tier: 2, unit: 'kg', body: 'Pecho, hombros y brazos',
+    why: 'Fuerza de pecho y brazos para defender, caer al piso y equilibrar todo lo que jalas.',
+    how: ['Acostado en el banco, ojos debajo de la barra, pies firmes en el piso.', 'Manos un poco más abiertas que los hombros; junta los omóplatos.', 'Baja la barra al pecho con los codos a unos 45 grados del cuerpo.', 'Empuja hasta estirar los brazos.'],
+    cues: ['Omóplatos juntos y abajo', 'Codos a 45 grados, no abiertos'],
+    err: 'Rebotar la barra en el pecho o despegar la cadera.',
+    easier: 'Press de pecho con mancuernas.',
+    harder: 'Pausa de 1 segundo en el pecho.',
+    safety: 'Siempre con alguien que te cuide o en un rack con barras de seguridad.' }),
+  X({ id: 'g-press-mancuernas', name: 'Press de pecho con mancuernas', pat: 'empuje', need: 'mancuerna', tier: 1, unit: 'kg', each: true, body: 'Pecho, hombros y brazos',
+    why: 'Fuerza de empuje con cada brazo trabajando por su lado: equilibra el brazo fuerte y el débil.',
+    how: ['Acostado en el banco, una mancuerna en cada mano a la altura del pecho.', 'Empuja hacia arriba hasta estirar los brazos.', 'Baja controlado con los codos a unos 45 grados.'],
+    cues: ['Omóplatos juntos', 'Bajada controlada'],
+    err: 'Abrir los codos en cruz.',
+    easier: 'Menos peso o lagartijas.',
+    harder: 'Más peso o pausa abajo.' }),
+  X({ id: 'g-landmine', name: 'Press landmine a un brazo', pat: 'empuje', need: 'barra', tier: 2, unit: 'kg', side: true, body: 'Hombro, pecho y tronco',
+    why: 'Empujar hacia arriba en diagonal: fuerza de hombro sin forzarlo, cerca del ángulo del remate.',
+    how: ['Una punta de la barra en el piso (en una esquina o en su soporte); el peso va en la otra punta.', 'Hincado en una rodilla, toma la punta con peso a la altura del hombro.', 'Empuja hacia arriba y al frente hasta estirar el brazo.', 'Baja controlado.'],
+    cues: ['Tronco firme, no te inclines', 'Termina con el brazo estirado'],
+    err: 'Arquear la espalda para empujar.',
+    easier: 'Solo la barra, sin discos.',
+    harder: 'De pie, o con más peso.' }),
+  X({ id: 'g-lagartija', name: 'Lagartijas con pausa', pat: 'empuje', need: 'nada', tier: 1, unit: 'pc', body: 'Pecho, brazos y tronco',
+    why: 'Fuerza de brazos y tronco con tu peso; te prepara para caer al piso en defensa.',
+    how: ['Manos un poco más abiertas que los hombros, cuerpo recto.', 'Baja el pecho casi al piso y quédate 1 segundo.', 'Sube empujando el piso.'],
+    cues: ['Cuerpo como tabla', 'Pausa de 1 segundo abajo'],
+    err: 'Dejar caer la cadera.',
+    easier: 'Manos en un banco.',
+    harder: 'Pies en un banco.' }),
+  X({ id: 'g-press-hombro-m', name: 'Press de hombro con mancuernas', pat: 'empuje', need: 'mancuerna', tier: 2, unit: 'kg', each: true, body: 'Hombros y brazos',
+    why: 'Fuerza con los brazos arriba de la cabeza, para el bloqueo y la colocación.',
+    how: ['Sentado con respaldo, mancuernas a la altura de los hombros.', 'Empuja hacia arriba hasta casi estirar los brazos.', 'Baja controlado.'],
+    cues: ['Costillas abajo, no arquees', 'Codos un poco al frente'],
+    err: 'Arquear la espalda baja.',
+    easier: 'Press landmine o menos peso.',
+    harder: 'De pie.',
+    safety: 'Si rematas mucho en la cancha o te molesta el hombro, prefiere el press landmine.' }),
+
+  // ---------- jalón y remo ----------
+  X({ id: 'g-dominada', name: 'Dominadas', pat: 'jalon', need: 'barra', tier: 2, unit: 'pc', body: 'Espalda y brazos',
+    why: 'Una espalda fuerte equilibra el hombro que remata y lo protege.',
+    how: ['Cuélgate de la barra fija con las palmas al frente, manos un poco más abiertas que los hombros.', 'Baja los hombros y sube hasta que la barbilla pase la barra.', 'Baja controlado hasta estirar los brazos.'],
+    cues: ['Primero bajan los hombros, luego jalan los brazos', 'Sin columpiarte'],
+    err: 'Columpiarse o hacer medias repeticiones.',
+    easier: 'Con una liga en los pies o en la máquina asistida.',
+    harder: 'Bajada de 3 segundos.' }),
+  X({ id: 'g-remo-1', name: 'Remo con mancuerna a un brazo', pat: 'jalon', need: 'mancuerna', tier: 1, unit: 'kg', side: true, body: 'Espalda y brazos',
+    why: 'Espalda alta fuerte para un hombro estable y una buena postura en recepción.',
+    how: ['Rodilla y mano del mismo lado apoyadas en un banco, espalda recta.', 'Jala la mancuerna hacia la cadera, codo pegado.', 'Baja lento hasta estirar el brazo.'],
+    cues: ['Lleva el codo a la bolsa del pantalón', 'Sin girar el tronco'],
+    err: 'Girar el cuerpo para subir el peso.',
+    easier: 'Menos peso.',
+    harder: 'Pausa de 1 segundo arriba.' }),
+  X({ id: 'g-jalon-polea', name: 'Jalón al pecho en polea', pat: 'jalon', need: 'polea', tier: 1, unit: 'kg', body: 'Espalda y brazos',
+    why: 'Fuerza de espalda para equilibrar el hombro del remate.',
+    how: ['Sentado, muslos bajo los soportes, manos un poco más abiertas que los hombros.', 'Baja los hombros y jala la barra hacia la parte alta del pecho.', 'Regresa lento hasta estirar los brazos.'],
+    cues: ['Pecho al frente', 'Sin echarte para atrás'],
+    err: 'Jalar detrás de la nuca.',
+    easier: 'Menos peso.',
+    harder: 'Dominadas.' }),
+  X({ id: 'g-remo-invertido', name: 'Remo invertido', pat: 'jalon', need: 'barra', tier: 1, unit: 'pc', body: 'Espalda y brazos',
+    why: 'Jalón con tu peso: espalda y omóplatos fuertes.',
+    how: ['Barra del rack a la altura de la cadera (o correas tipo TRX).', 'Cuélgate debajo con el cuerpo recto y talones en el piso.', 'Jala el pecho hacia la barra y baja lento.'],
+    cues: ['Cuerpo recto', 'Junta los omóplatos arriba'],
+    err: 'Dejar caer la cadera.',
+    easier: 'Barra más alta (cuerpo más vertical).',
+    harder: 'Barra más baja o pies en un banco.' }),
+
+  // ---------- hombro sano ----------
+  X({ id: 'g-re-liga', name: 'Rotación externa de hombro con liga', pat: 'hombro', need: 'liga', tier: 1, unit: 'pc', side: true, body: 'Manguito rotador',
+    why: 'Los músculos de atrás del hombro frenan el brazo después de cada remate y saque. Fuertes, cuidan tu hombro.',
+    how: ['Liga amarrada a la altura del codo; párate de lado.', 'Codo pegado al cuerpo y doblado a 90 grados (una toalla enrollada entre el codo y el costado ayuda).', 'Gira el antebrazo hacia afuera sin despegar el codo.', 'Regresa lento en 3 segundos.'],
+    cues: ['Codo pegado', 'Regreso lento'],
+    err: 'Despegar el codo o girar el cuerpo.',
+    easier: 'Liga más suave.',
+    harder: 'Rotación externa a 90 grados.' }),
+  X({ id: 'g-re-90', name: 'Rotación externa a 90 grados', pat: 'hombro', need: 'liga', tier: 2, unit: 'pc', side: true, body: 'Manguito rotador',
+    why: 'Fortalece el hombro justo en la posición del remate y del saque, frenando el brazo como en la cancha.',
+    how: ['Liga al frente a la altura del hombro.', 'Brazo arriba: codo a la altura del hombro y doblado a 90 grados.', 'Gira el antebrazo hacia atrás hasta que quede vertical.', 'Regresa muy lento, en 3 o 4 segundos.'],
+    cues: ['Codo quieto a la altura del hombro', 'El regreso lento es lo importante'],
+    err: 'Bajar el codo o arquear la espalda.',
+    easier: 'Rotación externa con el codo pegado.',
+    harder: 'Liga más fuerte, mismo regreso lento.' }),
+  X({ id: 'g-ytw', name: 'Y, T y W en banco inclinado', pat: 'hombro', need: 'mancuerna', tier: 1, unit: 'kg', each: true, body: 'Hombro y omóplatos',
+    why: 'Fortalece la parte de atrás del hombro y los músculos que mueven el omóplato.',
+    how: ['Boca abajo en un banco inclinado, mancuernas de 1 a 3 kg.', 'Y: brazos al frente en forma de Y; súbelos y baja.', 'T: brazos a los lados en cruz; súbelos y baja.', 'W: codos doblados; junta los omóplatos y sube.'],
+    cues: ['Pulgares hacia arriba', 'Lento, sin balanceo'],
+    err: 'Usar tanto peso que te balanceas.',
+    easier: 'Sin peso.',
+    harder: 'Pausa de 2 segundos arriba.' }),
+  X({ id: 'g-face-pull', name: 'Jalón a la cara (face pull)', pat: 'hombro', need: 'liga', tier: 1, unit: 'pc', body: 'Hombro de atrás y omóplatos',
+    why: 'Equilibra todo el trabajo de pecho y de remate con la parte de atrás del hombro.',
+    how: ['Polea con cuerda (o liga) a la altura de la cara.', 'Jala hacia la frente separando las manos y abriendo los codos.', 'Termina con los puños a los lados de la cabeza y regresa lento.'],
+    cues: ['Codos altos', 'Junta los omóplatos'],
+    err: 'Jalar con la espalda baja echándote atrás.',
+    easier: 'Menos peso.',
+    harder: 'Pausa de 2 segundos atrás.' }),
+  X({ id: 'g-serrato', name: 'Lagartija plus', pat: 'hombro', need: 'nada', tier: 1, unit: 'pc', body: 'Serrato y omóplatos',
+    why: 'Fortalece el serrato, el músculo que pega el omóplato a las costillas y ayuda a que el hombro trabaje bien arriba de la cabeza.',
+    how: ['Posición de plancha con los brazos estirados.', 'Sin doblar los codos, deja que el pecho baje juntando los omóplatos.', 'Empuja el piso separando los omóplatos lo más que puedas.'],
+    cues: ['Codos estirados', 'Empuja el piso lejos'],
+    err: 'Doblar los codos (se vuelve lagartija).',
+    easier: 'Con las rodillas apoyadas.',
+    harder: 'Pausa de 2 segundos arriba.' }),
+
+  // ---------- tronco ----------
+  X({ id: 'g-pallof', name: 'Press Pallof (antirrotación)', pat: 'tronco', need: 'liga', tier: 1, unit: 'pc', side: true, body: 'Abdomen y costados',
+    why: 'Un tronco que no se tuerce cuando no quieres: base firme para recibir, colocar y aterrizar.',
+    how: ['De lado a la polea (o a una liga), tómala con las dos manos frente al pecho.', 'Empuja las manos al frente hasta estirar los brazos sin dejar que el cuerpo gire.', 'Aguanta 2 segundos y regresa.'],
+    cues: ['Cadera y hombros al frente', 'Respira normal'],
+    err: 'Dejar que la polea te gire.',
+    easier: 'Liga más suave o más cerca de la polea.',
+    harder: 'Hincado en una rodilla o con más peso.' }),
+  X({ id: 'g-lenador', name: 'Leñador en polea', pat: 'tronco', need: 'polea', tier: 2, unit: 'kg', side: true, body: 'Abdomen y cadera',
+    why: 'Rotación con control, de arriba hacia abajo, parecida al brazo del remate.',
+    how: ['Polea arriba a un lado; tómala con las dos manos.', 'Gira la cadera y el tronco y jala en diagonal hasta la rodilla contraria.', 'Regresa lento.'],
+    cues: ['Gira la cadera, no solo los brazos', 'Brazos casi estirados'],
+    err: 'Doblar la espalda en lugar de girar.',
+    easier: 'Menos peso.',
+    harder: 'Más velocidad al bajar y regreso lento.' }),
+  X({ id: 'g-plancha-lat', name: 'Plancha lateral', pat: 'tronco', need: 'nada', tier: 1, unit: 's', side: true, body: 'Costados y cadera',
+    why: 'Costados fuertes para aterrizar y cambiar de dirección sin que se te doble el cuerpo.',
+    how: ['De lado, apoyado en un antebrazo, piernas estiradas.', 'Sube la cadera hasta formar una línea recta.', 'Aguanta el tiempo indicado y cambia de lado.'],
+    cues: ['Cadera arriba', 'Hombro sobre el codo'],
+    err: 'Dejar caer la cadera.',
+    easier: 'Con las rodillas apoyadas.',
+    harder: 'Sube la pierna de arriba.' }),
+  X({ id: 'g-deadbug', name: 'Bicho muerto con mancuerna', pat: 'tronco', need: 'mancuerna', tier: 1, unit: 'pc', side: true, body: 'Abdomen',
+    why: 'Controlar el tronco mientras mueves brazos y piernas, como en cualquier jugada.',
+    how: ['Boca arriba, brazos al techo (con una mancuerna ligera entre las manos) y rodillas a 90 grados.', 'Estira una pierna hacia el piso sin despegar la espalda baja.', 'Regresa y cambia de pierna.'],
+    cues: ['Espalda baja pegada al piso', 'Exhala al estirar'],
+    err: 'Arquear la espalda al estirar la pierna.',
+    easier: 'Sin peso y con menos recorrido.',
+    harder: 'Estira brazo y pierna contrarios al mismo tiempo.' }),
+  X({ id: 'g-granjero', name: 'Caminata del granjero', pat: 'tronco', need: 'mancuerna', tier: 1, unit: 'kg', each: true, repsLabel: 'm', body: 'Tronco, agarre y hombros',
+    why: 'Tronco firme y agarre fuerte caminando derecho: postura sólida en toda la cancha.',
+    how: ['Una mancuerna pesada en cada mano.', 'Camina derecho, con pasos cortos, la distancia indicada.', 'Deja las mancuernas con la espalda recta.'],
+    cues: ['Hombros abajo y atrás', 'Camina alto'],
+    err: 'Encorvarte o balancearte.',
+    easier: 'Menos peso.',
+    harder: 'Una sola mancuerna (el tronco trabaja para no inclinarse).',
+    dose: { nuevo: [2, '20 m'], medio: [3, '30 m'], avanzado: [3, '30 m'] } }),
+  // ---------- v3.20: con tu peso (casa y cancha): calistenia y resistencia ----------
+  // home: no entran solos a las rutinas de gym; salen en casa y cancha, al cambiar de lugar el día, en el circuito exprés y al buscar.
+  X({ id: 'f-sent-pc', name: 'Sentadilla con tu peso', pat: 'rodilla', need: 'nada', tier: 1, unit: 'pc', home: true, slot: 'sq', adult: true, body: 'Piernas completas',
+    why: 'La sentadilla sin pesas, en casa o en la cancha. Con polainas o una mochila con libros se vuelve más pesada.',
+    how: ['Pies a la anchura de los hombros, puntas un poco hacia afuera.', 'Baja la cadera atrás y abajo hasta que los muslos queden paralelos al piso o más.', 'Sube empujando el piso.'],
+    cues: ['Rodillas sobre las puntas', 'Pecho alto'], err: 'Que las rodillas se vayan hacia adentro.', easier: 'Siéntate y párate de una silla.', harder: 'Baja en 3 segundos, pausa abajo o carga una mochila con peso.' }),
+  X({ id: 'f-zancada-atras', name: 'Zancada hacia atrás', pat: 'unipodal', need: 'nada', tier: 1, unit: 'pc', side: true, home: true, slot: 'uni', adult: true, body: 'Cuádriceps y glúteo',
+    why: 'Pierna a pierna, más amable con la rodilla que la zancada al frente.',
+    how: ['De pie, da un paso largo hacia atrás.', 'Baja hasta que la rodilla de atrás casi toque el piso.', 'Empuja con la pierna de adelante para regresar.'],
+    cues: ['Tronco alto', 'Rodilla de adelante sobre el pie'], err: 'Dar el paso muy corto y cargar la rodilla de adelante.', easier: 'Apóyate en una pared.', harder: 'Con mancuernas, polainas o una mochila.' }),
+  X({ id: 'g-pared', name: 'Sentadilla en la pared', pat: 'rodilla', need: 'nada', tier: 1, unit: 's', home: true, slot: 'quad', body: 'Cuádriceps',
+    why: 'Fuerza de cuádriceps sin moverte y sin cargar la espalda. Muy buena para rodillas que se quejan al saltar.',
+    how: ['Espalda pegada a la pared y pies un paso adelante, a la anchura de la cadera.', 'Baja deslizando la espalda hasta que los muslos queden casi paralelos al piso.', 'Quédate ahí el tiempo indicado, respirando normal.'],
+    cues: ['Rodillas sobre los tobillos', 'Espalda pegada'], err: 'Dejar que las rodillas se pasen mucho de los pies o se vayan hacia adentro.', easier: 'Baja menos (a media sentadilla).', harder: 'Más tiempo o sostén una mochila en las piernas.', safety: 'Si duele la rodilla (no el músculo), baja menos.' }),
+  X({ id: 'g-puente', name: 'Puente de glúteo', pat: 'gluteo', need: 'nada', tier: 1, unit: 'pc', home: true, slot: 'glute', body: 'Glúteos y femorales',
+    why: 'Despierta y fortalece el glúteo, el motor del salto, sin cargar la espalda.',
+    how: ['Acostado boca arriba, rodillas dobladas y pies apoyados cerca de la cadera.', 'Aprieta los glúteos y sube la cadera hasta que hombros, cadera y rodillas queden en línea.', 'Sostén 2 segundos arriba y baja despacio.'],
+    cues: ['Aprieta arriba', 'Costillas abajo, sin arquear'], err: 'Subir arqueando la espalda en lugar de apretar el glúteo.', easier: 'Sube menos y sin pausa.', harder: 'A una pierna (puente a una pierna) o con una mochila en la cadera.' }),
+  X({ id: 'g-talones-1', name: 'Elevación de talones a una pierna', pat: 'pantorrilla', need: 'nada', tier: 1, unit: 'pc', side: true, home: true, slot: 'calf', body: 'Pantorrilla y tobillo',
+    why: 'Pantorrilla fuerte y tobillo firme para saltar y caer sin torcerte.',
+    how: ['De pie en una pierna, en el piso o con la punta en un escalón. Apóyate con una mano en la pared.', 'Sube lo más alto que puedas sobre la punta.', 'Baja en 3 segundos.'],
+    cues: ['Sube alto', 'Baja lento'], err: 'Rebotar rápido sin control.', easier: 'Con las dos piernas.', harder: 'En un escalón (bajando el talón más abajo) o con mochila.' }),
+  X({ id: 'g-sentadilla-salto', name: 'Sentadilla con salto', pat: 'salto', need: 'nada', tier: 1, unit: 'saltos', home: true, slot: 'pow', body: 'Piernas completas',
+    why: 'Potencia de piernas en cualquier lugar: practicas despegar fuerte y caer suave.',
+    how: ['Pies a la anchura de los hombros.', 'Baja rápido a media sentadilla con los brazos atrás y salta lo más alto que puedas.', 'Cae suave, con las rodillas dobladas sobre los pies, acomódate y repite.'],
+    cues: ['Brazos arriba al saltar', 'Cae en silencio'], err: 'Caer con las piernas rígidas o con las rodillas hacia adentro.', easier: 'Saltos más bajitos o sentadilla sin salto.', harder: 'Más alto, quedándote quieto 2 segundos al caer.', safety: 'En piso que no resbale y con tenis.' }),
+  X({ id: 'g-lagartija-rodillas', name: 'Lagartijas con rodillas apoyadas', pat: 'empuje', need: 'nada', tier: 1, unit: 'pc', home: true, slot: 'hpush', body: 'Pecho, hombro y tríceps',
+    why: 'La forma de empezar con las lagartijas: el mismo movimiento con menos peso.',
+    how: ['Manos en el piso un poco más abiertas que los hombros y rodillas apoyadas.', 'Cuerpo recto de las rodillas a la cabeza.', 'Baja el pecho hasta casi tocar el piso y empuja hasta estirar los brazos.'],
+    cues: ['Cadera en línea', 'Codos a 45°'], err: 'Doblar la cadera y bajar solo la cabeza.', easier: 'Con las manos en una pared o en la orilla de una mesa.', harder: 'Lagartija completa (sobre las puntas).' }),
+  X({ id: 'g-lagartija-diamante', name: 'Lagartijas cerradas (diamante)', pat: 'empuje', need: 'nada', tier: 2, unit: 'pc', home: true, slot: 'tri', body: 'Tríceps y pecho',
+    why: 'Con las manos juntas trabaja más el tríceps, que extiende el brazo en el remate y el saque.',
+    how: ['Manos juntas debajo del pecho, con los pulgares y los índices formando un diamante.', 'Cuerpo recto como tabla.', 'Baja hasta que el pecho toque casi las manos, con los codos pegados, y empuja.'],
+    cues: ['Codos pegados al cuerpo', 'Abdomen firme'], err: 'Abrir los codos hacia los lados.', easier: 'Con las rodillas apoyadas o manos un poco más separadas.', harder: 'Pies en un escalón o bajada en 3 segundos.', safety: 'Si te molesta la muñeca, separa un poco las manos.' }),
+  X({ id: 'g-pike', name: 'Lagartija en pica', pat: 'empuje', need: 'nada', tier: 2, unit: 'pc', home: true, slot: 'vpush', body: 'Hombro y tríceps',
+    why: 'Empuje hacia arriba sin pesas: el hombro trabaja como en un press de hombro.',
+    how: ['Manos en el piso a la anchura de los hombros y cadera muy alta: tu cuerpo forma una «V» al revés.', 'Dobla los codos y baja la cabeza hacia el piso, entre las manos.', 'Empuja hasta estirar los brazos sin bajar la cadera.'],
+    cues: ['Cadera alta todo el tiempo', 'La cabeza va adelante de las manos'], err: 'Bajar la cadera y convertirla en lagartija normal.', easier: 'Baja menos o con las manos en un escalón.', harder: 'Pies en una silla (más peso sobre los hombros).', safety: 'Bájala controlado: nada de golpear la cabeza contra el piso.' }),
+  X({ id: 'g-remo-mesa', name: 'Remo bajo una mesa firme', pat: 'jalon', need: 'cajon', tier: 2, unit: 'pc', home: true, slot: 'row', body: 'Espalda y bíceps',
+    why: 'El remo para la espalda en casa, jalando tu propio peso.',
+    how: ['Acuéstate boca arriba debajo de una mesa muy firme y toma la orilla con las dos manos.', 'Cuerpo recto de los talones a la cabeza (o rodillas dobladas, más fácil).', 'Jala el pecho hacia la orilla llevando los codos atrás y baja despacio.'],
+    cues: ['Cuerpo como tabla', 'Codos hacia atrás'], err: 'Subir solo la cadera sin acercar el pecho.', easier: 'Rodillas dobladas y pies cerca.', harder: 'Piernas estiradas o pausa de 2 segundos arriba.', safety: 'Solo con una mesa pesada que no se mueva ni se voltee. Pruébala antes. Si dudas, usa una liga.' }),
+  X({ id: 'g-dominada-neg', name: 'Dominadas negativas', pat: 'jalon', need: 'barra', tier: 2, unit: 'pc', home: true, slot: 'vpull', body: 'Espalda y bíceps',
+    why: 'El camino a tu primera dominada: bajar despacio fortalece justo lo que te falta para subir.',
+    how: ['Súbete a una banca o salta hasta quedar con la barbilla arriba de la barra.', 'Baja lo más despacio que puedas (3 a 5 segundos) hasta estirar los brazos.', 'Vuelve a subir con la banca y repite.'],
+    cues: ['Baja contando 1, 2, 3, 4', 'Hombros lejos de las orejas'], err: 'Dejarte caer de golpe.', easier: 'Bajadas de 2 segundos o con liga.', harder: 'Bajadas de 6 a 8 segundos o una dominada completa al final.' }),
+  X({ id: 'g-plancha', name: 'Plancha frontal', pat: 'tronco', need: 'nada', tier: 1, unit: 's', home: true, slot: 'core', body: 'Abdomen y tronco',
+    why: 'Tronco firme para pasar la fuerza de las piernas a los brazos al saltar y rematar.',
+    how: ['Apoyado en antebrazos y puntas de los pies, codos debajo de los hombros.', 'Cuerpo recto de la cabeza a los talones: aprieta abdomen y glúteos.', 'Sostén el tiempo indicado respirando normal.'],
+    cues: ['Glúteos apretados', 'Mira al piso'], err: 'Dejar caer la cadera o subirla mucho.', easier: 'Con las rodillas apoyadas.', harder: 'Más tiempo o levanta un pie.' }),
+  X({ id: 'g-toques-hombro', name: 'Plancha con toques de hombro', pat: 'tronco', need: 'nada', tier: 2, unit: 'pc', side: true, home: true, slot: 'core', body: 'Abdomen, oblicuos y hombro',
+    why: 'Tronco que no se tuerce mientras los brazos se mueven, como en el remate.',
+    how: ['En plancha alta (brazos estirados), pies separados a la anchura de la cadera.', 'Toca el hombro contrario con una mano, sin mover la cadera.', 'Regresa y cambia de mano.'],
+    cues: ['Cadera quieta', 'Despacio'], err: 'Balancear la cadera de lado a lado.', easier: 'Pies más separados o rodillas apoyadas.', harder: 'Pies juntos o más lento.' }),
+  X({ id: 'g-hueco', name: 'Cuerpo hueco', pat: 'tronco', need: 'nada', tier: 2, unit: 's', home: true, slot: 'core', body: 'Abdomen',
+    why: 'El abdomen de los gimnastas: te enseña a mantener el tronco firme en el aire.',
+    how: ['Acostado boca arriba, pega la espalda baja al piso.', 'Sube un poco hombros y piernas estiradas, con los brazos hacia atrás junto a las orejas.', 'Sostén sin despegar la espalda baja.'],
+    cues: ['Espalda baja pegada', 'Respira'], err: 'Que la espalda baja se despegue y se arquee.', easier: 'Rodillas dobladas o brazos a los lados.', harder: 'Piernas más bajas o más tiempo.' }),
+  X({ id: 'g-superman', name: 'Superman', pat: 'tronco', need: 'nada', tier: 1, unit: 'pc', home: true, slot: 'core', body: 'Espalda baja y glúteos',
+    why: 'Fortalece la espalda baja, que trabaja en cada salto y en cada remate.',
+    how: ['Acostado boca abajo con los brazos estirados al frente.', 'Sube al mismo tiempo brazos, pecho y piernas unos centímetros.', 'Sostén 2 segundos arriba y baja despacio.'],
+    cues: ['Mira al piso', 'Sube poco y controlado'], err: 'Echar la cabeza hacia atrás o subir con impulso.', easier: 'Solo brazos o solo piernas.', harder: 'Sostén 5 segundos arriba.' }),
+  X({ id: 'g-escalador', name: 'Escaladores', pat: 'resist', need: 'nada', tier: 1, unit: 's', role: 'core', home: true, slot: 'core', body: 'Todo el cuerpo y cardio',
+    why: 'Sube el pulso y trabaja el abdomen al mismo tiempo. Ideal para un circuito en casa.',
+    how: ['En plancha alta, manos debajo de los hombros.', 'Lleva una rodilla hacia el pecho y regrésala mientras llevas la otra, como si corrieras.', 'Mantén la cadera baja todo el tiempo.'],
+    cues: ['Cadera abajo', 'Ritmo constante'], err: 'Subir la cadera muy alto.', easier: 'Más despacio, una pierna a la vez.', harder: 'Más rápido o más tiempo.' }),
+  X({ id: 'g-burpee', name: 'Burpees', pat: 'resist', need: 'nada', tier: 2, unit: 'pc', role: 'core', home: true, slot: 'core', body: 'Todo el cuerpo y cardio',
+    why: 'El ejercicio más completo con tu peso: piernas, brazos, tronco y pulso arriba.',
+    how: ['De pie, baja en cuclillas y pon las manos en el piso.', 'Lleva los pies atrás hasta quedar en plancha.', 'Regresa los pies a las manos, levántate y salta con los brazos arriba.'],
+    cues: ['Espalda recta en la plancha', 'Cae suave del salto'], err: 'Dejar caer la cadera en la plancha.', easier: 'Sin salto y llevando los pies atrás uno por uno.', harder: 'Con una lagartija en la plancha.', safety: 'Si te duele la espalda baja, hazlo sin salto y más despacio.' }),
+  X({ id: 'g-tijera', name: 'Saltos de tijera', pat: 'resist', need: 'nada', tier: 1, unit: 's', role: 'core', home: true, slot: 'core', body: 'Cardio y pantorrillas',
+    why: 'Calienta y sube el pulso en poco espacio. Sirve para empezar o para un circuito.',
+    how: ['De pie, pies juntos y brazos a los lados.', 'Salta abriendo los pies y subiendo los brazos por arriba de la cabeza.', 'Salta de regreso a la posición inicial y repite con ritmo.'],
+    cues: ['En las puntas de los pies', 'Ritmo constante'], err: 'Caer con los talones de golpe.', easier: 'Sin salto: abre un pie a la vez.', harder: 'Más rápido o más tiempo.' }),
+  X({ id: 'g-rodillas', name: 'Rodillas arriba en el lugar', pat: 'resist', need: 'nada', tier: 1, unit: 's', role: 'core', home: true, slot: 'core', body: 'Cardio, cadera y abdomen',
+    why: 'Corre sin moverte de lugar: sube el pulso y despierta la cadera.',
+    how: ['De pie, corre en el lugar subiendo las rodillas a la altura de la cadera.', 'Mueve los brazos como al correr.', 'Aterriza en las puntas de los pies.'],
+    cues: ['Rodillas a la cadera', 'Tronco alto'], err: 'Echarte hacia atrás.', easier: 'Marcha en el lugar, sin saltar.', harder: 'Más rápido.' }),
+  X({ id: 'g-oso', name: 'Caminata de oso', pat: 'resist', need: 'nada', tier: 2, unit: 's', role: 'core', home: true, slot: 'core', body: 'Hombros, tronco y piernas',
+    why: 'Coordinación, hombros y tronco firmes. Un reto divertido para el circuito.',
+    how: ['En cuatro puntos con manos y pies, rodillas a 5 cm del piso.', 'Camina hacia adelante moviendo al mismo tiempo la mano derecha y el pie izquierdo, y luego al revés.', 'Espalda plana como mesa, sin subir la cadera.'],
+    cues: ['Rodillas cerca del piso', 'Espalda plana'], err: 'Subir la cadera muy alto.', easier: 'Pasos cortos o quédate en el lugar levantando mano y pie contrarios.', harder: 'Hacia atrás o más tiempo.' }),
+];
+// v3.14: las máquinas y poleas también se pueden usar (al personalizar, en la sesión libre o al registrar).
+export const GYM_BY_ID = Object.fromEntries([...GYM, ...MAQ].map((e) => [e.id, e]));
+export const GYM_ALL = [...GYM, ...MAQ];
+export const gymName = (id) => GYM_BY_ID[id]?.name || id;
+export const groupOf = (ex) => Object.keys(GROUPS).find((g) => GROUPS[g].pats.includes(ex.pat));
+
+// Preferencia de ejercicio por patrón. Se elige el primero que tu gym tiene y tu experiencia permite;
+// si el mismo patrón sale otro día de la semana, se usa el siguiente para variar.
+const ORDER = {
+  salto: ['g-salto-cajon', 'g-salto-cargado', 'g-jalon-alto', 'g-sentadilla-salto'],
+  lanzamiento: ['g-lanz-arriba', 'g-lanz-giro', 'g-slam'],
+  lateral: ['g-skater'],
+  aterrizaje: ['g-aterrizaje'],
+  rodilla: ['g-sent-trasera', 'g-sent-frontal', 'g-goblet', 'g-prensa', 'f-sent-pc', 'g-pared'],
+  cadera: ['g-hex', 'g-rumano-barra', 'g-rumano-mancuernas'],
+  gluteo: ['g-hipthrust', 'g-hipthrust-m', 'g-puente'],
+  unipodal: ['g-bulgara', 'g-subida', 'g-zancada', 'g-rumano-1', 'f-zancada-atras'],
+  isquios: ['g-nordico', 'g-curl-femoral', 'g-puente-1'],
+  pantorrilla: ['g-talones-pie', 'g-talones-sentado', 'g-tibial', 'g-talones-1'],
+  aductor: ['g-copenhague'],
+  empuje: ['g-press-banca', 'g-press-mancuernas', 'g-landmine', 'g-lagartija', 'g-press-hombro-m', 'g-lagartija-rodillas', 'g-pike', 'g-lagartija-diamante'],
+  jalon: ['g-dominada', 'g-remo-1', 'g-jalon-polea', 'g-remo-invertido', 'g-remo-mesa', 'g-dominada-neg'],
+  hombro: ['g-re-90', 'g-re-liga', 'g-ytw', 'g-face-pull', 'g-serrato'],
+  tronco: ['g-pallof', 'g-lenador', 'g-plancha-lat', 'g-deadbug', 'g-granjero', 'g-plancha', 'g-toques-hombro', 'g-superman', 'g-hueco'],
+  resist: ['g-escalador', 'g-tijera', 'g-rodillas', 'g-burpee', 'g-oso'],
+};
+// Si en tu gym no hay nada de un patrón, se usa este otro.
+const FALLBACK = { lanzamiento: 'salto', salto: 'lateral', lateral: 'aterrizaje', gluteo: 'cadera', aductor: 'unipodal', isquios: 'cadera' };
+
+// ---------- objetivos ----------
+// Cada día: [patrón o 'id:ejercicio', papel, prioridad]. Prioridad 1 nunca se quita; 2 y 3 se quitan si no alcanza el tiempo.
+// Papel: pow (potencia), main (fuerza principal), acc (complementario), prev (prevención), core (tronco).
+const D = (name, focus, slots) => ({ name, focus, slots });
+export const GOALS = {
+  salto: { name: 'Saltar más', icon: 'arrow-up', desc: 'Fuerza de piernas y potencia para el remate, el bloqueo y el saque en salto.',
+    full: D('Cuerpo completo', 'Salto, piernas y hombro', [['salto', 'pow', 1], ['rodilla', 'main', 1], ['cadera', 'main', 1], ['unipodal', 'acc', 2], ['pantorrilla', 'prev', 2], ['hombro', 'prev', 2], ['tronco', 'core', 3], ['isquios', 'acc', 3]]),
+    week: [
+      D('Piernas y despegue', 'Sentadilla y saltos', [['salto', 'pow', 1], ['rodilla', 'main', 1], ['unipodal', 'acc', 1], ['gluteo', 'acc', 2], ['pantorrilla', 'prev', 2], ['tronco', 'core', 3], ['aterrizaje', 'prev', 3]]),
+      D('Cadera y tren de arriba', 'Cadera, espalda y hombro', [['lanzamiento', 'pow', 1], ['cadera', 'main', 1], ['jalon', 'acc', 1], ['empuje', 'acc', 2], ['isquios', 'acc', 2], ['hombro', 'prev', 2], ['tronco', 'core', 3]]),
+      D('Una pierna y aterrizaje', 'Fuerza a una pierna', [['lateral', 'pow', 1], ['unipodal', 'main', 1], ['isquios', 'acc', 2], ['aductor', 'prev', 2], ['pantorrilla', 'prev', 2], ['hombro', 'prev', 3], ['tronco', 'core', 3]]),
+      D('Fuerza general', 'Todo el cuerpo', [['rodilla', 'main', 1], ['jalon', 'acc', 1], ['empuje', 'acc', 2], ['gluteo', 'acc', 2], ['hombro', 'prev', 2], ['tronco', 'core', 3]])] },
+  fuerza: { name: 'Fuerza general', icon: 'dumbbell', desc: 'La base para todo: piernas, cadera, empuje, jalón y tronco.',
+    full: D('Cuerpo completo', 'Los movimientos básicos', [['rodilla', 'main', 1], ['jalon', 'main', 1], ['cadera', 'main', 1], ['empuje', 'main', 2], ['unipodal', 'acc', 2], ['hombro', 'prev', 2], ['tronco', 'core', 3], ['pantorrilla', 'prev', 3]]),
+    week: [
+      D('Sentadilla y empuje', 'Piernas y pecho', [['rodilla', 'main', 1], ['empuje', 'main', 1], ['unipodal', 'acc', 2], ['jalon', 'acc', 2], ['pantorrilla', 'prev', 3], ['tronco', 'core', 3]]),
+      D('Cadera y jalón', 'Cadera y espalda', [['cadera', 'main', 1], ['jalon', 'main', 1], ['empuje', 'acc', 2], ['isquios', 'acc', 2], ['hombro', 'prev', 2], ['tronco', 'core', 3]]),
+      D('Potencia y una pierna', 'Saltos y fuerza a una pierna', [['salto', 'pow', 1], ['unipodal', 'main', 1], ['empuje', 'acc', 2], ['jalon', 'acc', 2], ['aductor', 'prev', 3], ['tronco', 'core', 3]]),
+      D('Lanzamientos y piernas', 'Potencia y piernas', [['lanzamiento', 'pow', 1], ['rodilla', 'main', 1], ['jalon', 'acc', 2], ['gluteo', 'acc', 2], ['hombro', 'prev', 2], ['tronco', 'core', 3]])] },
+  brazo: { name: 'Remate y saque más potentes', icon: 'zap', desc: 'Tronco que gira con fuerza, hombro fuerte y estable, y piernas que empujan.',
+    full: D('Cuerpo completo', 'Lanzamientos, hombro y piernas', [['lanzamiento', 'pow', 1], ['rodilla', 'main', 1], ['jalon', 'main', 1], ['hombro', 'prev', 1], ['empuje', 'acc', 2], ['tronco', 'core', 2], ['cadera', 'acc', 3]]),
+    week: [
+      D('Brazo y tronco', 'Lanzamientos, espalda y hombro', [['lanzamiento', 'pow', 1], ['jalon', 'main', 1], ['empuje', 'acc', 1], ['hombro', 'prev', 1], ['tronco', 'core', 2], ['tronco', 'core', 3]]),
+      D('Piernas', 'Base para golpear', [['salto', 'pow', 1], ['rodilla', 'main', 1], ['cadera', 'acc', 2], ['unipodal', 'acc', 2], ['hombro', 'prev', 2], ['pantorrilla', 'prev', 3]]),
+      D('Hombro fuerte', 'Hombro y rotación', [['lanzamiento', 'pow', 1], ['jalon', 'acc', 1], ['empuje', 'acc', 2], ['hombro', 'prev', 1], ['hombro', 'prev', 2], ['tronco', 'core', 2]]),
+      D('Cadera y tronco', 'Cadera y una pierna', [['cadera', 'main', 1], ['unipodal', 'acc', 2], ['isquios', 'acc', 2], ['tronco', 'core', 2], ['aductor', 'prev', 3]])] },
+  prevencion: { name: 'Cuidar tobillos, rodillas y hombros', icon: 'shield-check', desc: 'Menos lesiones: aterrizajes, isquios, aductores, pantorrillas y hombro.',
+    full: D('Prevención completa', 'Tobillo, rodilla y hombro', [['aterrizaje', 'prev', 1], ['unipodal', 'acc', 1], ['isquios', 'acc', 1], ['hombro', 'prev', 1], ['pantorrilla', 'prev', 2], ['aductor', 'prev', 2], ['id:g-sent-espanola', 'prev', 3], ['tronco', 'core', 3]]),
+    week: [
+      D('Rodilla y tobillo', 'Aterrizar y frenar', [['aterrizaje', 'prev', 1], ['rodilla', 'acc', 1], ['isquios', 'acc', 1], ['pantorrilla', 'prev', 2], ['hombro', 'prev', 2], ['tronco', 'core', 3]]),
+      D('Hombro y una pierna', 'Hombro y equilibrio', [['unipodal', 'acc', 1], ['jalon', 'acc', 1], ['hombro', 'prev', 1], ['aductor', 'prev', 2], ['id:g-sent-espanola', 'prev', 2], ['tronco', 'core', 3]]),
+      D('Lateral y cadera', 'Cambios de dirección', [['lateral', 'pow', 1], ['cadera', 'acc', 1], ['empuje', 'acc', 2], ['hombro', 'prev', 2], ['pantorrilla', 'prev', 2], ['tronco', 'core', 3]]),
+      D('Repaso de prevención', 'Aterrizaje y hombro', [['aterrizaje', 'prev', 1], ['unipodal', 'acc', 1], ['isquios', 'acc', 2], ['hombro', 'prev', 2], ['tronco', 'core', 3]])] },
+  rapidez: { name: 'Rapidez en la cancha', icon: 'timer', desc: 'Arrancar, frenar y cambiar de dirección: fuerza a una pierna y potencia de lado.',
+    full: D('Cuerpo completo', 'Lateral y una pierna', [['lateral', 'pow', 1], ['salto', 'pow', 2], ['unipodal', 'main', 1], ['cadera', 'main', 2], ['aductor', 'prev', 2], ['pantorrilla', 'prev', 2], ['tronco', 'core', 3], ['hombro', 'prev', 3]]),
+    week: [
+      D('Frenar y arrancar', 'Lateral y una pierna', [['lateral', 'pow', 1], ['unipodal', 'main', 1], ['cadera', 'acc', 2], ['aductor', 'prev', 2], ['pantorrilla', 'prev', 3], ['tronco', 'core', 3]]),
+      D('Piernas fuertes', 'Salto y sentadilla', [['salto', 'pow', 1], ['rodilla', 'main', 1], ['isquios', 'acc', 2], ['jalon', 'acc', 2], ['hombro', 'prev', 2], ['tronco', 'core', 3]]),
+      D('Cambios de dirección', 'Lateral y glúteo', [['lateral', 'pow', 1], ['unipodal', 'main', 1], ['gluteo', 'acc', 2], ['empuje', 'acc', 2], ['aductor', 'prev', 3], ['tronco', 'core', 3]]),
+      D('Cadera y tren de arriba', 'Cadera y espalda', [['lanzamiento', 'pow', 1], ['cadera', 'main', 1], ['jalon', 'acc', 2], ['hombro', 'prev', 2], ['pantorrilla', 'prev', 3]])] },
+  regreso: { name: 'Volver después de una pausa', icon: 'refresh-cw', desc: 'Si vuelves de vacaciones, empiezas en el gym o ya te dieron de alta de una lesión.',
+    full: D('Cuerpo completo suave', 'Todo, con poco peso', [['rodilla', 'acc', 1], ['cadera', 'acc', 1], ['jalon', 'acc', 1], ['empuje', 'acc', 2], ['hombro', 'prev', 2], ['pantorrilla', 'prev', 2], ['tronco', 'core', 3]]),
+    week: [
+      D('Piernas y espalda', 'Con poco peso', [['rodilla', 'acc', 1], ['jalon', 'acc', 1], ['pantorrilla', 'prev', 2], ['hombro', 'prev', 2], ['tronco', 'core', 3]]),
+      D('Cadera y pecho', 'Con poco peso', [['cadera', 'acc', 1], ['empuje', 'acc', 1], ['unipodal', 'acc', 2], ['hombro', 'prev', 2], ['tronco', 'core', 3]]),
+      D('Aterrizaje y una pierna', 'Con poco peso', [['aterrizaje', 'prev', 1], ['unipodal', 'acc', 1], ['jalon', 'acc', 2], ['isquios', 'acc', 2], ['tronco', 'core', 3]])] },
+};
+
+// Días ligeros (v3.8): sin pierna pesada ni saltos. Completan la semana cuando eliges más días que los pesados que te tocan.
+export const LIGHT_DAYS = [
+  D('Hombro, espalda y tronco', 'Tren de arriba, sin cargar piernas', [['jalon', 'main', 1], ['empuje', 'acc', 1], ['hombro', 'prev', 1], ['lanzamiento', 'pow', 2], ['tronco', 'core', 2], ['tronco', 'core', 3]]),
+  D('Prevención y movilidad', 'Tobillo, rodilla, cadera y hombro, suave', [['hombro', 'prev', 1], ['pantorrilla', 'prev', 1], ['aductor', 'prev', 2], ['id:g-sent-espanola', 'prev', 2], ['tronco', 'core', 2], ['hombro', 'prev', 3]]),
+  D('Brazo de remate y saque', 'Hombro fuerte y rotación', [['lanzamiento', 'pow', 1], ['hombro', 'prev', 1], ['jalon', 'acc', 1], ['hombro', 'prev', 2], ['tronco', 'core', 2]]),
+  D('Tronco y equilibrio', 'Tronco firme y tobillos', [['tronco', 'core', 1], ['tronco', 'core', 1], ['pantorrilla', 'prev', 2], ['hombro', 'prev', 2], ['empuje', 'acc', 3]]),
+  D('Recuperación activa', 'Suave: tronco, hombro y tobillos', [['tronco', 'core', 1], ['hombro', 'prev', 1], ['aductor', 'prev', 2], ['pantorrilla', 'prev', 2], ['jalon', 'acc', 3]]),
+];
+// Un día es «pesado» si trae saltos o fuerza principal de pierna.
+const LEG_POW = new Set(['salto', 'lateral', 'aterrizaje']), LEG_MAIN = new Set(['rodilla', 'cadera', 'unipodal']);
+export const isHeavyDay = (bp) => bp.slots.some(([pat, role]) => (LEG_POW.has(pat) && role === 'pow') || (LEG_MAIN.has(pat) && role === 'main'));
+// Máximo de días pesados por semana: pretemporada 3, temporada 2, semana de partido 1; al volver de una pausa no hay pesados.
+export const heavyMax = (spec) => (spec.goal === 'regreso' ? 0 : spec.phase === 'torneo' ? 1 : spec.phase === 'temp' ? 2 : 3);
+// Los días de la semana: primero los del objetivo (los pesados hasta su tope), luego ligeros, alternados para no juntar pierna.
+export function weekBlueprints(spec) {
+  const g = GOALS[spec.goal], n = spec.days, cap = heavyMax(spec);
+  if (n === 1) return [g.full];
+  const own = g.week.slice(0, Math.min(n, g.week.length));
+  const heavy = [], light = [];
+  for (const bp of own) { if (isHeavyDay(bp)) { if (heavy.length < cap) heavy.push(bp); } else light.push(bp); }
+  for (const bp of [...g.week.slice(own.length), ...LIGHT_DAYS]) {
+    if (heavy.length + light.length >= n) break;
+    if (isHeavyDay(bp)) { if (heavy.length < cap) heavy.push(bp); } else if (!light.includes(bp)) light.push(bp);
+  }
+  const out = [];
+  while (out.length < n && (heavy.length || light.length)) {
+    if (heavy.length) out.push(heavy.shift());
+    if (out.length < n && light.length) out.push(light.shift());
+  }
+  return out;
+}
+
+// ---------- dosis ----------
+// [series, repeticiones, te sobran, descanso en segundos] por papel y experiencia.
+const DOSE = {
+  pow: { nuevo: [2, '5', null, 90], medio: [3, '4', null, 90], avanzado: [3, '3', null, 120] },
+  main: { nuevo: [2, '10-12', 4, 90], medio: [3, '6-8', 3, 120], avanzado: [4, '5-6', 2, 150] },
+  acc: { nuevo: [2, '10-12', 4, 60], medio: [3, '8-10', 2, 90], avanzado: [3, '8-10', 2, 90] },
+  prev: { nuevo: [2, '12-15', 3, 45], medio: [2, '12-15', 2, 45], avanzado: [3, '12', 2, 45] },
+  core: { nuevo: [2, '8-10', 3, 45], medio: [3, '10', 2, 45], avanzado: [3, '12', 2, 45] },
+};
+const HOLD = { nuevo: '20 s', medio: '30 s', avanzado: '40 s' };
+const POWREPS = { salto: { nuevo: '5', medio: '4', avanzado: '3' }, lanzamiento: { nuevo: '6', medio: '6', avanzado: '5' },
+  lateral: { nuevo: '5', medio: '5', avanzado: '6' }, aterrizaje: { nuevo: '5', medio: '6', avanzado: '6' } };
+export const ROLE = { pow: 'Potencia', main: 'Fuerza', acc: 'Complemento', prev: 'Prevención', core: 'Tronco' };
+
+const lowEnd = (reps) => String(reps).replace(/^(\d+)\s*-\s*\d+/, '$1');
+export function topReps(reps) { const m = String(reps).match(/(\d+)(?:\s*-\s*(\d+))?/); return m ? Number(m[2] || m[1]) : null; }
+export function lowReps(reps) { const m = String(reps).match(/(\d+)/); return m ? Number(m[1]) : null; }
+
+function prescribe(ex, role, exp, phase) {
+  let [sets, reps, rir, rest] = DOSE[role][exp];
+  if (ex.unit === 's') reps = HOLD[exp];
+  else if (role === 'pow' || ex.unit === 'saltos') reps = (POWREPS[ex.pat] || POWREPS.salto)[exp];
+  if (ex.dose?.[exp]) [sets, reps] = ex.dose[exp];
+  if (ex.pat === 'lanzamiento') rest = 60;
+  if (role === 'pow' || ex.unit === 'saltos') rir = null;
+  if (phase === 'temp') {
+    if (role === 'main' || role === 'pow') sets = Math.max(2, sets - 1);
+    else if (role === 'acc' && exp !== 'nuevo') sets = Math.max(2, sets - 1);
+  }
+  if (phase === 'torneo') {
+    sets = Math.min(sets, 2);
+    if (rir != null) { rir = Math.max(rir, 4); reps = lowEnd(reps); }
+  }
+  return { ex: ex.id, role, sets, reps, rir, rest };
+}
+
+// Minutos estimados de un ejercicio (trabajo + descansos).
+export function itemMinutes(rx) {
+  const ex = GYM_BY_ID[rx.ex]; if (!ex) return 0;
+  const work = rx.role === 'pow' ? 15 : ex.unit === 's' ? (lowReps(rx.reps) || 30) : 35;
+  return (rx.sets * (work * (ex.side ? 2 : 1) + rx.rest)) / 60;
+}
+export const WARM_MIN = 10, COOL_MIN = 5;
+export const dayMinutes = (items) => Math.round(WARM_MIN + COOL_MIN + items.reduce((a, rx) => a + itemMinutes(rx), 0));
+
+// ---------- la rutina ----------
+export const DEFAULT_SPEC = { goal: 'salto', days: 2, minutes: 60, exp: 'nuevo', equip: 'completo', phase: 'temp' };
+export function normSpec(s) {
+  const o = { ...DEFAULT_SPEC, ...(s && typeof s === 'object' ? s : {}) };
+  if (!GOALS[o.goal]) o.goal = DEFAULT_SPEC.goal;
+  if (!EXP[o.exp]) o.exp = DEFAULT_SPEC.exp;
+  if (!EQUIP[o.equip]) o.equip = DEFAULT_SPEC.equip;
+  if (!PHASE[o.phase]) o.phase = DEFAULT_SPEC.phase;
+  o.days = Math.min(MAX_DAYS, Math.max(1, Math.round(Number(o.days) || 2)));
+  o.minutes = MINUTES.includes(Number(o.minutes)) ? Number(o.minutes) : 60;
+  return o;
+}
+export const isSpec = (s) => !!(s && typeof s === 'object' && GOALS[s.goal]);
+// v3.8: los días de gym son tuyos (1 a 6). Lo que se limita son los días pesados (heavyMax); los demás son ligeros.
+export const MAX_DAYS = 6;
+export const maxDays = () => MAX_DAYS;
+export const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+const plural2 = (n, a, b) => `${n} ${n === 1 ? a : b}`;
+export function buildRoutine(raw) {
+  const spec = normSpec(raw);
+  const g = GOALS[spec.goal];
+  const exp = spec.goal === 'regreso' ? 'nuevo' : spec.exp;
+  const tierMax = spec.goal === 'regreso' ? 1 : EXP[spec.exp].tier;
+  const blueprints = weekBlueprints(spec), n = blueprints.length;
+  const patUse = {};
+  // En un día ligero no se cambia un lanzamiento por un salto (el respaldo del patrón) para no cargar piernas.
+  const pickEx = (pat, used, light = false) => {
+    for (let p = pat, guard = 0; p && guard < 5; p = FALLBACK[p], guard++) {
+      if (light && p !== pat && (LEG_POW.has(p) || LEG_MAIN.has(p))) break;
+      // v3.20: los ejercicios «de casa» solo entran solos a las rutinas de casa o cancha (las de gym no cambian).
+      const list = (ORDER[p] || []).map((id) => GYM_BY_ID[id]).filter((e) => e && available(e, spec.equip) && e.tier <= tierMax && !used.has(e.id) && (!e.home || HOME_EQUIP.has(spec.equip)));
+      if (list.length) { const k = patUse[p] || 0; patUse[p] = k + 1; return list[k % list.length]; }
+    }
+    return null;
+  };
+  const days = blueprints.map((bp, i) => {
+    const used = new Set(), light = !isHeavyDay(bp);
+    let slots = bp.slots.map(([pat, role, p]) => ({ pat, role, p }));
+    if (spec.phase === 'torneo') slots = slots.filter((s) => s.role !== 'pow' && s.pat !== 'aterrizaje' && s.p <= 2);
+    if (spec.minutes <= 45) slots = slots.filter((s) => s.p <= 2);
+    let items = [];
+    for (const s of slots) {
+      const ex = s.pat.startsWith('id:') ? GYM_BY_ID[s.pat.slice(3)] : pickEx(s.pat, used, light);
+      if (!ex || used.has(ex.id) || !available(ex, spec.equip) || ex.tier > tierMax) continue;
+      used.add(ex.id);
+      items.push({ ...prescribe(ex, s.role, exp, spec.phase), p: s.p });
+    }
+    // Ajusta al tiempo: quita primero lo de menor prioridad (del final hacia atrás) y luego series de más.
+    for (let guard = 0; guard < 20 && dayMinutes(items) > spec.minutes + 3; guard++) {
+      let idx = -1, worst = 1;
+      items.forEach((it, k) => { if (it.p > 1 && it.p >= worst) { worst = it.p; idx = k; } });
+      if (idx >= 0) { items.splice(idx, 1); continue; }
+      const big = items.filter((it) => it.sets > 2).sort((a, b) => b.sets - a.sets)[0];
+      if (!big) break;
+      big.sets -= 1;
+    }
+    items = items.map(({ p, ...rx }) => rx);
+    return { key: LETTERS[i], name: bp.name, focus: bp.focus, items, min: dayMinutes(items), light };
+  });
+  const notes = [];
+  const heavyN = days.filter((d) => !d.light).length, lightN = n - heavyN;
+  if (lightN && n > 1) notes.push(`${plural2(heavyN, 'día pesado', 'días pesados')} (pierna y saltos) y ${plural2(lightN, 'día ligero', 'días ligeros')} (tren de arriba, tronco y prevención). ${spec.goal === 'regreso' ? 'Al volver de una pausa todos son ligeros.' : `En ${PHASE[spec.phase].name.toLowerCase()} Remate pone como máximo ${plural2(heavyMax(spec), 'día pesado', 'días pesados')}: con el voleibol ya saltas mucho.`}`);
+  if (n >= 5) notes.push('Con 5 o 6 días: deja al menos un día completo sin gym ni entreno a la semana, duerme 8 horas o más y, si llegas cansado a los entrenos, quita primero un día ligero.');
+  if (n >= 5 && exp === 'nuevo') notes.push('Si apenas empiezas en el gym, 2 o 3 días bastan las primeras semanas: la técnica se aprende mejor descansado.');
+  if (spec.phase === 'temp' && heavyN === 2 && n <= 3) notes.push('En temporada, 2 días suelen bastar. Si llegas cansado a los entrenos, quita un día.');
+  if (exp === 'nuevo') notes.push('Las primeras 2 semanas: aprende la técnica con poco peso. Pide al instructor del gym que te vea en los ejercicios nuevos.');
+  if (spec.goal === 'regreso') notes.push('Si vienes de una lesión, solo con el alta de tu médico o fisioterapeuta. Haz esta rutina 2 o 3 semanas y luego arma una con tu objetivo.');
+  if (spec.phase === 'torneo') notes.push('Semana de partido: haz la sesión 3 días o más antes del partido. Nada de pierna pesada ni saltos en las 48 horas antes.');
+  if (spec.equip === 'mancuernas' && (spec.goal === 'salto' || spec.goal === 'fuerza')) notes.push('Sin barra, la sentadilla goblet y la búlgara hacen el trabajo: cuando el peso más alto te quede ligero, haz la bajada en 3 segundos.');
+  // v3.13: rutina personalizada (días y ejercicios que el jugador o su entrenador editó a mano).
+  if (Array.isArray(spec.custom) && spec.custom.length) {
+    const cd = customGymDays(spec.custom);
+    if (cd.length) return { spec, n: cd.length, days: cd, notes: ['Rutina personalizada: los días y ejercicios los elegiste tú. Con «Volver a la de Remate» regresas a la automática.', ...notes.filter((x) => /lesión|partido|técnica/.test(x))], custom: true };
+  }
+  return { spec, n, days, notes };
+}
+
+// ---------- rutina personalizada (v3.13) ----------
+// custom: [{ name, items: [{ ex, role, sets, reps, rir, rest }] }] → días con letra, minutos y solo ejercicios que existen.
+const cleanRx = (rx, byId) => {
+  const ex = byId[rx?.ex]; if (!ex) return null;
+  const sets = Math.min(10, Math.max(1, Math.round(Number(rx.sets) || 3)));
+  const reps = String(rx.reps ?? '').trim().slice(0, 12) || '10';
+  const rest = Math.min(600, Math.max(0, Math.round(Number(rx.rest) || 60)));
+  const rir = rx.rir === null || rx.rir === '' || rx.rir === undefined ? null : Math.min(5, Math.max(0, Math.round(Number(rx.rir))));
+  return { ex: ex.id, role: rx.role || 'acc', sets, reps, rir: Number.isNaN(rir) ? null : rir, rest };
+};
+export const cleanCustom = (custom, byId) => (Array.isArray(custom) ? custom : []).slice(0, 7)
+  .map((d, i) => ({ name: String(d?.name || `Día ${LETTERS[i]}`).trim().slice(0, 40), items: (d?.items || []).map((rx) => cleanRx(rx, byId)).filter(Boolean).slice(0, 16) }))
+  .filter((d) => d.items.length);
+export function customGymDays(custom) {
+  return cleanCustom(custom, GYM_BY_ID).map((d, i) => ({ key: LETTERS[i], name: d.name, focus: 'Personalizado', items: d.items, min: dayMinutes(d.items), light: false, custom: true }));
+}
+// Papel y dosis de un ejercicio que se agrega a mano.
+export function gymRole(ex) {
+  if (ex.role) return ex.role === 'main' ? 'main' : ex.role === 'core' ? 'core' : 'acc';
+  if (['salto', 'lanzamiento', 'lateral'].includes(ex.pat)) return 'pow';
+  if (ex.pat === 'tronco') return 'core';
+  if (['aterrizaje', 'pantorrilla', 'aductor', 'hombro'].includes(ex.pat)) return 'prev';
+  return ex.need === 'barra' || ex.pat === 'rodilla' || ex.pat === 'cadera' ? 'main' : 'acc';
+}
+export function gymDefaultRx(exId, raw) {
+  const spec = normSpec(raw), ex = GYM_BY_ID[exId]; if (!ex) return null;
+  return prescribe(ex, gymRole(ex), spec.goal === 'regreso' ? 'nuevo' : spec.exp, spec.phase);
+}
+
+// ---------- semana: qué días ir al gym ----------
+// train: días de entrenamiento (0 domingo ... 6 sábado). Prefiere días sin entreno y separados entre sí.
+export function weekPlan(n, train = []) {
+  const week = [1, 2, 3, 4, 5, 6];
+  const off = week.filter((d) => !train.includes(d));
+  let chosen = [];
+  if (n === 1) chosen = off.length ? [off[Math.floor((off.length - 1) / 2)]] : [];
+  else if (off.length >= n) for (let i = 0; i < n; i++) chosen.push(off[Math.round((i * (off.length - 1)) / (n - 1))]);
+  else chosen = [...off];
+  chosen = [...new Set(chosen)];
+  for (const d of week) { if (chosen.length >= n) break; if (!chosen.includes(d)) chosen.push(d); }
+  return chosen.sort((a, b) => a - b).map((wd) => ({ wd, after: train.includes(wd) }));
+}
+
+// ---------- progresión: qué hacer la siguiente vez ----------
+const incFor = (ex, kg) => (ex.need === 'barra' ? (kg < 80 ? 2.5 : 5) : kg < 10 ? 1 : 2);
+const fmtKg = (x) => `${Math.round(x * 10) / 10}`;
+// last: { s: [[kg, reps], ...] } de la última vez que hiciste ese ejercicio.
+export function nextStep(rx, last, u = 'kg') {   // v3.27: u = unidad en que se muestra (kg o lb)
+  const ex = GYM_BY_ID[rx.ex]; if (!ex) return '';
+  if (rx.role === 'pow' || ex.unit === 'saltos') return 'Cada repetición a la máxima velocidad. Si pierdes altura o velocidad, para.';
+  const sets = (last?.s || []).filter((x) => x && Number(x[1]) > 0);
+  if (!sets.length) return ex.unit === 'kg' ? 'Primera vez: empieza ligero y busca el peso con el que te sobren las repeticiones que pide.' : '';
+  const top = topReps(rx.reps), done = sets.length >= rx.sets && sets.every((x) => Number(x[1]) >= top);
+  if (ex.unit === 's') return done ? 'La vez pasada aguantaste todo: súmale 5 a 10 segundos o pasa a la versión más difícil.' : 'Repite el mismo tiempo hasta completarlo en todas las series.';
+  if (ex.unit === 'pc' || ex.unit === 'saltos') return done ? 'La vez pasada completaste todo: pasa a la versión más difícil o haz la bajada más lenta.' : `Busca llegar a ${top} en todas las series.`;
+  const kg = Math.max(...sets.map((x) => Number(x[0]) || 0)), U = unitLabel(u), now = fromKg(kg, u), up = u === 'lb' ? now + incIn(u, incFor(ex, kg)) : fmtKg(kg + incFor(ex, kg));
+  if (!kg) return done ? 'Completaste todo: agrega un poco de peso.' : `Busca llegar a ${top} en todas las series.`;
+  if (done) return `La vez pasada completaste todo con ${now} ${U}: prueba con ${up} ${U} y vuelve a ${lowReps(rx.reps)} repeticiones.`;
+  return `Repite ${now} ${U} y busca llegar a ${top} en todas las series.`;
+}
+
+// Semana del bloque (bloques de 6 semanas: la 6 es ligera).
+export function blockWeek(since, today = todayStr()) {
+  if (!since) return null;
+  const d = diffDays(today, since);
+  if (d < 0) return null;
+  const w = Math.floor(d / 7) + 1;
+  return { week: ((w - 1) % 6) + 1, block: Math.floor((w - 1) / 6) + 1, light: ((w - 1) % 6) + 1 === 6, ends: addDays(since, Math.ceil(w / 6) * 42 - 1) };
+}
+
+// ---------- textos de apoyo ----------
+export const WARMUP = [
+  '5 minutos de cardio suave: bicicleta, caminadora inclinada o cuerda.',
+  'Movilidad: rodilla a la pared sin despegar el talón (10 por pierna), cadera en 90/90 (6 por lado) y giro de espalda acostado de lado (6 por lado).',
+  'Activación: puente de glúteo (10) y rotación externa con liga (12 por brazo).',
+  'Antes del primer ejercicio con peso: 1 o 2 series ligeras de prueba.',
+];
+export const COOLDOWN = ['3 a 5 minutos caminando y respirando tranquilo.', 'Estiramiento suave de pantorrilla, cadera y pecho, 30 segundos cada uno.'];
+
+export const READ = [
+  ['3 × 8', '3 series de 8 repeticiones. «8-10» quiere decir entre 8 y 10.'],
+  ['Te sobran 2', 'Elige un peso con el que, al terminar la serie, todavía podrías hacer 2 repeticiones más. Así entrenas fuerte sin llegar al fallo.'],
+  ['Descanso', 'El tiempo entre series. En potencia descansa completo: la calidad importa más que el cansancio.'],
+  ['Por lado', 'Las repeticiones son de cada pierna o de cada brazo.'],
+  ['Cuándo subir', 'Cuando completes todas las series con el máximo de repeticiones, la siguiente vez sube un poco el peso y vuelve al mínimo de repeticiones. Remate te lo sugiere al registrar.'],
+  ['Semana ligera', 'Cada 6 semanas, haz una semana con una serie menos y sin subir peso. Luego vuelve a armar tu rutina.'],
+];
+
+export const RULES = [
+  'Ve con un instructor del gym o un adulto que sepa de pesas, sobre todo las primeras semanas. Primero la técnica; el peso después.',
+  'Nunca pruebes cuánto aguantas a una sola repetición (tu máximo) sin un instructor. Remate no te lo pide: usa «te sobran 2».',
+  'No llegues al fallo. Termina cada serie cuando todavía podrías hacer las repeticiones que dice la rutina.',
+  'Calienta siempre 10 minutos y empieza cada ejercicio con 1 o 2 series ligeras.',
+  'En press de banca y sentadilla con barra: alguien que te cuide o el rack con barras de seguridad. Ponle seguros a la barra.',
+  'Si te duele una articulación (rodilla, hombro, espalda, tobillo), para y avísale a tu entrenador. Las agujetas de 1 o 2 días son normales; el dolor punzante no.',
+  'Respira: suelta el aire al hacer la fuerza. No aguantes la respiración mucho tiempo.',
+  'El gym ayuda al voleibol, no lo reemplaza: si el gym te hace llegar cansado a los entrenos, baja series o mueve el día.',
+];
+
+// Llegar bien al entreno y al partido.
+export const ARRIVE = [
+  { id: 'cuando', title: 'Cuándo ir al gym', icon: 'calendar-days', items: [
+    'En temporada, 1 o 2 sesiones por semana bastan para mantener y seguir ganando fuerza. En pretemporada o vacaciones puedes hacer 3.',
+    'El mejor momento: un día sin entreno, o el mismo día después del entreno. Evita pierna pesada justo antes de entrenar.',
+    'Pierna pesada o saltos: al menos 2 días (48 horas) antes de un partido. El día antes de un partido, descansa del gym o haz solo hombro y tronco ligero.',
+    'Deja al menos un día entre dos sesiones de pierna.'] },
+  { id: 'dormir', title: 'Dormir', icon: 'timer', items: [
+    'De 13 a 18 años se recomiendan de 8 a 10 horas cada noche. Dormir es cuando tu cuerpo se recupera y se hace más fuerte.',
+    'Acuéstate y levántate más o menos a la misma hora, también en fin de semana.',
+    'Deja el celular fuera de la cama 30 minutos antes de dormir.'] },
+  { id: 'agua', title: 'Agua', icon: 'activity', items: [
+    'Lleva tu botella todo el día y toma poco y seguido. No esperes a tener sed.',
+    'El agua es la mejor bebida para entrenar. Las bebidas deportivas solo hacen falta en sesiones largas e intensas (más de hora y media).',
+    'Bebidas energéticas y «pre-entrenos»: nunca. Tienen estimulantes que no son para tu edad.'] },
+  { id: 'comer', title: 'Comer para entrenar', icon: 'flame', items: [
+    '2 a 3 horas antes: una comida normal con carbohidratos (tortillas, arroz, pan, avena, fruta) y algo de proteína (huevo, frijoles, pollo, queso, leche o yogur).',
+    'Si solo tienes una hora: algo ligero, como un plátano, pan con crema de cacahuate, yogur o fruta.',
+    'Después, en la siguiente hora o dos: una comida con proteína y carbohidratos, por ejemplo quesadillas con frijoles, una torta de pollo, arroz con huevo o un licuado de leche con plátano.',
+    'Reparte la comida en el día y no entrenes en ayunas.',
+    'No hagas dietas por tu cuenta para bajar o subir de peso. Si te interesa, platícalo con tu entrenador, tu familia y un nutriólogo.'] },
+  { id: 'suple', title: 'Suplementos', icon: 'shield', items: [
+    'No los necesitas. Con buena comida, buen sueño y una rutina constante tienes lo que hace falta.',
+    'Proteína en polvo: si comes bien, no hace falta. Creatina, quemadores y «boosters»: la Academia Americana de Pediatría no los recomienda en menores de edad.',
+    'Ojo: muchos suplementos no traen lo que dice la etiqueta y algunos están contaminados.'] },
+  { id: 'llegar', title: 'Cómo saber si llegas bien', icon: 'check', items: [
+    'Al llegar al entreno te sientes con piernas «frescas» y sin dolor en articulaciones.',
+    'Si llegas cansado al entreno después del gym, baja una serie o cambia el día del gym.',
+    'Tus pruebas físicas (salto, 10 m y plancha) dicen si funciona: deben mantenerse o subir durante la temporada.'] },
+];
+
+// Fuentes (también aparecen en Ayuda).
+export const GYM_SOURCES = [
+  ['Fuerza en jóvenes: consenso internacional de 2014 (Lloyd y cols., British Journal of Sports Medicine). Empezar con pocas series y peso ligero, aprender la técnica con supervisión, avanzar a 2 a 4 series de 6 a 12 repeticiones y seguir entrenando fuerza durante la temporada.', 'https://doi.org/10.1136/bjsports-2013-092952'],
+  ['Potencia en voleibol (NSCA, «Developing Power»): en temporada no hace falta mucha pliometría en el gym, porque ya saltan cientos de veces en entrenos y partidos.', 'https://us.humankinetics.com/blogs/excerpt/training-power-for-volleyball'],
+  ['Fuerza en temporada en deportistas de preparatoria (NSCA, «Strength Training for Basketball», deporte con muchos saltos): 1 o 2 sesiones por semana de 30 a 45 minutos, acomodadas alrededor de entrenos y partidos.', 'https://us.humankinetics.com/blogs/excerpt/length-structure-and-organization-of-in-season-programs'],
+  ['Nórdico de isquiotibiales: los programas que lo incluyen bajaron cerca de la mitad las lesiones de isquiotibiales (van Dyk y cols., British Journal of Sports Medicine, 2019). Un análisis posterior pide tomar la cifra con cautela.', 'https://bjsm.bmj.com/content/53/21/1362'],
+  ['Entrenamiento neuromuscular (fuerza, saltos y aterrizajes) para prevenir lesiones de ligamento cruzado en mujeres jóvenes: baja el riesgo cerca de la mitad (Petushek y cols., 2019).', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC6592422'],
+  ['Escala de «te sobran» (repeticiones en reserva) para elegir el peso sin probar tu máximo: Zourdos y cols., Journal of Strength and Conditioning Research, 2016.', 'https://pubmed.ncbi.nlm.nih.gov/26049792/'],
+  ['Sueño: la Academia Americana de Medicina del Sueño recomienda de 8 a 10 horas para jóvenes de 13 a 18 años (2016).', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC4877308'],
+  ['Comida y agua del deportista adolescente: Sports Dietitians Australia, 2014. Comida con carbohidratos y proteína repartida en el día y alrededor del entreno, agua como bebida principal y sin suplementos para mejorar el rendimiento.', 'https://doi.org/10.1123/ijsnem.2014-0031'],
+  ['Bebidas deportivas y energéticas: Academia Americana de Pediatría, 2011. Agua como bebida principal; las energéticas nunca en niños ni adolescentes.', 'https://doi.org/10.1542/peds.2011-0965'],
+  ['Suplementos para rendir más en adolescentes: Academia Americana de Pediatría, 2016.', 'https://doi.org/10.1542/peds.2016-1300'],
+];
+
+// ---------- v3.20: entrenar donde estés ----------
+const SWAP_FALLBACK = { ...FALLBACK, cadera: 'isquios', isquios: 'gluteo', hombro: 'empuje', aductor: 'unipodal' };
+// Cambia un ejercicio por uno equivalente que se pueda hacer con lo que hay (mismo patrón; si no hay, el de respaldo).
+export function swapForEquip(exId, equip, { tierMax = 3, exclude = [] } = {}) {
+  const ex = GYM_BY_ID[exId];
+  if (!ex || available(ex, equip)) return exId;
+  const skip = new Set(exclude);
+  for (let p = ex.pat, guard = 0; p && guard < 4; p = SWAP_FALLBACK[p], guard++) {
+    const ids = [...new Set([...(ORDER[p] || []), ...GYM_ALL.filter((e) => e.pat === p).map((e) => e.id)])];
+    const ok = ids.map((id) => GYM_BY_ID[id]).filter((e) => e && available(e, equip) && e.tier <= tierMax && !skip.has(e.id));
+    // Primero los de la misma unidad (tiempo con tiempo, repeticiones con repeticiones).
+    ok.sort((a, b) => Number(b.unit === ex.unit) - Number(a.unit === ex.unit) || Math.abs(a.tier - ex.tier) - Math.abs(b.tier - ex.tier));
+    if (ok.length) return ok[0].id;
+  }
+  return null;
+}
+
+// Circuito exprés con tu peso: 6 estaciones por tiempo (trabajo y descanso), varias rondas.
+export const CIRCUIT_LEVELS = { suave: ['Suave', 30, 30], normal: ['Normal', 40, 20], fuerte: ['Fuerte', 45, 15] };
+export const CIRCUIT_MINUTES = [10, 15, 20, 30];
+const CIRCUIT_SLOTS = [
+  ['g-tijera', 'g-rodillas', 'g-escalador', 'g-burpee', 'g-oso'],
+  ['f-sent-pc', 'g-sentadilla-salto', 'g-pared', 'f-zancada-atras', 'g-skater'],
+  ['g-lagartija-rodillas', 'g-lagartija', 'g-pike', 'g-lagartija-diamante', 'f-fondos-banco'],
+  ['g-plancha', 'g-toques-hombro', 'g-hueco', 'g-superman', 'g-plancha-lat'],
+  ['g-puente', 'g-remo-mesa', 'g-superman', 'g-talones-1', 'f-zancada-atras'],
+  ['g-escalador', 'g-burpee', 'g-rodillas', 'g-tijera', 'g-oso'],
+];
+// ok(id): si el ejercicio existe y se puede hacer ahí. tierMax: hasta qué nivel de dificultad.
+export function buildCircuit({ ok, tierMax = 2, minutes = 20, level = 'normal', seed = Date.now(), byId = GYM_BY_ID }) {
+  let a = seed >>> 0; const rnd = () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; };
+  const used = new Set(), items = [];
+  for (const slot of CIRCUIT_SLOTS) {
+    const cand = slot.filter((id) => byId[id] && byId[id].tier <= tierMax && !used.has(id) && ok(id));
+    if (!cand.length) continue;
+    const id = cand[Math.floor(rnd() * Math.min(cand.length, 3))];
+    used.add(id); items.push(id);
+  }
+  const [, work, rest] = CIRCUIT_LEVELS[level] || CIRCUIT_LEVELS.normal;
+  const roundRest = 60, per = items.length * (work + rest) - rest;
+  const rounds = items.length ? Math.max(2, Math.min(6, Math.round((minutes * 60 + roundRest) / (per + roundRest)))) : 0;
+  return { items, work, rest, rounds, roundRest, level };
+}

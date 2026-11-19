@@ -1,0 +1,251 @@
+// Utilidades generales: DOM, fechas, avisos y hojas emergentes.
+import { icon } from './icons.js';
+
+export function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  let value;
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k === 'html') el.innerHTML = v;
+    else if (k === 'for') el.htmlFor = v;
+    else if (k === 'value') value = v;
+    else if (k === 'style' && typeof v === 'object') { for (const [sk, sv] of Object.entries(v)) { if (sk.startsWith('--')) el.style.setProperty(sk, sv); else el.style[sk] = sv; } }
+    else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
+    else if (v === true) el.setAttribute(k, '');
+    else el.setAttribute(k, v);
+  }
+  append(el, kids);
+  if (value !== undefined) el.value = value;
+  return el;
+}
+export function append(el, kids) {
+  for (const k of kids.flat(Infinity)) {
+    if (k == null || k === false) continue;
+    el.append(k.nodeType ? k : document.createTextNode(String(k)));
+  }
+  return el;
+}
+export function ic(name, size = 20, cls = '') {
+  const t = document.createElement('template');
+  t.innerHTML = icon(name, size, cls);
+  return t.content.firstElementChild;
+}
+export const $ = (sel, root = document) => root.querySelector(sel);
+export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+
+// ---------- números y listas ----------
+export const clamp = (n, a, b) => Math.min(b, Math.max(a, n));
+export const sum = (arr) => arr.reduce((a, b) => a + b, 0);
+export const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+export function groupBy(arr, fn) {
+  const m = new Map();
+  for (const x of arr) { const k = fn(x); (m.get(k) || m.set(k, []).get(k)).push(x); }
+  return m;
+}
+export function debounce(fn, ms = 200) {
+  let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+}
+export function uid() {
+  if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0; return (c === 'x' ? r : (r & 3) | 8).toString(16);
+  });
+}
+const ALPHA = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';        // 31 caracteres, sin 0 O 1 I L
+export function newJoinCode() {
+  const buf = new Uint8Array(24); crypto.getRandomValues(buf);
+  let out = '', i = 0;
+  while (out.length < 6) {
+    if (i >= buf.length) { crypto.getRandomValues(buf); i = 0; }
+    const b = buf[i++]; if (b >= 248) continue;          // 248 = 31*8: evita sesgo
+    out += ALPHA[b % 31];
+  }
+  return out;
+}
+export const cleanCode = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+// ---------- fechas (siempre texto AAAA-MM-DD, sin zonas horarias) ----------
+export const pad = (n) => String(n).padStart(2, '0');
+export const toStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+export const todayStr = () => toStr(new Date());
+export const parseDate = (s) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+export const addDays = (s, n) => { const d = parseDate(s); d.setDate(d.getDate() + n); return toStr(d); };
+export const diffDays = (a, b) => Math.round((parseDate(a) - parseDate(b)) / 86400000);
+export function fmtDate(s, opts) {
+  if (!s) return '';
+  return new Intl.DateTimeFormat('es-MX', opts || { weekday: 'short', day: 'numeric', month: 'short' }).format(parseDate(s)).replace('.', '');
+}
+export function relDay(s) {
+  const n = diffDays(s, todayStr());
+  if (n === 0) return 'Hoy'; if (n === 1) return 'Mañana'; if (n === -1) return 'Ayer';
+  return fmtDate(s);
+}
+export const fmtTime = (t) => (t ? String(t).slice(0, 5) : '');
+export const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+export const DAYS_LONG = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+export const initials = (n) => String(n || '?').trim().split(/\s+/).slice(0, 2).map((x) => x[0]).join('').toUpperCase();
+
+// ---------- avisos ----------
+let toastTimer;
+export function toast(msg, ms = 2600) {
+  let t = document.getElementById('toast');
+  if (!t) { t = h('div', { id: 'toast', role: 'status', 'aria-live': 'polite' }); document.body.append(t); }
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, ms);
+}
+
+// ---------- hoja emergente ----------
+// actions: [{label, kind:'primary'|'ball'|'danger'|'', onClick: async () => false para no cerrar}]
+export function openSheet({ title, body, actions = [], onClose }) {
+  const dlg = h('dialog', { class: 'sheet', 'aria-label': title });
+  const close = (v) => { if (dlg.open) dlg.close(); dlg.remove(); onClose?.(v); };
+  const content = typeof body === 'function' ? body(close) : body;
+  dlg.append(
+    h('div', { class: 'sheet-head' }, h('h2', {}, title),
+      h('button', { class: 'iconbtn', type: 'button', 'aria-label': 'Cerrar', onclick: () => close() }, ic('x'))),
+    h('div', { class: 'sheet-body' }, content),
+  );
+  if (actions.length) {
+    dlg.append(h('div', { class: 'sheet-foot' }, actions.map((a) => {
+      const b = h('button', { type: 'button', class: `btn ${a.kind || ''}` }, a.label);
+      b.addEventListener('click', async () => {
+        b.disabled = true;
+        try { const r = await a.onClick?.(close); if (r !== false) close(a.value ?? true); }
+        finally { b.disabled = false; }
+      });
+      return b;
+    })));
+  }
+  dlg.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+  document.body.append(dlg);
+  dlg.showModal();
+  return { close, el: dlg };
+}
+export function confirmSheet({ title, text, ok = 'Aceptar', danger = false }) {
+  return new Promise((res) => {
+    let done = false;
+    openSheet({
+      title, body: h('p', {}, text),
+      actions: [{ label: 'Cancelar', onClick: () => { done = true; res(false); } },
+                { label: ok, kind: danger ? 'danger' : 'primary', onClick: () => { done = true; res(true); } }],
+      onClose: () => { if (!done) res(false); },
+    });
+  });
+}
+
+// ---------- archivos y portapapeles ----------
+export function download(filename, text, mime = 'application/json') {
+  const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: mime })), download: filename });
+  document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+export async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); toast('Copiado'); }
+  catch { toast('No se pudo copiar'); }
+}
+export async function shareText(text) {
+  if (navigator.share) { try { await navigator.share({ text }); return; } catch { return; } }
+  copyText(text);
+}
+
+// ---------- tema claro, oscuro o automático (se recuerda en este navegador) ----------
+const THEME_KEY = 'remate.theme';
+const themeGet = () => { try { return localStorage.getItem(THEME_KEY); } catch { return null; } };
+export const THEMES = { auto: 'Automático (como tu celular)', light: 'Claro', dark: 'Oscuro' };
+export const getTheme = () => (THEMES[themeGet()] ? themeGet() : 'auto');
+// iPhone: Safari y Remate instalado guardan la sesión por separado; los enlaces de WhatsApp abren Safari.
+export const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+export const isStandalone = () => !!(window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true);
+export const iosBrowser = () => isIOS() && !isStandalone();
+export const INSTALL_STEPS = ['En Safari, toca el botón Compartir (el cuadro con la flecha hacia arriba).', 'Elige «Agregar a inicio» y luego «Agregar».', 'Abre Remate desde ese ícono y escribe tu código una sola vez. De ahí en adelante entra siempre por el ícono.'];
+
+export function applyTheme() {
+  const t = getTheme(), root = document.documentElement;
+  if (t === 'auto') root.removeAttribute('data-theme'); else root.dataset.theme = t;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t === 'dark' ? '#0F2A55' : '#12356F');
+}
+export function setTheme(t) { if (THEMES[t]) { try { localStorage.setItem(THEME_KEY, t); } catch { /* sin almacenamiento */ } applyTheme(); } }
+
+// ---------- videos de YouTube o Drive con marcas de tiempo ----------
+export function ytId(url) {
+  try {
+    const u = new URL(url);
+    if (u.hostname.endsWith('youtu.be')) return u.pathname.slice(1).split('/')[0] || null;
+    if (u.hostname.endsWith('youtube.com')) {
+      if (u.searchParams.get('v')) return u.searchParams.get('v');
+      const m = u.pathname.match(/\/(live|shorts|embed)\/([^/?]+)/);
+      if (m) return m[2];
+    }
+  } catch { /* no es URL */ }
+  return null;
+}
+export const isUrl = (s) => /^https?:\/\/\S+\.\S+/i.test(String(s || '').trim());
+// Abre el video en ese segundo (solo YouTube permite saltar al minuto desde el enlace).
+export const atTime = (url, t) => { const id = ytId(url); return id ? `https://www.youtube.com/watch?v=${id}&t=${Math.max(0, Math.floor(t || 0))}s` : url; };
+export function parseTime(s) {
+  const p = String(s || '').trim().split(':').map((x) => x.trim());
+  if (!p[0] || p.some((x) => !/^\d+$/.test(x)) || p.length > 3) return null;
+  return p.reduce((a, x) => a * 60 + Number(x), 0);
+}
+export function fmtClock(t) {
+  t = Math.max(0, Math.floor(t || 0));
+  const hh = Math.floor(t / 3600), mm = Math.floor((t % 3600) / 60), ss = String(t % 60).padStart(2, '0');
+  return hh ? `${hh}:${String(mm).padStart(2, '0')}:${ss}` : `${mm}:${ss}`;
+}
+
+// ---------- calendario (.ics) ----------
+// Mismo formato que la función "calendario" de Supabase. Zona horaria del Bajío: UTC-6 todo el año.
+const ICS_TZ = 'America/Mexico_City';
+const icsEsc = (s) => String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+function icsFold(line) {
+  const enc = new TextEncoder(), out = []; let cur = '';
+  for (const ch of line) { if (enc.encode(cur + ch).length > (out.length ? 74 : 75)) { out.push(cur); cur = ch; } else cur += ch; }
+  out.push(cur); return out.join('\r\n ');
+}
+function icsLocal(date, time, plusMin = 0) {
+  const [hh, mm] = time.split(':').map(Number);
+  const t = new Date(Date.UTC(+date.slice(0, 4), +date.slice(5, 7) - 1, +date.slice(8, 10), hh, mm + plusMin));
+  return `${t.getUTCFullYear()}${pad(t.getUTCMonth() + 1)}${pad(t.getUTCDate())}T${pad(t.getUTCHours())}${pad(t.getUTCMinutes())}00`;
+}
+// events: [{ uid, summary, date: 'AAAA-MM-DD', end?, time?: 'HH:MM', minutes?, location?, desc?, alarm?: minutos antes (null = sin aviso), rrule? }]
+export function buildICS(events, calName = 'Remate') {
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
+  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Remate//Calendario del equipo//ES', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    `X-WR-CALNAME:${icsEsc(calName)}`, `X-WR-TIMEZONE:${ICS_TZ}`,
+    'BEGIN:VTIMEZONE', `TZID:${ICS_TZ}`, 'BEGIN:STANDARD', 'DTSTART:19700101T000000', 'TZOFFSETFROM:-0600', 'TZOFFSETTO:-0600', 'TZNAME:CST', 'END:STANDARD', 'END:VTIMEZONE'];
+  for (const e of events) {
+    L.push('BEGIN:VEVENT', `UID:${e.uid}@remate`, `DTSTAMP:${stamp}`);
+    if (e.time) L.push(`DTSTART;TZID=${ICS_TZ}:${icsLocal(e.date, e.time)}`, `DTEND;TZID=${ICS_TZ}:${icsLocal(e.date, e.time, e.minutes || 90)}`);
+    else L.push(`DTSTART;VALUE=DATE:${e.date.replaceAll('-', '')}`, `DTEND;VALUE=DATE:${addDays(e.end || e.date, 1).replaceAll('-', '')}`);
+    if (e.rrule) L.push(`RRULE:${e.rrule}`);                      // se repite (por ejemplo, cada semana hasta que termina el bloque)
+    L.push(`SUMMARY:${icsEsc(e.summary)}`);
+    if (e.location) L.push(`LOCATION:${icsEsc(e.location)}`);
+    if (e.desc) L.push(`DESCRIPTION:${icsEsc(e.desc)}`);
+    // Avisos: los de hora, X minutos antes; los de todo el día, a las 9 de la mañana del día anterior.
+    // alarm 0 = avisa justo a la hora (los recordatorios diarios de Remate Fit).
+    if (e.alarm !== null) L.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsEsc(e.summary)}`, `TRIGGER:${e.time ? (e.alarm === 0 ? 'PT0M' : `-PT${e.alarm || 60}M`) : '-PT15H'}`, 'END:VALARM');
+    L.push('END:VEVENT');
+  }
+  L.push('END:VCALENDAR');
+  return `${L.map(icsFold).join('\r\n')}\r\n`;
+}
+
+// Días de la semana en iCalendar (0 = domingo, como Date.getDay()).
+export const BYDAY = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+// Repetir cada semana esos días hasta una fecha (incluida).
+export const weeklyRule = (days, until) => `FREQ=WEEKLY;BYDAY=${[...days].sort((a, b) => a - b).map((d) => BYDAY[d]).join(',')}${until ? `;UNTIL=${until.replaceAll('-', '')}T235959Z` : ''}`;
+// Primera fecha desde «from» (incluida) que cae en ese día de la semana.
+export const nextWeekday = (from, wd) => addDays(from, (wd - parseDate(from).getDay() + 7) % 7);
+// Enlace para agregar UN evento a Google Calendar (con su repetición, si tiene).
+export function googleCalUrl(e) {
+  const p = new URLSearchParams({ action: 'TEMPLATE', text: e.summary });
+  if (e.time) { p.set('dates', `${icsLocal(e.date, e.time)}/${icsLocal(e.date, e.time, e.minutes || 90)}`); p.set('ctz', ICS_TZ); }
+  else p.set('dates', `${e.date.replaceAll('-', '')}/${addDays(e.end || e.date, 1).replaceAll('-', '')}`);
+  if (e.desc) p.set('details', e.desc);
+  if (e.location) p.set('location', e.location);
+  if (e.rrule) p.set('recur', `RRULE:${e.rrule}`);
+  return `https://calendar.google.com/calendar/render?${p}`;
+}
+
+// Clave de un rival: el nombre sin mayúsculas, acentos ni signos («Prepa Las Lomas» = «prepa las lomas»).
+export const rivalKey = (name) => String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
