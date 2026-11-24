@@ -1,6 +1,7 @@
 // Ajustes: equipo, días de entrenamiento, apariencia, respaldo, privacidad y cuenta.
 import { defaultUnit, setDefaultUnit } from '../peso.js';
-import { h, ic, toast, confirmSheet, openSheet, download, copyText, shareText, fmtDate, newJoinCode, DAYS, DAYS_LONG, plural, THEMES, getTheme, setTheme } from '../util.js';
+import { groupsSection } from './multigrupo.js';
+import { h, ic, toast, confirmSheet, openSheet, download, copyText, shareText, fmtDate, newJoinCode, DAYS, DAYS_LONG, plural, THEMES, getTheme, setTheme, getViewPref, setViewPref } from '../util.js';
 import { state, group, settings, saveSettings, add, patch, remove, players, sessions, exportBackup, importBackup, refresh, flush, pendingCount, teamReady, equiposReady, teams } from '../store.js';
 import { pushSettings } from './avisos.js';
 import { fraseField } from './frase.js';
@@ -33,6 +34,33 @@ async function signOut(label) {
   location.hash = ''; location.reload();
 }
 
+// v3.35: pantalla para la cancha
+const viewPrefField = () => h('div', { class: 'stack', style: { gap: '6px' } },
+  [['sol', 'Para la cancha al sol', 'Más contraste: fondo blanco, letras negras y bordes marcados.'], ['grande', 'Letra grande', 'Todo un poco más grande, para leer de lejos.']].map(([k, t, d]) =>
+    h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: getViewPref(k) ? true : null, onchange: (e) => setViewPref(k, e.target.checked) }), h('span', {}, h('strong', {}, ` ${t}`), h('span', { class: 'row-sub', style: { display: 'block' } }, d)))));
+// v3.35: revisar instalación (autodiagnóstico)
+export function installCheckSection() {
+  const out = h('div', { class: 'stack' });
+  const run = async (btn) => {
+    btn.disabled = true;
+    const dg = await import('../diagnostico.js');
+    const prog = h('p', { class: 'row-sub', style: { margin: 0 } }, 'Revisando archivos…'); out.replaceChildren(prog);
+    try {
+      const f = await dg.checkFiles((d, t) => { prog.textContent = `Revisando archivos… ${d} de ${t}`; });
+      const v = await dg.checkViews((d, t) => { prog.textContent = `Probando que cada pantalla abra… ${d} de ${t}`; });
+      const okAll = !f.missing.length && !f.versionMismatch && !v.broken.length;
+      out.replaceChildren(...[
+        note(okAll ? `Todo bien: ${f.total} archivos de la versión ${f.appVersion} y ${v.total} módulos abren sin error.` : 'Encontré problemas. Sube estos archivos en su carpeta y vuelve a revisar:', okAll ? 'ok' : 'warn'),
+        f.missing.length ? h('ul', { class: 'plain' }, f.missing.map((x) => h('li', {}, h('strong', {}, x.split('/').pop()), h('span', { class: 'row-sub' }, ` → va en ${dg.folderOf(x)}`)))) : null,
+        f.versionMismatch ? note(`sw.js dice versión ${f.swVersion} y version.js dice ${f.appVersion}: sube los dos de la misma versión.`, 'warn') : null,
+        v.broken.length ? h('ul', { class: 'plain' }, v.broken.map((x) => h('li', {}, h('strong', {}, x.file), h('span', { class: 'row-sub', style: { display: 'block' } }, x.why)))) : null].filter(Boolean));
+    } catch (e) { out.replaceChildren(note(`No se pudo revisar: ${e.message || e}. ¿Hay internet?`, 'warn')); }
+    btn.disabled = false;
+  };
+  const btn = h('button', { class: 'btn', type: 'button', onclick: (e) => run(e.currentTarget) }, ic('shield-check', 18), 'Revisar instalación');
+  return h('section', { class: 'stack' }, sectionTitle('Revisar instalación'),
+    h('p', { class: 'row-sub', style: { margin: 0 } }, 'Después de subir una versión a GitHub: revisa que estén todos los archivos, en su carpeta y de la misma versión. Necesita internet.'), btn, out);
+}
 const themeField = () => {
   const sel = h('select', { 'aria-label': 'Tema' }, options(Object.entries(THEMES), getTheme()));
   sel.addEventListener('change', () => setTheme(sel.value));
@@ -162,8 +190,8 @@ function categoriesSection() {
 
 function asistente() {
   return { title: 'Ajustes', el: h('div', { class: 'page' },
-    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField(), weightField(), fraseField()),
-    offlineSection(),
+    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField(), viewPrefField(), weightField(), fraseField()),
+    offlineSection(), installCheckSection(),
     h('section', { class: 'stack' }, sectionTitle('Notificaciones'), pushSettings()),
     aboutSection(),
     h('section', { class: 'stack' }, sectionTitle('Cuenta'),
@@ -190,6 +218,7 @@ function coach() {
   const el = h('div', { class: 'page' },
     // v3.23.1: el entrenador también activa las notificaciones en su celular (antes solo jugadores y ayudantes)
     h('section', { class: 'stack' }, sectionTitle('Notificaciones en este celular'), pushSettings()),
+    groupsSection(),
     h('section', { class: 'stack' }, sectionTitle('Tu equipo'),
       field('Nombre del equipo', name), field('Temporada', season, 'Aparece en reportes y en tu ayuda memoria. Es opcional.')),
     h('section', { class: 'stack' }, sectionTitle('Entrenamientos'),
@@ -236,8 +265,8 @@ function coach() {
     teamsSection(),
     categoriesSection(),
     supportSection(),
-    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField(), weightField(), fraseField()),
-    offlineSection(),
+    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField(), viewPrefField(), weightField(), fraseField()),
+    offlineSection(), installCheckSection(),
     h('section', { class: 'stack' }, sectionTitle('Tus datos'),
       state.mode === 'cloud' ? h('p', { style: { margin: 0 } }, pendingCount() ? `${plural(pendingCount(), 'cambio espera', 'cambios esperan')} conexión para enviarse.` : state.online ? 'Todo está guardado en la nube.' : 'Sin internet: los cambios se guardan en este celular y se envían al volver la conexión.') : note('Modo demo: los datos son de ejemplo y viven solo en este navegador. Para usar Remate con tus jugadores, conéctalo a Supabase (el LEEME explica cómo).', 'warn'),
       h('div', { class: 'cluster' },
@@ -264,16 +293,16 @@ function coach() {
 function jugador(ctx) {
   const me = ctx.me;
   if (ctx.self) return { title: 'Ajustes', el: h('div', { class: 'page' },
-    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField(), weightField(), fraseField()),
-    offlineSection(),
+    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField(), viewPrefField(), weightField(), fraseField()),
+    offlineSection(), installCheckSection(),
     h('section', { class: 'stack' }, sectionTitle('Tu perfil de jugador'),
       h('p', { style: { margin: 0 } }, `Estás usando Remate con tu ficha de jugador (${me.name}). Lo que registres aquí (En casa, retos, convocatorias y Teoría) cuenta como de ese jugador.`),
       h('div', { class: 'cluster' }, h('button', { class: 'btn', type: 'button', onclick: () => import('./sheets-player.js').then((m) => m.playerFormSheet(me, { self: true })) }, ic('pencil', 18), 'Editar mis datos'),
         h('button', { class: 'btn primary', type: 'button', onclick: () => import('./mas.js').then((m) => m.leaveSelf('#/ajustes')) }, ic('undo-2', 18), 'Volver a entrenador'))),
     aboutSection()) };
   return { title: 'Ajustes', el: h('div', { class: 'page' },
-    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField(), weightField(), fraseField()),
-    offlineSection(),
+    h('section', { class: 'stack' }, sectionTitle('Pantalla'), themeField(), viewPrefField(), weightField(), fraseField()),
+    offlineSection(), installCheckSection(),
     ctx.readonly ? null : h('section', { class: 'stack' }, sectionTitle('Notificaciones'), pushSettings()),
     h('section', { class: 'stack' }, sectionTitle('Tu información'),
       h('p', { style: { margin: 0 } }, `Tu entrenador guarda tu nombre o apodo${me ? ` (${me.name})` : ''}, tu posición, tus evaluaciones y tu asistencia. No guarda teléfono, domicilio ni fotos. Solo tú y tu entrenador ven tu avance. Si quieres que se corrija o se borre algo, pídeselo a tu entrenador.`)),

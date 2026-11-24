@@ -4,9 +4,10 @@
 // (settings.split), así que no necesita SQL. El plan de siempre no cambia: el grupo B solo agrega «alt» a un bloque.
 import { h, ic, toast, addDays, fmtDate } from '../util.js';
 import { state, settings, saveSettings, convocados, patch } from '../store.js';
-import { getExercise, allExercises } from '../content/exercises.js';
+import { getExercise, allExercises, progressionOf } from '../content/exercises.js';
 import { note } from './ui.js';
 import { pickExerciseSheet } from './sheets-session.js';
+import { isAbsent } from './condiciones.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
 export const TIER = { A: 'Grupo A', B: 'Grupo B' };
@@ -34,7 +35,7 @@ export function bestCut(list) {
 export function groupOf(p, sp) { if (!sp) return null; return sp.moved?.[p.id] || (lvl(p) <= sp.cut ? 'A' : 'B'); }
 export function groupsOf(s) {
   const sp = splitOf(s); if (!sp) return null;
-  const list = convocados(s), A = list.filter((p) => groupOf(p, sp) === 'A'), B = list.filter((p) => groupOf(p, sp) === 'B');
+  const list = convocados(s).filter((p) => !isAbsent(s, p)), A = list.filter((p) => groupOf(p, sp) === 'A'), B = list.filter((p) => groupOf(p, sp) === 'B');   // v3.36: sin los que faltaron
   const range = (xs) => (xs.length ? [Math.min(...xs.map(lvl)), Math.max(...xs.map(lvl))] : null);
   return { sp, A, B, rA: range(A), rB: range(B) };
 }
@@ -182,7 +183,8 @@ export function exAdvice(exId, opts = {}) {
 }
 const resText = (x) => `${RES[x.r]?.t || x.r}${x.n != null ? ` (${x.n})` : ''}`;
 // Debajo de un bloque del plan (entrenador): el resultado de este entreno y la sugerencia por historial.
-export function blockResultLine(s, b) {
+const swapTo = (exId, k) => { const ex = getEx(exId); if (!ex) return null; const p = progressionOf(ex, allExercises(state.data.customEx)); return k === 'up' ? p.next : p.prev; };
+export function blockResultLine(s, b, edit = null) {
   const ex = b.ex ? getEx(b.ex) : null; if (!ex) return null;
   const res = b.res || {}, have = ['T', 'A', 'B'].filter((g) => res[g]?.r);
   const advA = exAdvice(b.ex, { except: s.id, g: splitOf(s) ? 'A' : null });
@@ -191,8 +193,16 @@ export function blockResultLine(s, b) {
   return h('span', { class: 'blk-res' },
     have.length ? h('span', { class: 'cluster', style: { gap: '6px' } }, h('small', { class: 'row-sub' }, 'Cómo salió:'),
       have.map((g) => h('span', { class: `chip ${RES[res[g].r]?.cls || ''}` }, g === 'T' ? resText(res[g]) : `${g}: ${resText(res[g])}`))) : null,
-    advA ? h('small', { class: `adv ${advA.k}` }, ic(advA.k === 'up' ? 'arrow-up' : 'arrow-down', 14), ` ${splitOf(s) ? 'Grupo A: ' : ''}${advA.t}`) : null,
-    advB ? h('small', { class: `adv ${advB.k}` }, ic(advB.k === 'up' ? 'arrow-up' : 'arrow-down', 14), ` Grupo B: ${advB.t}`) : null);
+    advA ? advLine(advA, splitOf(s) ? 'Grupo A: ' : '', swapTo(b.ex, advA.k), edit && ((to) => { edit({ ...(splitOf(s) && !b.alt?.ex ? { ex: to.id, alt: { ex: b.ex } } : { ex: to.id }), res: dropRes(b.res, ['T', 'A']) }); toast(`Cambiado por «${to.name}»`); })) : null,
+    advB ? advLine(advB, 'Grupo B: ', swapTo(b.alt.ex, advB.k), edit && ((to) => { edit({ alt: { ex: to.id }, res: dropRes(b.res, ['B']) }); toast(`Grupo B: ahora «${to.name}»`); })) : null);
+}
+// Al cambiar el ejercicio, el resultado ya marcado de ese grupo se quita (era del ejercicio anterior).
+const dropRes = (res, gs) => { if (!res) return undefined; const r = { ...res }; gs.forEach((g) => delete r[g]); return Object.keys(r).length ? r : undefined; };
+// v3.34: la sugerencia con botón para cambiar al ejercicio siguiente (o anterior) de la progresión.
+function advLine(adv, pre, to, onSwap) {
+  return h('span', { class: `adv ${adv.k}` }, ic(adv.k === 'up' ? 'arrow-up' : 'arrow-down', 14),
+    h('small', {}, ` ${pre}${adv.t}`),
+    to && onSwap ? h('button', { type: 'button', class: 'btn sm ghost', onclick: () => onSwap(to) }, ic('replace', 14), `Cambiar por «${to.name}»`) : null);
 }
 // En la página del ejercicio (entrenador): los últimos resultados.
 export function exHistoryCard(ex) {

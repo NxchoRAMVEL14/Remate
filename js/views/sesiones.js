@@ -6,6 +6,8 @@ import { sectionTitle, empty, note, sessionWhen, options, field } from './ui.js'
 import { sessionFormSheet, calendarCard } from './sheets-session.js';
 import { currentBlock } from './temporada.js';
 import { teoriaCard } from './teoria.js';
+import { semanaButton } from './del-dia.js';
+import { templateChoices, templateById, planFromAny } from './condiciones.js';
 
 function sessionRow(s) {
   const marks = state.data.attendance.filter((a) => a.session_id === s.id);
@@ -30,10 +32,13 @@ export default function sesiones(ctx) {
   const el = h('div', { class: 'page' },
     (() => { const b = currentBlock(); return h('a', { class: 'labcard', href: '#/temporada' }, h('span', { class: 'lc-ic' }, ic('calendar-range', 26)),
       h('span', { class: 'lc-t' }, h('strong', {}, 'Planear temporada'), h('span', {}, b ? `Bloque actual: ${b.name}` : 'Bloques con enfoque que crean tus entrenamientos.')), ic('chevron-right', 20)); })(),
+    h('a', { class: 'labcard', href: '#/cero' }, h('span', { class: 'lc-ic' }, ic('sprout', 26)),
+      h('span', { class: 'lc-t' }, h('strong', {}, 'Desde cero'), h('span', {}, 'Clases en orden para un grupo que nunca ha jugado: 8 clases o Torneo exprés de 4.')), ic('chevron-right', 20)),
     teoriaCard(ctx),
     calendarCard(ctx),
     h('section', {}, sectionTitle('Entrenamientos', h('div', { class: 'cluster' },
       h('button', { class: 'btn sm', type: 'button', onclick: scheduleSheet }, ic('calendar-days', 16), 'Programar semanas'),
+      semanaButton('btn sm'),
       h('button', { class: 'btn primary sm', type: 'button', onclick: () => sessionFormSheet(null, (s) => { location.hash = `#/sesion/${s.id}`; }) }, ic('plus', 16), 'Nuevo'))),
     all.length ? null : empty('Aún no hay entrenamientos', 'Crea uno con una plantilla o programa varias semanas de golpe con tus días de entrenamiento.')));
   if (overdue.length) el.append(h('section', {}, sectionTitle('Sin lista'), note('Estos entrenamientos ya pasaron y no tienen lista. Ábrelos para pasar lista o cancelarlos.', 'warn'),
@@ -52,7 +57,7 @@ function scheduleSheet() {
   const st = settings();
   if (!(st.days || []).length) { toast('Primero elige tus días de entrenamiento en Ajustes'); location.hash = '#/ajustes'; return; }
   const weeks = h('select', {}, options([[1, '1 semana'], [2, '2 semanas'], [4, '4 semanas'], [8, '8 semanas']], 4));
-  const tpl = h('select', {}, options([['', 'En blanco (arma cada plan después)'], ...TEMPLATES.map((x) => [x.id, `${x.name}, ${x.minutes} min`])], ''));
+  const tpl = h('select', {}, options([['', 'En blanco (arma cada plan después)'], ...templateChoices()], ''));
   const preview = h('p', { 'aria-live': 'polite' });
   const dates = () => {
     const have = new Set(state.data.sessions.map((s) => s.session_date)), out = [];
@@ -67,9 +72,9 @@ function scheduleSheet() {
       field('Cuántas semanas', weeks), field('Plantilla para todos', tpl, 'Puedes cambiar el plan de cada uno después.'), preview),
     actions: [{ label: 'Cancelar' }, { label: 'Crear', kind: 'primary', onClick: () => {
       const d = dates(); if (!d.length) { toast('No hay días nuevos que crear'); return false; }
-      const tp = TEMPLATE_BY_ID[tpl.value];
+      const tp = templateById(tpl.value);
       for (const date of d) add('sessions', { group_id: group()?.id, session_date: date, start_time: st.start, minutes: tp?.minutes || st.minutes, title: tp?.name || '',
-        focus: tp?.focus || [], plan: tp ? planFromTemplate(tp, date, settings().warmup_prev !== false) : [], status: 'planeada', published: false });
+        focus: tp?.focus || [], plan: tp ? planFromAny(tpl.value, date, settings().warmup_prev !== false) : [], status: 'planeada', published: false });
       toast(`${plural(d.length, 'entrenamiento creado', 'entrenamientos creados')}`);
     } }],
   });

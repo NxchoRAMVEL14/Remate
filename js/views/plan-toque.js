@@ -5,7 +5,8 @@
 //  3) si hay partido en los próximos 3 días (semana de partido: menos bloques y más juego, sin físico pesado),
 //  4) lo que ya se trabajó en los 2 últimos entrenos hechos (para no repetirlo).
 import { h, ic, toast, openSheet, confirmSheet, todayStr, addDays, fmtDate, diffDays } from '../util.js';
-import { state, add, patch, settings, teamPlayers, group } from '../store.js';
+import { state, add, patch, settings, teamPlayers, group, players } from '../store.js';
+import { replay, byRotation, rotLabel } from '../match-calc.js';
 import { levelGap, currentRatings } from '../calc.js';
 import { SKILL_BY_ID } from '../content/skills.js';
 import { BUILTIN, getExercise } from '../content/exercises.js';
@@ -22,14 +23,14 @@ const TRAIN = ['saque', 'recepcion', 'colocacion', 'remate', 'bloqueo', 'defensa
 // Candidatos para una habilidad, del que mejor le queda al grupo al que menos. variant rota entre los 3 mejores.
 export function pick(skill, level, used, variant = 0) {
   const kinds = skill === 'fisico' ? ['fisico'] : ['tecnica', 'juego'];
-  const ok = BUILTIN.filter((e) => e.skills.includes(skill) && kinds.includes(e.kind) && !used.has(e.id))
+  const ok = BUILTIN.filter((e) => !e.cero && e.skills.includes(skill) && kinds.includes(e.kind) && !used.has(e.id))
     .sort((a, b) => fit(a, level) - fit(b, level) || (a.skills[0] !== skill) - (b.skills[0] !== skill) || (a.kind !== kinds[0]) - (b.kind !== kinds[0]) || span(a) - span(b));
   const top = ok.filter((e) => fit(e, level) <= 1).slice(0, 3);
   return (top.length ? top[variant % top.length] : ok[0]) || null;
 }
 export function pickGame(level, want, used, variant = 0) {
   const hits = (e) => e.skills.filter((s) => want.includes(s)).length;
-  const ok = BUILTIN.filter((e) => e.kind === 'juego' && !used.has(e.id)).sort((a, b) => fit(a, level) - fit(b, level) || hits(b) - hits(a) || span(a) - span(b));
+  const ok = BUILTIN.filter((e) => !e.cero && e.kind === 'juego' && !used.has(e.id)).sort((a, b) => fit(a, level) - fit(b, level) || hits(b) - hits(a) || span(a) - span(b));
   const top = ok.filter((e) => fit(e, level) <= 1).slice(0, 2);
   return (top.length ? top[variant % top.length] : ok[0]) || null;
 }
@@ -68,6 +69,37 @@ export function signals(date = todayStr()) {
   return { team, evald, score, why, lastM, dx: dx?.enough ? dx : null, sideOut, soon, recentFocus, level };
 }
 
+// ---------- v3.34: del partido al entreno ----------
+// La rotación donde más puntos pierden, juntando los rallies de hasta 3 partidos terminados de los últimos 30 días
+// que tengan la alineación capturada. Necesita por lo menos 3 rotaciones con 6 rallies o más; si ninguna va en negativo, no propone nada.
+export const ROT_EX = 'ju-14';
+export function weakRotation(date = todayStr()) {
+  const d = state.data;
+  const ms = (d.matches || []).filter((m) => m.status === 'terminado' && m.match_date <= date && diffDays(date, m.match_date) <= 30 && (m.lineups || []).some((l) => l?.slots?.length === 6)
+    && (!m.group_id || !group() || m.group_id === group().id)).sort((a, b) => b.match_date.localeCompare(a.match_date)).slice(0, 3);
+  if (!ms.length) return null;
+  const rallies = ms.flatMap((m) => replay((d.matchLogs || []).find((l) => l.match_id === m.id)?.log || [], m.lineups || [], players()).rallies);
+  const rots = byRotation(rallies).filter((r) => r.n >= 6);
+  if (rots.length < 3) return null;
+  const worst = rots.reduce((a, b) => (b.diff < a.diff || (b.diff === a.diff && (b.so ?? 100) < (a.so ?? 100)) ? b : a));
+  if (worst.diff >= 0) return null;
+  return { key: worst.key, label: rotLabel(worst.key), n: worst.n, won: worst.won, so: worst.so, soN: worst.soN, soW: worst.soW, rivals: ms.map((m) => m.rival) };
+}
+export const rotNote = (w) => `Rotación a trabajar: ${w.label.toLowerCase()}. Ganaron ${w.won} de ${w.n} rallies${w.soN ? ` (side-out ${w.so} %)` : ''}${w.rivals?.length ? ` contra ${w.rivals.join(', ')}` : ''}.`;
+// Pone «Tu peor rotación» en el próximo entreno (antes del enfriamiento), con la rotación escrita en la nota.
+export function rotationToNext(w) {
+  const t = todayStr();
+  const next = state.data.sessions.filter((s) => s.status === 'planeada' && s.session_date >= t && (!s.group_id || s.group_id === group()?.id))
+    .sort((a, b) => a.session_date.localeCompare(b.session_date) || String(a.start_time || '').localeCompare(String(b.start_time || '')))[0];
+  if (!next) { toast('No tienes entrenos por venir: crea uno primero'); return; }
+  const plan = structuredClone(next.plan || []), note = rotNote(w), at = plan.findIndex((b) => b.ex === ROT_EX);
+  if (at >= 0) plan[at] = { ...plan[at], note };
+  else { const ci = plan.findIndex((b) => getExercise(b.ex)?.kind === 'cierre'); plan.splice(ci >= 0 ? ci : plan.length, 0, { ex: ROT_EX, min: 20, note }); }
+  patch('sessions', next.id, { plan });
+  toast(`«Tu peor rotación» quedó en el entreno del ${fmtDate(next.session_date, { weekday: 'long', day: 'numeric' })}`);
+  location.hash = `#/sesion/${next.id}`;
+}
+
 export function autoPlan({ date = todayStr(), minutes = null, variant = 0, force = null } = {}) {
   const sg = signals(date), st = settings();
   const mins = Math.max(45, Number(minutes) || Number(st.minutes) || 90);
@@ -90,8 +122,9 @@ export function autoPlan({ date = todayStr(), minutes = null, variant = 0, force
     }
   }
   const want = [...(sg.sideOut ? ['recepcion', 'saque'] : []), ...focus];
-  const game = pickGame(sg.level, want, used, variant);
-  if (game) { used.add(game.id); plan.push({ ex: game.id, min: gameMin, note: [sg.sideOut ? `Side-out: ${sg.sideOut.why}` : '', sg.soon ? `Partido el ${fmtDate(sg.soon.match_date, { weekday: 'long' })}: jueguen como en el partido.` : ''].filter(Boolean).join(' ') }); }
+  const wr = sg.level >= 3 ? weakRotation(date) : null;   // v3.34: con equipo de nivel 3 o más, el juego del final es su peor rotación
+  const game = wr && !used.has(ROT_EX) ? getExercise(ROT_EX) : pickGame(sg.level, want, used, variant);
+  if (game) { used.add(game.id); plan.push({ ex: game.id, min: gameMin, note: [wr && game.id === ROT_EX ? rotNote(wr) : '', sg.sideOut ? `Side-out: ${sg.sideOut.why}` : '', sg.soon ? `Partido el ${fmtDate(sg.soon.match_date, { weekday: 'long' })}: jueguen como en el partido.` : ''].filter(Boolean).join(' ') }); }
   plan.push({ ex: 'fi-10', min: 5, note: '' });
   const total = plan.reduce((a, b) => a + b.min, 0);
   const first = plan.find((b, i) => i > 0 && b.ex !== game?.id && b.ex !== 'fi-10') || plan.find((b) => b.ex === game?.id);
@@ -99,6 +132,7 @@ export function autoPlan({ date = todayStr(), minutes = null, variant = 0, force
   // Por qué: lo que se le explica al entrenador.
   const reasons = [];
   for (const k of focus) reasons.push({ t: NAME(k), d: sg.why[k].join(' ') || (force === k ? 'Lo elegiste tú.' : 'Es de lo básico que más se usa en el juego.') });
+  if (wr && game?.id === ROT_EX) reasons.push({ t: 'Peor rotación', d: `En tus últimos partidos, ${wr.label.toLowerCase()} fue donde más puntos perdieron (${wr.won} de ${wr.n} rallies). El juego del final es «Tu peor rotación» en esa rotación.` });
   if (sg.soon) reasons.push({ t: 'Semana de partido', d: `Juegan contra ${sg.soon.rival} el ${fmtDate(sg.soon.match_date, { weekday: 'long', day: 'numeric' })}: menos bloques, más juego y nada de físico pesado.` });
   if (sg.evald.length < sg.team.length) reasons.push({ t: 'Sin evaluar', d: `${sg.team.length - sg.evald.length} de ${sg.team.length} jugadores no tienen evaluación; evalúalos para que el plan sea más preciso.` });
   if (!sg.dx && sg.lastM) reasons.push({ t: 'Último partido', d: `Contra ${sg.lastM.rival} no hay suficiente captura para sacar conclusiones.` });

@@ -3,7 +3,7 @@ import { h, ic, toast, plural, addDays, parseDate, fmtDate, openSheet, confirmSh
 import { state, getSession, patch, add, remove, settings, players, convocados, hasConv, saveConv, isApart } from '../store.js';
 import { planMinutes, focusOf } from '../calc.js';
 import { SKILL_BY_ID } from '../content/skills.js';
-import { TEMPLATES, TEMPLATE_BY_ID, planFromTemplate, WARMUPS, warmupFor } from '../content/templates.js';
+import { TEMPLATES, ALL_TEMPLATES, TEMPLATE_BY_ID, planFromTemplate, WARMUPS, warmupFor } from '../content/templates.js';
 import { getExercise, KINDS, levelLabel } from '../content/exercises.js';
 import { courtSVG } from '../court.js';
 import { sectionTitle, empty, note, longDate, field, options, STATUS_LABEL, jersey } from './ui.js';
@@ -12,7 +12,8 @@ import { noticeSheet } from './avisos.js';
 import { openCourtMode } from './court-mode.js';
 import { azarButton } from './azar.js';
 import { planToqueButton } from './plan-toque.js';
-import { splitBox, blockSplitLines, printableSplit, splitOf, blockResultLine } from './grupos.js';
+import { splitBox, blockSplitLines, printableSplit, splitOf, blockResultLine, groupsOf } from './grupos.js';
+import { hoyTengoBox, saveAsTemplate, templateChoices, templateById, planFromAny, myTemplates, deleteTemplate } from './condiciones.js';
 
 const getEx = (id) => getExercise(id, state.data.customEx);
 
@@ -83,6 +84,7 @@ export default function sesion(ctx) {
     h('div', { class: 'cluster' },
       h('button', { class: 'btn sm', type: 'button', onclick: () => sessionFormSheet(s) }, ic('pencil', 16), 'Editar datos'),
       h('button', { class: 'btn sm', type: 'button', onclick: () => duplicate(s) }, ic('copy', 16), 'Duplicar'),
+      (s.plan || []).length ? h('button', { class: 'btn sm', type: 'button', onclick: () => saveAsTemplate(s) }, ic('bookmark', 16), 'Guardar como plantilla') : null,
       s.status !== 'cancelada' && s.session_date >= todayStr() ? calButton({ name: 'entrenamiento', events: [sessionEvent(s)] }) : null,
       s.status === 'hecha' ? h('button', { class: 'btn sm', type: 'button', title: 'Por si pasaste lista por error', onclick: () => undoDone(s) }, ic('undo-2', 16), 'Regresar a Por hacer') : null,
       s.status === 'cancelada'
@@ -118,7 +120,7 @@ export default function sesion(ctx) {
   const att = marks.length ? (() => { const c = { presente: 0, retardo: 0, falta: 0, justificada: 0 }; marks.forEach((m) => c[m.status]++); return c; })() : null;
 
   return { title: s.title || 'Entrenamiento', back: '#/sesiones', actions: plan.length ? [{ label: 'Imprimir plan', icon: 'printer', onClick: () => window.print() }] : [],
-    el: h('div', { class: 'page' }, h('div', { class: 'no-print stack' }, head, conv, splitBox(s)), planBox,
+    el: h('div', { class: 'page' }, h('div', { class: 'no-print stack' }, head, conv, splitBox(s), s.status !== 'cancelada' && (s.plan || []).length ? hoyTengoBox(s, groupsOf(s)) : null), planBox,
       att ? h('section', { class: 'no-print' }, sectionTitle('Asistencia'), h('div', { class: 'cluster' }, ['presente', 'retardo', 'falta', 'justificada'].map((k) => h('span', { class: `chip ${{ presente: 'ok', retardo: 'warn', falta: 'bad', justificada: 'info' }[k]}` }, `${STATUS_LABEL[k]} ${att[k]}`)),
         h('span', { class: 'chip' }, `Sin lista ${convocados(s).filter((p) => !marks.some((m) => m.player_id === p.id)).length}`))) : null,
       h('section', { class: 'no-print' }, sectionTitle('Notas'), h('div', { class: 'field' }, notes, h('span', { class: 'hint' }, 'Los jugadores las ven cuando el entrenamiento está publicado. Para algo privado usa las notas de cada jugador.'))),
@@ -143,7 +145,7 @@ function blockRow(s, plan, i, b, setPlan) {
       h('button', { class: 'iconbtn', type: 'button', 'aria-label': 'Quitar bloque', onclick: () => { setPlan(plan.filter((_, k) => k !== i)); toast('Bloque quitado'); } }, ic('x', 18))),
     b.note ? h('span', { class: 'bnote' }, b.note) : null,
     blockSplitLines(s, b, edit),
-    blockResultLine(s, b));
+    blockResultLine(s, b, edit));
 }
 
 function noteSheet(b, onSave) {
@@ -154,14 +156,16 @@ function noteSheet(b, onSave) {
 
 // ---------- plantilla ----------
 function templateSheet(s) {
-  const sel = h('select', {}, options(TEMPLATES.map((t) => [t.id, `${t.name}, ${t.minutes} min, niveles ${t.levels[0]} a ${t.levels[1]}`]), TEMPLATES[0].id));
+  const mine = myTemplates();
+  const sel = h('select', {}, options([...mine.map((t) => [t.id, `★ ${t.name}, ${t.minutes} min (tuya)`]), ...ALL_TEMPLATES.map((t) => [t.id, `${t.name}, ${t.minutes} min, niveles ${t.levels[0]} a ${t.levels[1]}`])], (mine[0] || TEMPLATES[0]).id));
   const desc = h('p', { class: 'row-sub' });
-  const paint = () => { desc.textContent = TEMPLATE_BY_ID[sel.value].desc; }; sel.addEventListener('input', paint); paint();
+  const del = h('button', { type: 'button', class: 'btn sm ghost', onclick: () => { const t = templateById(sel.value); deleteTemplate(sel.value); toast(`Plantilla «${t?.name}» borrada`); sel.querySelector(`option[value="${sel.value}"]`)?.remove(); paint(); } }, ic('trash-2', 14), 'Borrar esta plantilla mía');
+  const paint = () => { const t = templateById(sel.value); const isMine = String(sel.value).startsWith('mt-'); desc.textContent = isMine ? `Tu plantilla: ${t?.plan.length || 0} bloques, ${t?.minutes || 0} min.` : (t?.desc || ''); del.hidden = !isMine; }; sel.addEventListener('input', paint); paint();
   openSheet({ title: 'Aplicar plantilla',
-    body: h('div', { class: 'stack' }, field('Plantilla', sel), desc, (s.plan || []).length ? note('Esto reemplaza el plan actual.', 'warn') : null),
+    body: h('div', { class: 'stack' }, field('Plantilla', sel), desc, del, (s.plan || []).length ? note('Esto reemplaza el plan actual.', 'warn') : null),
     actions: [{ label: 'Cancelar' }, { label: 'Aplicar', kind: 'primary', onClick: () => {
-      const t = TEMPLATE_BY_ID[sel.value];
-      patch('sessions', s.id, { plan: planFromTemplate(t, s.session_date, settings().warmup_prev !== false), focus: t.focus, title: s.title || t.name }); toast('Plantilla aplicada');
+      const t = templateById(sel.value); if (!t) return;
+      patch('sessions', s.id, { plan: planFromAny(sel.value, s.session_date, settings().warmup_prev !== false), focus: t.focus || [], title: s.title || t.name }); toast('Plantilla aplicada');
     } }] });
 }
 

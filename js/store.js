@@ -59,6 +59,7 @@ export const state = {
   viewAs: null,                      // id de jugador que el entrenador está previsualizando
   self: false,                       // true si el entrenador entró a su propio perfil de jugador (no es solo vista previa)
   data: emptyData(), pending: 0, online: true, lastError: null,
+  all: null,                         // v3.37: todos los datos; data es la vista del grupo activo (si hay varios grupos)
   lab: true,                         // false si la base de datos aún no tiene las tablas de la fase 2
   casa: true,                        // false si aún no tiene las de la fase 3 (en casa y mejoras)
   team: true,                        // false si aún no tiene las de la fase 4 (ayudantes, convocatoria, pruebas, avisos)
@@ -141,31 +142,39 @@ function ownerId() { return state.role === 'player' ? (state.me?.owner_id || sta
 export function add(key, row) {
   const full = { id: uid(), owner_id: ownerId(), ...DEFAULTS[key](), ...row };
   if (!NO_CREATED_AT.has(key)) full.created_at = full.created_at || new Date().toISOString();
-  state.data[key].push(full);
+  allData()[key].push(full); if (scoped()) rescope();
   persist({ op: 'add', key, row: structuredClone(full) });
   emit();
   return full;
 }
 // v3.9: guarda en memoria algo que la nube ya tiene (no lo vuelve a mandar).
 export function applyRemote(key, row, match = (r) => r.id === row.id) {
-  const i = state.data[key].findIndex(match);
-  if (i >= 0) state.data[key][i] = { ...state.data[key][i], ...row }; else state.data[key].push(row);
+  const arr = allData()[key], i = arr.findIndex(match);
+  if (i >= 0) arr[i] = { ...arr[i], ...row }; else arr.push(row);
+  if (scoped()) rescope();
   saveCache(); emit();
 }
 export function patch(key, id, changes) {
-  const r = find(key, id); if (!r) return null;
+  const r = find(key, id) || allData()[key].find((x) => x.id === id); if (!r) return null;
   Object.assign(r, changes);
+  if (scoped() && ('group_id' in changes)) rescope();
   persist({ op: 'patch', key, id, changes: structuredClone(changes) });
   emit();
   return r;
 }
 export function remove(key, id) {
-  state.data[key] = state.data[key].filter((r) => r.id !== id);
-  const d = state.data;
+  const d = allData();
+  d[key] = d[key].filter((r) => r.id !== id);
   if (key === 'players') for (const k of ['attendance', 'ratings', 'exams', 'claims', 'notes', 'matchStats', 'homeLogs', 'rsvps', 'playerTests', 'tRsvps', 'gymLogs', 'sessionRpe', 'techVideos', 'fitProfiles', 'fitLogs']) d[k] = d[k].filter((r) => r.player_id !== id);
+  if (key === 'groups') {   // v3.37: al borrar un grupo, todo lo suyo (la nube lo borra en cascada)
+    const gone = (k) => { const ids = new Set(d[k].filter((r) => r.group_id === id).map((r) => r.id)); d[k] = d[k].filter((r) => r.group_id !== id); return ids; };
+    const p = gone('players'), se = gone('sessions'), m = gone('matches'), t = gone('tournaments'); ['staff', 'notices', 'calFeeds'].forEach(gone);
+    for (const k of Object.keys(d)) if (Array.isArray(d[k]) && k !== 'groups') d[k] = d[k].filter((r) => !(r.player_id && p.has(r.player_id)) && !(r.session_id && se.has(r.session_id)) && !(r.match_id && m.has(r.match_id)) && !(r.tournament_id && t.has(r.tournament_id)));
+  }
   if (key === 'tournaments') { d.tRsvps = d.tRsvps.filter((r) => r.tournament_id !== id); d.matches.forEach((m) => { if (m.tournament_id === id) m.tournament_id = null; }); }
   if (key === 'sessions') { d.attendance = d.attendance.filter((r) => r.session_id !== id); d.sessionRpe = d.sessionRpe.filter((r) => r.session_id !== id); d.coachLogs.forEach((r) => { if (r.session_id === id) r.session_id = null; }); }
   if (key === 'matches') { for (const k of ['matchLogs', 'matchStats', 'rsvps']) d[k] = d[k].filter((r) => r.match_id !== id); d.coachLogs.forEach((r) => { if (r.match_id === id) r.match_id = null; }); }
+  if (scoped()) rescope(); else state.data = d;
   persist({ op: 'remove', key, id });
   emit();
 }
@@ -173,7 +182,8 @@ export function remove(key, id) {
 // Datos frescos de la nube para unas filas, sin pasar por la cola de envío
 // (por ejemplo, la lista de un entrenamiento mientras los jugadores escanean el QR).
 export function replaceRows(key, pred, rows) {
-  state.data[key] = [...state.data[key].filter((r) => !pred(r)), ...rows];
+  const d = allData(); d[key] = [...d[key].filter((r) => !pred(r)), ...rows];
+  if (scoped()) rescope(); else state.data = d;
   if (state.mode === 'cloud') saveCache();
   emit();
 }
@@ -194,7 +204,36 @@ export function recordExam(playerId, level, passed, results, note = '') {
 }
 
 // ---------- accesos de lectura ----------
-export const group = () => state.data.groups[0] || null;
+// ---------- v3.37: varios grupos (por ejemplo CETAC y una telesecundaria) ----------
+// La base de datos ya permite varios grupos por entrenador. state.all guarda todo y state.data es la vista del grupo activo:
+// sus jugadores, entrenos, partidos, torneos y todo lo que cuelga de ellos. Con un solo grupo, data y all son lo mismo.
+export function allData() { return state.all || state.data; }
+const activeKey = () => `remate.grupo.${state.user?.id || 'demo'}`;
+export const groupsAll = () => [...(allData().groups || [])].sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+export const scoped = () => state.role === 'coach' && groupsAll().length > 1;
+export function activeGroupId() { const gs = groupsAll(), id = ls.get(activeKey()); return (gs.find((g) => g.id === id) || gs[0])?.id || null; }
+export function rescope() {
+  const all = allData();
+  if (!scoped()) { state.data = all; return; }
+  const gid = activeGroupId(), v = { ...all };
+  const byGroup = (r) => !('group_id' in r) || r.group_id == null || r.group_id === gid;
+  for (const k of ['players', 'sessions', 'matches', 'tournaments', 'staff', 'notices', 'calFeeds']) v[k] = (all[k] || []).filter(byGroup);
+  const pids = new Set(v.players.map((r) => r.id)), sids = new Set(v.sessions.map((r) => r.id)), mids = new Set(v.matches.map((r) => r.id)), tids = new Set(v.tournaments.map((r) => r.id));
+  for (const k of Object.keys(all)) {
+    if (['groups', 'players', 'sessions', 'matches', 'tournaments', 'staff', 'notices', 'calFeeds', 'roster'].includes(k) || !Array.isArray(all[k])) continue;
+    v[k] = all[k].filter((r) => byGroup(r) && (!r.player_id || pids.has(r.player_id)) && (!r.session_id || sids.has(r.session_id)) && (!r.match_id || mids.has(r.match_id)) && (!r.tournament_id || tids.has(r.tournament_id)));
+  }
+  state.data = v;
+}
+function setAll(data) { state.all = data; rescope(); }
+export function setActiveGroup(id) { ls.set(activeKey(), id); rescope(); emit(); }
+export function createGroup(name, copy = true) {
+  const cur = group(), st = settings();
+  const base = copy ? { days: st.days, start: st.start, minutes: st.minutes, late_per_absence: st.late_per_absence } : {};
+  const g = add('groups', { name: name.trim().slice(0, 60), settings: base });
+  setActiveGroup(g.id); return g;
+}
+export const group = () => { const gs = allData().groups || []; const id = activeGroupId(); return gs.find((g) => g.id === id) || gs[0] || null; };
 export function settings() {
   return { days: [2, 4], start: '17:00', minutes: 90, late_per_absence: 3, season: '', ...(group()?.settings || {}) };
 }
@@ -276,11 +315,11 @@ export function saveProfile(changes) {
 
 // ---------- guardado ----------
 let demoTimer;
-function saveDemo() { ls.set(DEMO_KEY, JSON.stringify({ v: 1, data: state.data })); }
+function saveDemo() { ls.set(DEMO_KEY, JSON.stringify({ v: 1, data: allData() })); }
 function scheduleDemoSave() { clearTimeout(demoTimer); demoTimer = setTimeout(saveDemo, 250); }
 addEventListener('pagehide', () => { if (state.mode === 'demo') saveDemo(); });
 
-function saveCache() { if (state.user) ls.set(cacheKey(), JSON.stringify(state.data)); }
+function saveCache() { if (state.user) ls.set(cacheKey(), JSON.stringify(allData())); }
 function saveOutbox() { ls.set(outKey(), JSON.stringify(outbox)); state.pending = outbox.length; }
 
 function persist(op) {
@@ -398,7 +437,7 @@ export async function refresh() {
     // v3.13: hora de los partidos (y horarios de torneos, en el mismo bloque de SQL).
     let missing313 = false;
     if (!missing) { try { const c = await client(); const { error } = await c.from('matches').select('start_time').limit(1); if (error && (error.code === '42703' || /column|start_time/i.test(error.message || ''))) missing313 = true; } catch (e) { if (!isNetworkError(e)) missing313 = true; } }
-    state.data = next; state.online = true; state.lab = !missing; state.equipos = !missing8; state.casa = !missing3; state.team = !missing4; state.torneos = !missing5; state.cal = !missing6; state.gym = !missing7; if (state.role !== 'player') state.sql37 = !missing9; state.sql39 = !missing39; state.sql311 = !missing311; state.sql313 = !missing313; state.sql323 = !missing323; state.sql326 = !missing326; state.syncedAt = new Date().toISOString(); try { ls.set(`remate.synced.${state.user?.id}`, state.syncedAt); } catch { /* */ }
+    setAll(next); state.online = true; state.lab = !missing; state.equipos = !missing8; state.casa = !missing3; state.team = !missing4; state.torneos = !missing5; state.cal = !missing6; state.gym = !missing7; if (state.role !== 'player') state.sql37 = !missing9; state.sql39 = !missing39; state.sql311 = !missing311; state.sql313 = !missing313; state.sql323 = !missing323; state.sql326 = !missing326; state.syncedAt = new Date().toISOString(); try { ls.set(`remate.synced.${state.user?.id}`, state.syncedAt); } catch { /* */ }
     saveCache(); emit();
     return true;
   } catch (e) {
@@ -415,18 +454,18 @@ export function beginDemo(seedFn) {
   const raw = ls.get(DEMO_KEY);
   let data = null;
   try { data = raw ? JSON.parse(raw).data : null; } catch { data = null; }
-  state.data = { ...emptyData(), ...(data || seedFn()) };
+  setAll({ ...emptyData(), ...(data || seedFn()) });
   ls.set(MODE_KEY, 'demo');
   if (!data) saveDemo();
   state.ready = true; emit();
 }
-export function resetDemo(seedFn) { state.data = { ...emptyData(), ...seedFn() }; saveDemo(); emit(); }
+export function resetDemo(seedFn) { setAll({ ...emptyData(), ...seedFn() }); saveDemo(); emit(); }
 
 export function beginCloud({ user, role }) {
   state.mode = 'cloud'; state.role = role; state.user = user; state.email = user.email || '';
   try { outbox = JSON.parse(ls.get(outKey()) || '[]'); } catch { outbox = []; }
   state.pending = outbox.length;
-  try { const c = JSON.parse(ls.get(cacheKey()) || 'null'); if (c) state.data = { ...emptyData(), ...c }; } catch { /* sin caché */ }
+  try { const c = JSON.parse(ls.get(cacheKey()) || 'null'); if (c) setAll({ ...emptyData(), ...c }); } catch { /* sin caché */ }
   state.syncedAt = ls.get(`remate.synced.${user.id}`) || null;
   // v3.8: con varios celulares, la fila del jugador guarda solo el último; los demás también la ven (es la única que ven).
   if (role === 'player') state.me = state.data.players.find((p) => p.user_id === user.id) || state.data.players[0] || null;
@@ -436,15 +475,15 @@ export function clearLocal() {
   for (const k of ls.keys()) if (k.startsWith('remate.cache.') || k.startsWith('remate.outbox.')) ls.del(k);
   ls.del(MODE_KEY);
   outbox = [];
-  Object.assign(state, { ready: false, mode: null, role: null, user: null, email: '', me: null, viewAs: null, self: false, data: emptyData(), pending: 0, lastError: null, lab: true, casa: true, team: true, torneos: true, cal: true, equipos: true, gym: true, sql37: true, sql39: true, sql311: true, sql313: true, sql323: true, sql326: true, syncedAt: null });
+  Object.assign(state, { ready: false, mode: null, role: null, user: null, email: '', me: null, viewAs: null, self: false, data: emptyData(), all: null, pending: 0, lastError: null, lab: true, casa: true, team: true, torneos: true, cal: true, equipos: true, gym: true, sql37: true, sql39: true, sql311: true, sql313: true, sql323: true, sql326: true, syncedAt: null });
 }
 export const pendingCount = () => outbox.length;
 
 // ---------- respaldo ----------
-export const exportBackup = () => JSON.stringify({ app: 'remate', version: 1, exported_at: new Date().toISOString(), mode: state.mode, data: state.data }, null, 1);
+export const exportBackup = () => JSON.stringify({ app: 'remate', version: 1, exported_at: new Date().toISOString(), mode: state.mode, data: allData() }, null, 1);
 export function importBackup(text) {
   const j = JSON.parse(text);
   if (j?.app !== 'remate' || !j.data) throw new Error('Este archivo no es un respaldo de Remate.');
   if (state.mode !== 'demo') throw new Error('Restaurar solo está disponible en modo demo.');
-  state.data = { ...emptyData(), ...j.data }; saveDemo(); emit();
+  setAll({ ...emptyData(), ...j.data }); saveDemo(); emit();
 }

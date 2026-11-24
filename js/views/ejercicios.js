@@ -21,7 +21,7 @@ export const skIcon = (k) => SK_IC[k] || 'volleyball';
 const inTier = (e, t) => e.levels[0] <= t.range[1] && e.levels[1] >= t.range[0];
 export const tierOf = (e) => TIERS.find((t) => e.levels[0] >= t.range[0] && e.levels[0] <= t.range[1]) || TIERS[0];
 export const tierOfLevel = (n) => TIERS.find((t) => n >= t.range[0] && n <= t.range[1]) || TIERS[0];
-const tierBadge = (e) => { const t = tierOf(e), top = TIERS.find((x) => e.levels[1] >= x.range[0] && e.levels[1] <= x.range[1]) || t;
+const tierBadge = (e) => { if (e.cero) return h('span', { class: 'tier-b t-cero' }, 'Desde cero'); const t = tierOf(e), top = TIERS.find((x) => e.levels[1] >= x.range[0] && e.levels[1] <= x.range[1]) || t;
   return h('span', { class: `tier-b ${t.cls}` }, t === top ? t.name : `${t.name} a ${top.name.toLowerCase()}`); };
 export const exCard = (e, extra) => h('a', { class: `excard sk-${e.skills[0]}`, href: `#/ejercicio/${e.id}` },
   h('span', { class: 'ex-ic', 'aria-hidden': 'true' }, ic(skIcon(e.skills[0]), 22)),
@@ -60,7 +60,7 @@ export default function ejercicios(ctx) {
   const mt = h('select', { 'aria-label': 'Material' }, options([['', 'Todo el material'], ...Object.entries(MATERIAL)], ui.material));
   const rows = h('div', { class: 'rows' }), count = h('span', { class: 'row-sub', 'aria-live': 'polite' });
   const tierBox = h('div', { class: 'tiers', role: 'group', 'aria-label': 'Nivel' }), chipBox = h('div', { class: 'skchips', role: 'group', 'aria-label': 'Fundamento' });
-  const order = (e) => e.levels[0] * 100 + SKILLS.findIndex((s) => s.id === e.skills[0]) * 10 + e.min / 10;
+  const order = (e) => (e.cero ? 50 : e.levels[0] * 100) + SKILLS.findIndex((s) => s.id === e.skills[0]) * 10 + e.min / 10;
   const SK = SKILLS.filter((x) => SK_IC[x.id]);
   const feat = featured(ctx, all);
   const syncFeat = () => { if (feat) feat.hidden = !!(ui.q || ui.tier || ui.skill); };
@@ -96,6 +96,7 @@ export default function ejercicios(ctx) {
   // v3.21: Aprende, la teoría y la práctica juntas.
   const learn = h('a', { class: 'labcard', href: '#/aprende' }, h('span', { class: 'lc-ic' }, ic('graduation-cap', 26)),
     h('span', { class: 'lc-t' }, h('strong', {}, 'Aprende por fundamento o posición'), h('span', {}, 'Saque, remate, central, líbero…: la teoría, la práctica, En casa y el gym, juntos.')), ic('chevron-right', 20));
-  return { title: 'Ejercicios', el: h('div', { class: 'page' }, h('div', { class: 'labcards' }, learn, home, gymCard), ctx.role === 'coach' ? delDiaPanel(ui) : null, h('section', {}, sectionTitle('Biblioteca', add),
+  return { title: 'Ejercicios', el: h('div', { class: 'page' }, h('div', { class: 'labcards' }, learn, ctx.role === 'coach' ? h('a', { class: 'labcard', href: '#/cero' }, h('span', { class: 'lc-ic' }, ic('sprout', 26)),
+    h('span', { class: 'lc-t' }, h('strong', {}, 'Desde cero'), h('span', {}, 'Programa de clases para quien nunca ha jugado.')), ic('chevron-right', 20)) : null, home, gymCard), ctx.role === 'coach' ? delDiaPanel(ui) : null, h('section', {}, sectionTitle('Biblioteca', add),
     h('div', { class: 'stack' }, tierBox, chipBox, q, more, feat, h('div', { class: 'split' }, h('h3', { style: { margin: 0 } }, 'Todos'), count), rows))) };
 }

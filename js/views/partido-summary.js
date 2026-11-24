@@ -5,6 +5,7 @@ import { countsFor, playersIn, metrics, teamSummary, addCounts, fmtEff, result, 
 import { note, empty, sectionTitle, field, options } from './ui.js';
 import { getLog, nameOf, matchRoster } from './partido-capture.js';
 import { sugeridoButton } from './sugerido.js';
+import { rotationToNext } from './plan-toque.js';
 import { coachLogSheet } from './lab-coaching.js';
 import { torneoById } from './torneos.js';
 import { calButton, matchEvent } from './sheets-session.js';
@@ -171,6 +172,7 @@ export function summaryView(m, ctx, { canEdit, coach }) {
     ids.length && team.oppErr != null ? h('p', { style: { margin: 0 } }, `Puntos nuestros: ${team.ourPts}. De ellos, ${team.points} fueron por ace, remate o bloqueo y ${team.oppErr} por error del rival anotado. Errores nuestros: ${tm.errors}.`) : null,
     rots.length ? h('section', { class: 'stack' }, sectionTitle('Por rotación'),
       worst ? note(`Donde más puntos pierden: ${rotLabel(worst.key).toLowerCase()} (${worst.won} ganados de ${worst.n}). Ahí conviene revisar la recepción y la primera opción de ataque.`, worst.diff < 0 ? 'warn' : '') : null,
+      coach && worst && worst.diff < 0 ? h('div', { class: 'cluster' }, h('button', { class: 'btn sm', type: 'button', onclick: () => rotationToNext({ key: worst.key, label: rotLabel(worst.key), n: worst.n, won: worst.won, so: worst.so, soN: worst.soN, rivals: [m.rival] }) }, ic('calendar-plus', 16), 'Llevarlo al próximo entreno')) : null,
       h('div', { class: 'tablewrap' }, h('table', { class: 'stbl' },
         h('thead', {}, h('tr', {}, ['Rotación', 'Rallies', 'Ganados', '+/-', 'Side-out', 'Break point'].map((t) => h('th', { scope: 'col' }, t)))),
         h('tbody', {}, rots.map((x) => h('tr', { class: worst && x.key === worst.key ? 'hl' : null }, h('th', { scope: 'row' }, rotLabel(x.key)), h('td', {}, String(x.n)), h('td', {}, String(x.won)),

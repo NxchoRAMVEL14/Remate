@@ -3,7 +3,7 @@ import { injuryChip } from './lesiones.js';
 import { h, ic, openSheet, confirmSheet, toast, todayStr, addDays, parseDate, DAYS, buildICS, download, copyText, plural, fmtDate, googleCalUrl, weeklyRule, nextWeekday } from '../util.js';
 import { add, patch, remove, group, settings, players, setAttendance, state, calReady, randomToken, multiTeam, teamName, teamOf, convocados } from '../store.js';
 import { SKILLS, SKILL_BY_ID } from '../content/skills.js';
-import { TEMPLATES, TEMPLATE_BY_ID, planFromTemplate } from '../content/templates.js';
+import { TEMPLATES, ALL_TEMPLATES, TEMPLATE_BY_ID, planFromTemplate } from '../content/templates.js';
 import { allExercises, filterExercises, MATERIAL, KINDS, levelLabel } from '../content/exercises.js';
 import { field, options, note, jersey, STATUS_LABEL } from './ui.js';
 import { noticeSheet } from './avisos.js';
@@ -26,7 +26,7 @@ export function sessionFormSheet(s = null, onCreated) {
   const time = h('input', { type: 'time', value: s?.start_time ? s.start_time.slice(0, 5) : st.start });
   const mins = h('input', { type: 'number', min: 10, max: 300, step: 5, inputmode: 'numeric', value: s?.minutes || st.minutes });
   const title = h('input', { type: 'text', maxlength: 80, value: s?.title || '', placeholder: 'Por ejemplo: Saque y recepción' });
-  const tpl = h('select', {}, options([['', 'En blanco (arma tú el plan)'], ...TEMPLATES.map((t) => [t.id, `${t.name}, ${t.minutes} min, niveles ${t.levels[0]} a ${t.levels[1]}`])], ''));
+  const tpl = h('select', {}, options([['', 'En blanco (arma tú el plan)'], ...ALL_TEMPLATES.map((t) => [t.id, `${t.name}, ${t.minutes} min, niveles ${t.levels[0]} a ${t.levels[1]}`])], ''));
   let lastAuto = '';
   tpl.addEventListener('change', () => {
     const t = TEMPLATE_BY_ID[tpl.value];

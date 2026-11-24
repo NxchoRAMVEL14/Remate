@@ -2,7 +2,7 @@
 import { h, ic, toast, openSheet, confirmSheet, relDay, todayStr, isUrl, ytId } from '../util.js';
 import { state, sessions, patch, remove, settings, saveSettings } from '../store.js';
 import { SKILL_BY_ID } from '../content/skills.js';
-import { getExercise, KINDS, MATERIAL, levelLabel } from '../content/exercises.js';
+import { getExercise, KINDS, MATERIAL, levelLabel, progressionOf, allExercises } from '../content/exercises.js';
 import { courtSVG, animateArrows } from '../court.js';
 import { figCard } from '../figura.js';
 import { figFor, stepFigs } from '../content/movimientos.js';
@@ -34,6 +34,16 @@ export function exerciseDetail(ex) {
     sec('Cómo saber si salió bien', p(ex.measure)),
     ex.safety ? note(`Seguridad: ${ex.safety}`, 'warn') : null,
     ex.src ? h('p', { class: 'row-sub', style: { margin: 0 } }, `Fuente: ${ex.src}`) : null);
+}
+
+// v3.34: el ejercicio anterior y el siguiente del mismo fundamento.
+export function progressionCard(ex) {
+  const { prev, next } = progressionOf(ex, allExercises(state.data.customEx).filter((e) => !e.lab));
+  if (!prev && !next) return null;
+  const card = (e, dir) => (e ? h('a', { class: `prog-card ${dir}`, href: `#/ejercicio/${e.id}` },
+    h('small', {}, dir === 'prev' ? '← Antes (más fácil)' : 'Después (más difícil) →'), h('strong', {}, e.name), h('span', { class: 'row-sub' }, `${levelLabel(e)} · ${e.min} min`))
+    : h('div', { class: `prog-card ${dir} none` }, h('small', {}, dir === 'prev' ? '← Antes' : 'Después →'), h('span', { class: 'row-sub' }, dir === 'prev' ? 'Es el primero de su fundamento.' : 'Es el más avanzado de su fundamento.')));
+  return h('section', { class: 'stack' }, h('h3', { style: { margin: 0 } }, 'Progresión'), h('div', { class: 'prog' }, card(prev, 'prev'), card(next, 'next')));
 }
 
 export function exerciseSheet(ex) {
@@ -86,5 +96,5 @@ export default function ejercicio(ctx) {
   const video = vid || (coach && !ex.lab) ? h('div', { class: 'cluster' },
     vid ? h('a', { class: 'btn ball', href: vid, target: '_blank', rel: 'noopener' }, ic('video', 18), ytId(vid) ? 'Ver video en YouTube' : 'Ver video') : null,
     coach && !ex.lab ? h('button', { class: 'btn ghost sm', type: 'button', onclick: () => videoExSheet(ex) }, ic(vid ? 'pencil' : 'plus', 16), vid ? 'Cambiar video' : 'Agregar video') : null) : null;
-  return { title: ex.name, back, el: h('div', { class: 'page' }, ex.lab ? note('Ejercicio de tu laboratorio de salto. Tus jugadores no lo ven.') : null, tools, video, coach && !ex.lab && rateable(ex) ? exHistoryCard(ex) : null, exerciseDetail(ex)) };
+  return { title: ex.name, back, el: h('div', { class: 'page' }, ex.lab ? note('Ejercicio de tu laboratorio de salto. Tus jugadores no lo ven.') : null, tools, video, coach && !ex.lab && rateable(ex) ? exHistoryCard(ex) : null, exerciseDetail(ex), !ex.lab ? progressionCard(ex) : null) };
 }

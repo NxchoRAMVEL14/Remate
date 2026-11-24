@@ -2,7 +2,7 @@
 import { h, ic, toast, openSheet, confirmSheet, fmtDate, todayStr, addDays, parseDate, plural, uid, DAYS_LONG } from '../util.js';
 import { state, settings, saveSettings, group, add } from '../store.js';
 import { SKILLS, SKILL_BY_ID } from '../content/skills.js';
-import { TEMPLATES, TEMPLATE_BY_ID, planFromTemplate } from '../content/templates.js';
+import { TEMPLATES, ALL_TEMPLATES, TEMPLATE_BY_ID, planFromTemplate } from '../content/templates.js';
 import { sectionTitle, note, empty, field, options } from './ui.js';
 import { weekStart } from '../lab-calc.js';
 
@@ -41,8 +41,8 @@ function blockSheet(b = null) {
   const chosen = new Set(b?.focus || []);
   const focus = h('div', { class: 'cluster' }, SKILLS.map((s) => { const cb = h('input', { type: 'checkbox', checked: chosen.has(s.id) ? true : null, onchange: (e) => { if (e.target.checked) chosen.add(s.id); else chosen.delete(s.id); } });
     return h('label', { class: 'check chipcheck' }, cb, h('span', {}, s.name)); }));
-  const t1 = h('select', {}, options([['', 'Sin plantilla'], ...TEMPLATES.map((t) => [t.id, `${t.name} (${t.minutes} min)`])], b?.templates?.[0] || ''));
-  const t2 = h('select', {}, options([['', 'Ninguna'], ...TEMPLATES.map((t) => [t.id, `${t.name} (${t.minutes} min)`])], b?.templates?.[1] || ''));
+  const t1 = h('select', {}, options([['', 'Sin plantilla'], ...ALL_TEMPLATES.map((t) => [t.id, `${t.name} (${t.minutes} min)`])], b?.templates?.[0] || ''));
+  const t2 = h('select', {}, options([['', 'Ninguna'], ...ALL_TEMPLATES.map((t) => [t.id, `${t.name} (${t.minutes} min)`])], b?.templates?.[1] || ''));
   const text = h('input', { type: 'text', maxlength: 200, value: b?.note || '', placeholder: 'Opcional: objetivo del bloque' });
   const err = h('div', { class: 'note bad', role: 'alert', hidden: true });
   openSheet({
@@ -101,6 +101,8 @@ export default function temporada(ctx) {
 }
 
 // Bloque actual (para mostrarlo en Entrenamientos y en Hoy).
+// v3.36: el bloque de temporada de una fecha (para que el entreno del día y la semana sigan su enfoque).
+export const blockAt = (d) => plan().find((b) => b.start <= d && d <= endOf(b)) || null;
 export function currentBlock() {
   const t = todayStr();
   return plan().find((b) => b.start <= t && t <= endOf(b)) || null;

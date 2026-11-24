@@ -62,8 +62,17 @@ export function openCourtMode(session, { group = null } = {}) {
   const btn = (label, icon, fn, cls = '') => h('button', { class: `btn ${cls}`, type: 'button', 'aria-label': label, title: label, onclick: fn }, ic(icon, 20), h('span', {}, label));
 
   const closeBtn = h('button', { class: 'iconbtn', type: 'button', 'aria-label': 'Cerrar modo cancha', onclick: close }, ic('x', 26));
+  // v3.36: voz. Anuncia cada bloque, avisa a 30 segundos y dice qué sigue. Se recuerda en este celular.
+  let voice = (() => { try { return localStorage.getItem('remate.cm.voz') !== '0'; } catch { return true; } })(), said30 = false;
+  const canSpeak = 'speechSynthesis' in window;
+  const say = (t) => { if (!voice || !canSpeak || !t) return; try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.lang = 'es-MX'; u.rate = 1.02; speechSynthesis.speak(u); } catch { /* sin voz */ } };
+  const voiceBtn = canSpeak ? h('button', { class: 'iconbtn', type: 'button', 'aria-pressed': voice ? 'true' : 'false', 'aria-label': 'Voz', onclick: () => {
+    voice = !voice; try { localStorage.setItem('remate.cm.voz', voice ? '1' : '0'); } catch { /* */ } voiceBtn.replaceChildren(ic(voice ? 'volume-2' : 'volume-x', 24)); voiceBtn.setAttribute('aria-pressed', voice ? 'true' : 'false');
+    if (voice) say('Voz activada'); else try { speechSynthesis.cancel(); } catch { /* */ } } }, ic(voice ? 'volume-2' : 'volume-x', 24)) : null;
+  const nextName = (i) => (items[i + 1] ? items[i + 1].name : null);
+  const announce = (i) => { const x = items[i]; if (x) say(`Bloque ${i + 1}: ${x.name}. ${Math.round(x.secs / 60)} minutos.`); };
   const ov = h('div', { class: 'timer', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Modo cancha' },
-    h('div', { class: 'stack' }, h('div', { class: 'split', style: { flexWrap: 'nowrap' } }, count, closeBtn), viewSeg, segs),
+    h('div', { class: 'stack' }, h('div', { class: 'split', style: { flexWrap: 'nowrap' } }, count, h('div', { class: 'cluster', style: { flexWrap: 'nowrap', gap: '4px' } }, voiceBtn, closeBtn)), viewSeg, segs),
     h('div', { class: 'mid' }, name, partBar, clock, visual, info, rateBox, nextUp),
     h('div', { class: 'ctrl' },
       btn('Anterior', 'chevron-left', () => go(idx - 1)),
@@ -153,26 +162,29 @@ export function openCourtMode(session, { group = null } = {}) {
   function tick() {
     const now = Date.now(), dt = Math.min(5, (now - last) / 1000); last = now;
     left -= dt; spent += dt;
-    if (left <= 0 && !beeped) { beeped = true; beep(); }
+    if (left <= 30 && left > 0 && !said30 && items[idx].secs > 90) { said30 = true; const nx = nextName(idx); say(`Faltan 30 segundos.${nx ? ` Sigue: ${nx}.` : ''}`); }
+    if (left <= 0 && !beeped) { beeped = true; beep(); const nx = nextName(idx); setTimeout(() => say(nx ? `Tiempo. Sigue: ${nx}.` : 'Tiempo. Terminamos.'), 900); }
     paint();
   }
   function start() { running = true; last = Date.now(); clearInterval(timer); timer = setInterval(tick, 250); keepAwake(); try { audio ??= new (window.AudioContext || window.webkitAudioContext)(); audio.resume?.(); } catch { /* sin audio */ } paint(); }
   function stop() { running = false; clearInterval(timer); paint(); }
-  function toggle() { if (finished) { finished = false; idx = 0; left = items[0].secs; spent = 0; beeped = false; start(); return; } running ? stop() : start(); }
+  function toggle() { if (finished) { finished = false; idx = 0; left = items[0].secs; spent = 0; beeped = false; said30 = false; start(); announce(0); return; } if (running) stop(); else { const fresh = left >= items[idx].secs - 1; start(); if (fresh) announce(idx); } }
   function go(i) {
     if (i < 0) i = 0;
     if (i >= items.length) { finished = true; stop(); beep(); return; }
-    finished = false; idx = i; left = items[i].secs; beeped = false;
+    finished = false; idx = i; left = items[i].secs; beeped = false; said30 = false;
+    if (running) announce(i);
     spent = items.slice(0, i).reduce((n, x) => n + x.secs, 0);
     paint();
   }
-  function adjust(d) { left += d; if (left > 0) beeped = false; paint(); }
+  function adjust(d) { left += d; if (left > 0) beeped = false; if (left > 30) said30 = false; paint(); }
   function onKey(e) { if (e.key === 'Escape' && !document.querySelector('dialog[open]')) close(); if (e.key === ' ' && e.target === document.body) { e.preventDefault(); toggle(); } }
   function onVis() { if (document.visibilityState === 'visible' && running) keepAwake(); }
   function close() {
     clearInterval(timer); document.removeEventListener('keydown', onKey); document.removeEventListener('visibilitychange', onVis);
     try { wake?.release(); } catch { /* nada */ }
     try { audio?.close(); } catch { /* nada */ }
+    try { speechSynthesis.cancel(); } catch { /* nada */ }
     ov.remove(); if (root) root.inert = false; try { returnTo?.focus(); } catch { /* nada */ }
   }
   document.addEventListener('keydown', onKey); document.addEventListener('visibilitychange', onVis);

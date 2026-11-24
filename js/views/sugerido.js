@@ -19,14 +19,14 @@ const span = (e) => e.levels[1] - e.levels[0];
 
 // El ejercicio de técnica (o juego) que mejor le queda al equipo para una habilidad.
 function pickFor(skill, level, used) {
-  const ok = BUILTIN.filter((e) => e.skills.includes(skill) && !used.has(e.id) && (e.kind === 'tecnica' || e.kind === 'juego'));
+  const ok = BUILTIN.filter((e) => !e.cero && e.skills.includes(skill) && !used.has(e.id) && (e.kind === 'tecnica' || e.kind === 'juego'));
   // Primero el que trabaja esa habilidad como principal, luego técnica antes que juego, luego el más ajustado al nivel.
   return ok.sort((a, b) => fit(a, level) - fit(b, level) || (a.skills[0] !== skill) - (b.skills[0] !== skill)
     || (a.kind !== 'tecnica') - (b.kind !== 'tecnica') || span(a) - span(b))[0] || null;
 }
 // El juego final: el que más toca lo que falló.
 function pickGame(level, want, used) {
-  const ok = BUILTIN.filter((e) => e.kind === 'juego' && e.skills.includes('juego') && !used.has(e.id));
+  const ok = BUILTIN.filter((e) => !e.cero && e.kind === 'juego' && e.skills.includes('juego') && !used.has(e.id));
   const hits = (e) => e.skills.filter((s) => want.includes(s)).length;
   return ok.sort((a, b) => fit(a, level) - fit(b, level) || hits(b) - hits(a) || span(a) - span(b))[0] || null;
 }

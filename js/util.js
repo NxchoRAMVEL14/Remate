@@ -159,9 +159,15 @@ export const isStandalone = () => !!(window.matchMedia?.('(display-mode: standal
 export const iosBrowser = () => isIOS() && !isStandalone();
 export const INSTALL_STEPS = ['En Safari, toca el botón Compartir (el cuadro con la flecha hacia arriba).', 'Elige «Agregar a inicio» y luego «Agregar».', 'Abre Remate desde ese ícono y escribe tu código una sola vez. De ahí en adelante entra siempre por el ícono.'];
 
+// v3.35: «Para la cancha al sol» (alto contraste) y «Letra grande»: se recuerdan en este celular.
+const prefOn = (k) => { try { return localStorage.getItem(k) === '1'; } catch { return false; } };
+export const viewPrefs = { sol: 'remate.sol', grande: 'remate.grande' };
+export const getViewPref = (k) => prefOn(viewPrefs[k]);
+export function setViewPref(k, on) { try { localStorage.setItem(viewPrefs[k], on ? '1' : '0'); } catch { /* sin almacenamiento */ } applyTheme(); }
 export function applyTheme() {
   const t = getTheme(), root = document.documentElement;
   if (t === 'auto') root.removeAttribute('data-theme'); else root.dataset.theme = t;
+  root.classList.toggle('sol', prefOn(viewPrefs.sol)); root.classList.toggle('grande', prefOn(viewPrefs.grande));
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t === 'dark' ? '#0F2A55' : '#12356F');
 }
 export function setTheme(t) { if (THEMES[t]) { try { localStorage.setItem(THEME_KEY, t); } catch { /* sin almacenamiento */ } applyTheme(); } }

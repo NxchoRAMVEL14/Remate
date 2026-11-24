@@ -12,10 +12,10 @@ import { casaReady, isStaff, ls, myPlayer } from './store.js';
 const R = (file, pick = 'default') => ({ file, pick });
 const ROUTES = { hoy: R('hoy'), jugadores: R('jugadores'), jugador: R('jugador'), sesiones: R('sesiones'), sesion: R('sesion'), ejercicios: R('ejercicios'), ejercicio: R('ejercicio'),
   ruta: R('ruta'), ajustes: R('ajustes'), ayuda: R('ayuda'), novedades: R('ayuda', 'novedades'), partidos: R('partidos'), partido: R('partidos', 'partido'), lab: R('lab'), reportes: R('reportes'),
-  mas: R('mas'), casa: R('casa'), mejoras: R('mejoras'), pruebas: R('pruebas'), temporada: R('temporada'), avisos: R('avisos'), radar: R('radar-guia'), comparar: R('radar-guia', 'comparar'),
+  mas: R('mas'), casa: R('casa'), mejoras: R('mejoras'), pruebas: R('pruebas'), temporada: R('temporada'), cero: R('desde-cero'), avisos: R('avisos'), radar: R('radar-guia'), comparar: R('radar-guia', 'comparar'),
   teoria: R('teoria'), aprende: R('aprende'), pizarra: R('pizarra'), panel: R('panel'), lesiones: R('lesiones'), scout: R('scout-rapido'), video: R('video-dibujo'), torneo: R('torneos'), alineacion: R('partido-capture', 'alineacion'), rivales: R('rivales'), rival: R('rivales'), gym: R('gym'), medir: R('medir'),
   'lista-qr': R('asistir', 'listaQr'), llegue: R('asistir', 'llegue'), asistir: R('asistir'), inicio: R('inicio'), entrenos: R('entrenos'), carga: R('carga'), tecnica: R('tecnica'), azar: R('azar'), fit: R('fit'), imprimir: R('imprimir'), perfiles: R('perfiles'), conoceme: R('conoceme') };
-const COACH = new Set(['hoy', 'jugadores', 'jugador', 'sesiones', 'sesion', 'ejercicios', 'ejercicio', 'ruta', 'ajustes', 'ayuda', 'partidos', 'partido', 'lab', 'reportes', 'mas', 'casa', 'mejoras', 'pruebas', 'temporada', 'avisos', 'radar', 'novedades', 'teoria', 'comparar', 'torneo', 'alineacion', 'rivales', 'rival', 'gym', 'medir', 'lista-qr', 'llegue', 'carga', 'tecnica', 'azar', 'fit', 'imprimir', 'aprende', 'pizarra', 'panel', 'lesiones', 'scout', 'video', 'perfiles']);
+const COACH = new Set(['hoy', 'jugadores', 'jugador', 'sesiones', 'sesion', 'ejercicios', 'ejercicio', 'ruta', 'ajustes', 'ayuda', 'partidos', 'partido', 'lab', 'reportes', 'mas', 'casa', 'mejoras', 'pruebas', 'temporada', 'cero', 'avisos', 'radar', 'novedades', 'teoria', 'comparar', 'torneo', 'alineacion', 'rivales', 'rival', 'gym', 'medir', 'lista-qr', 'llegue', 'carga', 'tecnica', 'azar', 'fit', 'imprimir', 'aprende', 'pizarra', 'panel', 'lesiones', 'scout', 'video', 'perfiles']);
 const PLAYER = new Set(['inicio', 'ruta', 'entrenos', 'partidos', 'partido', 'ejercicios', 'ejercicio', 'casa', 'pruebas', 'avisos', 'asistir', 'ajustes', 'ayuda', 'radar', 'novedades', 'teoria', 'torneo', 'gym', 'medir', 'llegue', 'lista-qr', 'tecnica', 'fit', 'imprimir', 'aprende', 'pizarra', 'lesiones', 'conoceme']);
 const ASSISTANT = new Set(['asistir', 'partidos', 'partido', 'avisos', 'ejercicios', 'ejercicio', 'ajustes', 'ayuda', 'novedades', 'torneo', 'alineacion', 'lista-qr', 'aprende', 'pizarra']);
 const MODS = new Map();
@@ -81,6 +81,16 @@ function render({ fresh = false } = {}) {
         h('div', { class: 'note warn' }, navigator.onLine === false ? 'Esta pantalla todavía no se guardó en tu celular y no hay internet. Conéctate y vuelve a intentar.' : 'No se pudo abrir esta pantalla. Puede que haya una versión nueva de Remate: recarga.'),
         h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', onclick: () => location.reload() }, 'Recargar'), h('a', { class: 'btn', href: HOME[role] || '#/inicio' }, 'Ir al inicio'))))));
       console.error(e);
+      // v3.35: decir qué archivo falta y en qué carpeta va (o si hay versiones mezcladas).
+      if (navigator.onLine !== false) import('./diagnostico.js').then(async (dg) => {
+        const box = root.querySelector('.page'); if (!box || box.querySelector('.dg-msg')) return;
+        const wait = h('p', { class: 'row-sub dg-msg' }, 'Revisando qué archivo falta…'); box.append(wait);
+        try {
+          const r = await dg.checkFiles();
+          const txt = dg.missingText(r) || `Todos los archivos están en GitHub. ${dg.explain(e)} Si acabas de subir una versión, espera unos minutos y recarga.`;
+          wait.replaceWith(h('div', { class: 'note dg-msg' }, txt));
+        } catch { wait.remove(); }
+      }, () => {});
     });
     return;
   }

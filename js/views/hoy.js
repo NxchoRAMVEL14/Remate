@@ -1,8 +1,9 @@
 // "Hoy": lo próximo que viene y lo que necesita tu atención.
 import { h, ic, plural, toast, todayStr, fmtDate, sum } from '../util.js';
+import { groupChip } from './multigrupo.js';
 import { retoCard, syncReto } from './reto.js';
 import { planToqueButton } from './plan-toque.js';
-import { delDiaButton } from './del-dia.js';
+import { delDiaButton, semanaButton } from './del-dia.js';
 import { syncRanking } from './ranking.js';
 import { hoyBand as injuryBand } from './lesiones.js';
 import { retroHoyLine } from './perfiles.js';
@@ -34,7 +35,7 @@ export default function hoy() {
   const team = list.filter((p) => !isApart(p));   // v3.20: sin los que entrenan contigo aparte
   const st = settings();
   const all = sessions();
-  const el = h('div', { class: 'page' });
+  const el = h('div', { class: 'page' }, groupChip());   // v3.37: con varios grupos, cuál ves y cambiarlo
 
   // ---- sin jugadores: primeros pasos ----
   if (!list.length) {
@@ -76,7 +77,7 @@ export default function hoy() {
     el.append(h('section', { class: 'panel stack' },
       h('h2', {}, 'No hay entrenamientos por venir'),
       h('p', { style: { margin: 0 } }, `Tus días configurados son ${(st.days || []).length ? 'los marcados en Ajustes' : 'ninguno todavía'}. Crea el siguiente y arma el plan con una plantilla.`),
-      h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', onclick: () => sessionFormSheet(null, (s) => { location.hash = `#/sesion/${s.id}`; }) }, ic('plus', 18), 'Nuevo entrenamiento'), planToqueButton({}, 'btn'), delDiaButton({}))));
+      h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', onclick: () => sessionFormSheet(null, (s) => { location.hash = `#/sesion/${s.id}`; }) }, ic('plus', 18), 'Nuevo entrenamiento'), planToqueButton({}, 'btn'), delDiaButton({}), semanaButton())));
   }
   if (overdue.length) {
     el.append(note(`${plural(overdue.length, 'entrenamiento pasado sigue', 'entrenamientos pasados siguen')} sin lista. Pasa lista o cancélalos para que la asistencia sea correcta.`, 'warn'),
