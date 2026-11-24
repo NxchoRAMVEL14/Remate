@@ -87,3 +87,13 @@ img, svg { max-width: 100%; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+/* v3.35 · Para la cancha al sol (alto contraste, siempre claro) y letra grande */
+:root.sol, :root.sol[data-theme="dark"], :root.sol:not([data-theme="light"]) {
+  --bg: #FFFFFF; --surface: #FFFFFF; --surface-2: #EEF1F5; --ink: #000000; --ink-2: #1D2B3A; --line: #44546A;
+  --court: #0B3A8C; --court-deep: #062457; --link: #0B3A8C; --ok: #0B5E37; --ok-bg: #D2F0DF; --warn: #6B4400; --warn-bg: #FBE7A8;
+  --bad: #8F1F0B; --bad-bg: #F9D3CA; --info: #0B3A8C; --info-bg: #D4E2FA; color-scheme: light;
+}
+:root.sol .panel, :root.sol .row, :root.sol .btn, :root.sol input, :root.sol select, :root.sol textarea { border-width: 2px; }
+:root.sol body { font-weight: 500; }
+:root.grande { font-size: 118%; }

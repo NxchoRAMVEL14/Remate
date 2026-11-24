@@ -1458,3 +1458,34 @@ body.act-on { overflow: hidden; }
 .blk-res .adv { display: flex; gap: 6px; align-items: flex-start; padding: 6px 8px; border-radius: 8px; }
 .blk-res .adv.up { background: color-mix(in srgb, #2f80ed 12%, transparent); }
 .blk-res .adv.down { background: color-mix(in srgb, #eb5757 12%, transparent); }
+
+/* v3.34 · Progresión, peor rotación y semana con un toque */
+.prog { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.prog-card { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); text-decoration: none; background: var(--paper, #fff); }
+.prog-card.next { text-align: right; }
+.prog-card small { color: var(--ink-2); font-weight: 700; }
+.prog-card.none { opacity: .7; }
+.blk-res .adv { flex-wrap: wrap; }
+.blk-res .adv > small { flex: 1 1 200px; }
+.blk-res .adv .btn { flex: 1 1 100%; justify-content: flex-start; white-space: normal; text-align: left; }
+.wk-day { border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; gap: 4px; }
+.wk-day .wk-h { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+
+/* v3.36 · Hoy tengo… */
+.ht-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ht-grid .seg { display: grid; grid-template-columns: 1fr 1fr; align-items: stretch; }
+.ht-grid .seg button { font-size: .8rem; padding: 6px 4px; line-height: 1.15; text-align: center; white-space: normal; min-height: 40px; }
+.ht-issue { display: grid; gap: 4px; padding: 8px 10px; border-radius: 10px; background: var(--warn-bg); }
+.ht-issue .btn { justify-self: start; white-space: normal; text-align: left; }
+@media (max-width: 380px) { .ht-grid { grid-template-columns: 1fr; } }
+
+/* v3.37 · Varios grupos */
+.group-chip { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 6px 12px; min-height: 40px; font: inherit; font-size: .92rem; cursor: pointer; }
+.group-chip span { color: var(--link); font-weight: 700; }
+.rows .row.on { background: var(--info-bg); }
+
+/* v3.38 Desde cero */
+.tier-b.t-cero { background: #cfe8ff; }
+.cero-plan { margin: 0; padding-left: 1.3em; display: grid; gap: 4px; }
+.cero-plan a { font-weight: 600; }
+.cero-card h3 { margin: 0; }

@@ -4,7 +4,7 @@
 // 3.5 s contesta con lo guardado y actualiza por detrás. Los datos (Supabase) nunca pasan por aquí: los guarda la
 // app en el celular y sube los cambios cuando vuelve la señal.
 // El nombre lleva la versión de js/version.js: al subir una versión nueva, cámbialo aquí también.
-const CACHE = 'remate-v3.33.0';
+const CACHE = 'remate-v3.38.0';
 // ASSETS: la lista la genera scripts/assets (no la edites a mano).
 // ASSETS:BEGIN
 const ASSETS = [
@@ -30,6 +30,7 @@ const ASSETS = [
   "./js/cloud.js",
   "./js/court.js",
   "./js/demo.js",
+  "./js/diagnostico.js",
   "./js/figura.js",
   "./js/horarios.js",
   "./js/icons.js",
@@ -47,8 +48,10 @@ const ASSETS = [
   "./js/content/categorias.js",
   "./js/content/challenges.js",
   "./js/content/coaching.js",
+  "./js/content/desde-cero.js",
   "./js/content/ex-avanzado.js",
   "./js/content/ex-bloqueo-defensa.js",
+  "./js/content/ex-cero.js",
   "./js/content/ex-colocacion.js",
   "./js/content/ex-fisico.js",
   "./js/content/ex-intermedio.js",
@@ -92,9 +95,11 @@ const ASSETS = [
   "./js/views/casa.js",
   "./js/views/chart.js",
   "./js/views/compartir.js",
+  "./js/views/condiciones.js",
   "./js/views/conoceme.js",
   "./js/views/court-mode.js",
   "./js/views/del-dia.js",
+  "./js/views/desde-cero.js",
   "./js/views/ejercicio.js",
   "./js/views/ejercicios.js",
   "./js/views/entrenos.js",
@@ -121,6 +126,7 @@ const ASSETS = [
   "./js/views/mas.js",
   "./js/views/medir.js",
   "./js/views/mejoras.js",
+  "./js/views/multigrupo.js",
   "./js/views/panel.js",
   "./js/views/partido-capture.js",
   "./js/views/partido-summary.js",
@@ -168,7 +174,9 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET' || url.origin !== location.origin) return;            // la nube (Supabase) nunca se guarda aquí
   e.respondWith((async () => {
     const c = await caches.open(CACHE);
-    const net = fetch(req).then((res) => { if (res.ok && res.type === 'basic') c.put(req, res.clone()).catch(() => {}); return res; });
+    // v3.35: «no-cache» revalida cada archivo con GitHub (respuesta corta si no cambió): así nunca se mezclan
+    // archivos viejos guardados por el navegador con los nuevos durante los minutos después de subir una versión.
+    const net = fetch(req.mode === 'navigate' ? req : new Request(req, { cache: 'no-cache' })).then((res) => { if (res.ok && res.type === 'basic') c.put(req, res.clone()).catch(() => {}); return res; });
     const fromCache = async () => (await c.match(req, { ignoreSearch: true })) || (req.mode === 'navigate' ? (await c.match('./index.html')) || (await c.match('./')) : null);
     const hit = await c.match(req, { ignoreSearch: true });
     if (!hit) {                                                                    // no lo tenemos: esperar a la red
