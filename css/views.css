@@ -1501,3 +1501,13 @@ body.act-on { overflow: hidden; }
 .rot-card .slip-head { display: flex; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
 .serve-list { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
 @media print { .rot-grid { grid-template-columns: repeat(3, 1fr); } .rot-card { break-inside: avoid; } }
+
+/* v3.40 Biblioteca */
+.fav-btn[aria-pressed="true"] { background: var(--ball); color: #0C2340; border-color: var(--ball); }
+.fav-btn[aria-pressed="true"] svg { fill: currentColor; }
+.fav-on { color: var(--ball); display: inline-flex; }
+.fav-on svg { fill: currentColor; }
+.lib-top { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 8px; }
+@media (max-width: 420px) { .lib-top { grid-template-columns: 1fr; } }
+.step-bar { margin-top: 8px; align-items: center; }
+.step-bar .step-lbl { margin-left: auto; }
