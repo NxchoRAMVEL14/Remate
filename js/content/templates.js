@@ -1,5 +1,6 @@
 // Plantillas de sesión: arma un plan en un toque y ajústalo a tu grupo.
 // Cada bloque: { ex: id del ejercicio, min: minutos }. Las plantillas suman la duración indicada.
+import { CERO_TEMPLATES } from './desde-cero.js';
 const B = (ex, min) => ({ ex, min });
 
 // Calentamiento preventivo (v3.4): se turnan las versiones A, B y C por semana del año.
@@ -40,4 +41,6 @@ export const TEMPLATES = [
     desc: 'Para días con poco tiempo: calentamiento, tres fundamentos y juego.',
     blocks: [B('fi-01', 10), B('re-02', 12), B('co-02', 12), B('sa-01', 10), B('ju-01', 16)] },
 ];
-export const TEMPLATE_BY_ID = Object.fromEntries(TEMPLATES.map((t) => [t.id, t]));
+// v3.38: las clases de «Desde cero» van aparte (no entran al demo ni a las sugerencias), pero se pueden elegir en cualquier lista.
+export const ALL_TEMPLATES = [...TEMPLATES, ...CERO_TEMPLATES];
+export const TEMPLATE_BY_ID = Object.fromEntries(ALL_TEMPLATES.map((t) => [t.id, t]));
