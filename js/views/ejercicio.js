@@ -3,12 +3,13 @@ import { h, ic, toast, openSheet, confirmSheet, relDay, todayStr, isUrl, ytId } 
 import { state, sessions, patch, remove, settings, saveSettings } from '../store.js';
 import { SKILL_BY_ID } from '../content/skills.js';
 import { getExercise, KINDS, MATERIAL, levelLabel, progressionOf, allExercises } from '../content/exercises.js';
-import { courtSVG, animateArrows } from '../court.js';
+import { courtSVG } from '../court.js';
 import { figCard } from '../figura.js';
 import { figFor, stepFigs } from '../content/movimientos.js';
 import { empty, note, field } from './ui.js';
 import { customExerciseSheet } from './sheets-session.js';
 import { exHistoryCard, rateable } from './grupos.js';
+import { favButton, shareImageButton, stepper } from './biblioteca.js';
 
 const chip = (t, cls = '') => h('span', { class: `chip ${cls}` }, t);
 
@@ -20,8 +21,9 @@ export function exerciseDetail(ex) {
     h('div', { class: 'ex-meta' }, chip(`${ex.min} min`, 'ball'), chip(levelLabel(ex), 'info'), chip(KINDS[ex.kind] || ex.kind),
       ex.players && ex.players !== '—' ? chip(`${ex.players} jugadores`) : null,
       ex.skills.map((k) => chip(SKILL_BY_ID[k]?.name || k)), ex.material.map((m) => chip(MATERIAL[m] || m)), ex.custom ? chip('Propio', 'ok') : null),
-    ex.diagram ? h('figure', { class: 'court-wrap', style: { margin: 0 } }, animateArrows(h('div', { html: courtSVG(ex.diagram, `Diagrama de ${ex.name}`) })),
-      h('figcaption', {}, 'Cancha vista desde tu lado de la red. Círculos: jugadores. Flecha blanca: movimiento. Flecha amarilla: balón. Punteada coral: salto. Triángulos: conos.')) : null,
+    ex.diagram ? (() => { const box = h('div', { html: courtSVG(ex.diagram, `Diagrama de ${ex.name}`) }), bar = stepper(box);   // v3.40: paso a paso
+      return h('figure', { class: 'court-wrap', style: { margin: 0 } }, box, bar,
+        h('figcaption', {}, 'Cancha vista desde tu lado de la red. Círculos: jugadores. Flecha blanca: movimiento. Flecha amarilla: balón. Punteada coral: salto. Triángulos: conos.')); })() : null,
     sec('Objetivo', p(ex.goal)),
     sec('Organización', p(ex.setup)),
     // v3.9: el muñequito del movimiento; en calentamientos y físicos, uno por paso.
@@ -96,5 +98,6 @@ export default function ejercicio(ctx) {
   const video = vid || (coach && !ex.lab) ? h('div', { class: 'cluster' },
     vid ? h('a', { class: 'btn ball', href: vid, target: '_blank', rel: 'noopener' }, ic('video', 18), ytId(vid) ? 'Ver video en YouTube' : 'Ver video') : null,
     coach && !ex.lab ? h('button', { class: 'btn ghost sm', type: 'button', onclick: () => videoExSheet(ex) }, ic(vid ? 'pencil' : 'plus', 16), vid ? 'Cambiar video' : 'Agregar video') : null) : null;
-  return { title: ex.name, back, el: h('div', { class: 'page' }, ex.lab ? note('Ejercicio de tu laboratorio de salto. Tus jugadores no lo ven.') : null, tools, video, coach && !ex.lab && rateable(ex) ? exHistoryCard(ex) : null, exerciseDetail(ex), !ex.lab ? progressionCard(ex) : null) };
+  const mine = !ex.lab ? h('div', { class: 'cluster' }, favButton(ex), shareImageButton(ex)) : null;
+  return { title: ex.name, back, el: h('div', { class: 'page' }, ex.lab ? note('Ejercicio de tu laboratorio de salto. Tus jugadores no lo ven.') : null, tools, mine, video, coach && !ex.lab && rateable(ex) ? exHistoryCard(ex) : null, exerciseDetail(ex), !ex.lab ? progressionCard(ex) : null) };
 }
