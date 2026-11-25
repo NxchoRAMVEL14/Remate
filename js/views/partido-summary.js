@@ -6,6 +6,7 @@ import { note, empty, sectionTitle, field, options } from './ui.js';
 import { getLog, nameOf, matchRoster } from './partido-capture.js';
 import { sugeridoButton } from './sugerido.js';
 import { rotationToNext } from './plan-toque.js';
+import { servePlanCard } from './alineaciones.js';
 import { coachLogSheet } from './lab-coaching.js';
 import { torneoById } from './torneos.js';
 import { calButton, matchEvent } from './sheets-session.js';
@@ -164,6 +165,7 @@ export function summaryView(m, ctx, { canEdit, coach }) {
       h('div', { class: 'cluster' }, coach ? h('a', { class: 'btn sm', href: `#/rival/${rivalKey(m.rival)}` }, ic('eye', 16), `Scouting de ${m.rival}`) : null,
         coach && m.status === 'terminado' && rows.length ? sugeridoButton(m) : null,
         m.status !== 'terminado' && m.match_date >= todayStr() ? calButton({ name: 'partido', events: [matchEvent(m)] }) : null)),
+    coach && m.status !== 'terminado' && m.match_date >= todayStr() ? servePlanCard(m) : null,
     torneoById(m.tournament_id) && !state.data.rsvps.some((x) => x.match_id === m.id) ? tourRsvpNote(m)
       : upcoming || state.data.rsvps.some((x) => x.match_id === m.id) ? rsvpSection(m) : null,
     rows.length ? h('div', { class: 'kpis' }, k(fmtEff(tm.atEff), 'Eficiencia de ataque'), k(pctTxt(tm.recPos), 'Recepción buena o perfecta'), k(pctTxt(tm.svIn), 'Saques dentro')) : null,

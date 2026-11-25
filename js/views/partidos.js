@@ -104,6 +104,7 @@ function coach(ctx) {
     ro ? missingSqlNote() : null,
     ro ? null : h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', onclick: () => matchSheet(null, (m) => { location.hash = `#/partido/${m.id}`; }) }, ic('plus', 18), 'Nuevo partido'),
       isCoach ? h('a', { class: 'btn', href: '#/rivales' }, ic('eye', 18), 'Scouting de rivales') : null,
+      isCoach ? h('a', { class: 'btn', href: '#/alineaciones' }, ic('users', 18), 'Alineaciones') : null,
       isCoach || state.role === 'assistant' ? h('a', { class: 'btn', href: '#/pizarra' }, ic('move', 18), 'Pizarra') : null),
     tournamentsSection(ctx),
     list.length || tf ? sectionTitle('Partidos') : null,

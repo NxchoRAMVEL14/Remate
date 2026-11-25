@@ -5,6 +5,7 @@ import { client, isNetworkError, friendly } from '../cloud.js';
 import { ACTIONS, GROUPS, score, storedSets, countsFor, playersIn, setsToWin, replay, rotLabel, ZONE_ORDER, RIVAL_GRID, ZONE_ACTIONS, rivalLabel } from '../match-calc.js';
 import { note, sectionTitle, field, options } from './ui.js';
 import { suggestLineup } from './sugerido.js';
+import { lineupsFor, storeLineup } from './alineaciones.js';
 
 export const getLog = (m) => state.data.matchLogs.find((l) => l.match_id === m.id) || null;
 export const nameOf = (id) => playerById(id)?.name || 'Jugador';
@@ -271,6 +272,14 @@ export function lineupSheet(m, setIdx) {
   const cell = (z) => h('label', { class: 'lu-cell' }, h('span', {}, `Zona ${z}${z === 1 ? ' (saca)' : ''}`), zone[z]);
   // v3.8: propuesta de Remate (5-1) a partir del radar, las posiciones y la estadística; tú decides.
   const sugBox = h('div', { class: 'stack' });
+  // v3.39: alineaciones guardadas: elegir una llena las zonas; al guardar, se puede guardar también con nombre.
+  const saved = lineupsFor(m);
+  const useSaved = saved.length ? h('select', { 'aria-label': 'Usar una alineación guardada', onchange: (e) => {
+    const lu = saved.find((x) => x.id === e.target.value); if (!lu) return;
+    if (lu.slots.some((id) => !list.some((p) => p.id === id))) { list = matchRoster(m, { all: true }); for (const sel of [...Object.values(zone), libero]) { const v = sel.value; sel.replaceChildren(...opts(v)); sel.value = v; } }
+    lu.slots.forEach((id, i) => { zone[i + 1].value = id; }); libero.value = lu.libero || '';
+  } }, options([['', 'Elegir…'], ...saved.map((x) => [x.id, x.name])], '')) : null;
+  const keepBox = h('input', { type: 'checkbox' }), keepName = h('input', { type: 'text', maxlength: 40, placeholder: 'Nombre, por ejemplo: Titular' });
   const sugerir = () => {
     const r = suggestLineup(m);
     if (r.error) { sugBox.replaceChildren(note(r.error, 'warn')); return; }
@@ -285,10 +294,12 @@ export function lineupSheet(m, setIdx) {
     title: `Alineación del set ${setIdx + 1}`,
     body: h('div', { class: 'stack' },
       h('p', { class: 'row-sub', style: { margin: 0 } }, 'Como la ves desde tu banca: la red arriba. Al sacar primero, el de zona 1 es el que saca.'),
+      useSaved ? field('Usar una alineación guardada', useSaved) : null,
       h('div', { class: 'cluster' }, h('button', { type: 'button', class: 'btn sm', onclick: sugerir }, ic('sparkles', 16), 'Sugerir alineación')),
       h('div', { class: 'lu-grid' }, h('div', { class: 'lu-net' }, 'Red'), ZONE_ORDER.front.map(cell), ZONE_ORDER.back.map(cell)),
       field('Líbero (opcional)', libero), allBox,
-      h('div', { class: 'field' }, h('span', { class: 'label' }, '¿Quién saca primero en este set?'), seg), sugBox, err),
+      h('div', { class: 'field' }, h('span', { class: 'label' }, '¿Quién saca primero en este set?'), seg), sugBox,
+      h('label', { class: 'check' }, keepBox, h('span', {}, 'Guardar también como alineación (para usarla en otros partidos)')), keepName, err),
     actions: [{ label: 'Cancelar' }, { label: 'Guardar', kind: 'primary', onClick: () => {
       const slots = [1, 2, 3, 4, 5, 6].map((z) => zone[z].value);
       if (slots.some((x) => !x)) { err.textContent = 'Elige a los 6 jugadores en cancha.'; err.hidden = false; return false; }
@@ -296,7 +307,11 @@ export function lineupSheet(m, setIdx) {
       if (libero.value && slots.includes(libero.value)) { err.textContent = 'El líbero no puede estar también en la alineación.'; err.hidden = false; return false; }
       const next = [...lus]; while (next.length < setIdx) next.push(null);
       next[setIdx] = { slots, libero: libero.value || null, serve };
-      patch('matches', m.id, { lineups: next }); toast('Alineación guardada'); return true;
+      if (keepBox.checked) {
+        if (!keepName.value.trim()) { err.textContent = 'Ponle nombre a la alineación que vas a guardar.'; err.hidden = false; return false; }
+        storeLineup({ id: uid(), name: keepName.value.trim(), team: teamOf(m), slots, libero: libero.value || null, updated: new Date().toISOString().slice(0, 10) });
+      }
+      patch('matches', m.id, { lineups: next }); toast(keepBox.checked ? 'Alineación guardada y lista para otros partidos' : 'Alineación guardada'); return true;
     } }],
   });
 }
