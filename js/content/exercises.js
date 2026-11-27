@@ -10,12 +10,13 @@ import principiante from './ex-principiante.js';   // v3.30: tanda 1 (24 de Prin
 import intermedio from './ex-intermedio.js';       // v3.31: tanda 2 (24 de Intermedio)
 import avanzado from './ex-avanzado.js';           // v3.32: tanda 3 (24 de Avanzado)
 import cero from './ex-cero.js';              // v3.38: Desde cero (11, antes de Principiante)
+import tanda4 from './ex-tanda4.js';          // v3.41: tanda 4 (pocos jugadores, calentamientos con balón, grupos de 20 o más)
 import LAB from './lab-ex.js';
 
 export const MATERIAL = { balones: 'Balones', conos: 'Conos', red: 'Red', pared: 'Pared', cuerpo: 'Peso corporal', polainas: 'Polainas (tobilleras con peso)', escalon: 'Escalón o banca' };
 export const KINDS = { calentamiento: 'Calentamiento', tecnica: 'Técnica', juego: 'Juego', fisico: 'Físico', cierre: 'Cierre' };
 
-export const BUILTIN = [...saque, ...recepcion, ...colocacion, ...remate, ...bloqueoDefensa, ...fisico, ...juego, ...principiante, ...intermedio, ...avanzado, ...cero];
+export const BUILTIN = [...saque, ...recepcion, ...colocacion, ...remate, ...bloqueoDefensa, ...fisico, ...juego, ...principiante, ...intermedio, ...avanzado, ...cero, ...tanda4];
 export const BUILTIN_BY_ID = Object.fromEntries(BUILTIN.map((e) => [e.id, e]));
 // Los del laboratorio de salto son solo del entrenador: no salen en la biblioteca ni en lo que ve el jugador.
 const LAB_BY_ID = Object.fromEntries(LAB.map((e) => [e.id, e]));
