@@ -4,6 +4,7 @@
 //  2) lo que falló en el último partido (de los últimos 14 días, si se capturó bastante),
 //  3) si hay partido en los próximos 3 días (semana de partido: menos bloques y más juego, sin físico pesado),
 //  4) lo que ya se trabajó en los 2 últimos entrenos hechos (para no repetirlo).
+import { enoughPlayers } from './biblioteca.js';   // v3.41
 import { h, ic, toast, openSheet, confirmSheet, todayStr, addDays, fmtDate, diffDays } from '../util.js';
 import { state, add, patch, settings, teamPlayers, group, players } from '../store.js';
 import { replay, byRotation, rotLabel } from '../match-calc.js';
@@ -23,14 +24,14 @@ const TRAIN = ['saque', 'recepcion', 'colocacion', 'remate', 'bloqueo', 'defensa
 // Candidatos para una habilidad, del que mejor le queda al grupo al que menos. variant rota entre los 3 mejores.
 export function pick(skill, level, used, variant = 0) {
   const kinds = skill === 'fisico' ? ['fisico'] : ['tecnica', 'juego'];
-  const ok = BUILTIN.filter((e) => !e.cero && e.skills.includes(skill) && kinds.includes(e.kind) && !used.has(e.id))
+  const ok = BUILTIN.filter((e) => !e.cero && enoughPlayers(e, players().length) && e.skills.includes(skill) && kinds.includes(e.kind) && !used.has(e.id))
     .sort((a, b) => fit(a, level) - fit(b, level) || (a.skills[0] !== skill) - (b.skills[0] !== skill) || (a.kind !== kinds[0]) - (b.kind !== kinds[0]) || span(a) - span(b));
   const top = ok.filter((e) => fit(e, level) <= 1).slice(0, 3);
   return (top.length ? top[variant % top.length] : ok[0]) || null;
 }
 export function pickGame(level, want, used, variant = 0) {
   const hits = (e) => e.skills.filter((s) => want.includes(s)).length;
-  const ok = BUILTIN.filter((e) => !e.cero && e.kind === 'juego' && !used.has(e.id)).sort((a, b) => fit(a, level) - fit(b, level) || hits(b) - hits(a) || span(a) - span(b));
+  const ok = BUILTIN.filter((e) => !e.cero && enoughPlayers(e, players().length) && e.kind === 'juego' && !used.has(e.id)).sort((a, b) => fit(a, level) - fit(b, level) || hits(b) - hits(a) || span(a) - span(b));
   const top = ok.filter((e) => fit(e, level) <= 1).slice(0, 2);
   return (top.length ? top[variant % top.length] : ok[0]) || null;
 }

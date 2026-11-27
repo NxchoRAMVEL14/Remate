@@ -8,6 +8,7 @@ import { openCourtMode } from './court-mode.js';
 import { splitOf } from './grupos.js';
 import { matchSheet, matchesSorted, resultChip } from './partidos.js';
 import { sectionTitle, note, empty, sessionWhen, jersey, field, options } from './ui.js';
+import { can, roleOf, myStaff, funcName } from './ayudantes.js';
 
 export default function asistir(ctx) {
   if (!isStaff()) return { title: 'Asistir', back: '#/inicio', el: h('div', { class: 'page' }, empty('Esta sección es para ayudantes', 'Tu entrenador puede nombrarte capitán para que pases lista y captures partidos.')) };
@@ -34,12 +35,15 @@ export default function asistir(ctx) {
     h('section', { class: 'band next stack' },
       h('span', { class: 'when' }, group()?.name || 'Tu equipo'),
       h('h2', {}, `Eres ${who}`),
-      h('p', { style: { margin: 0 } }, `Puedes pasar lista y capturar partidos de los ${plural(n, 'jugador', 'jugadores')} del equipo. No ves notas, evaluaciones ni datos privados.`)),
-    h('section', { class: 'stack' }, sectionTitle('Pasar lista'),
+      h('p', { style: { margin: 0 } }, state.role === 'assistant'
+        ? `Tu función: ${funcName(roleOf(myStaff()))}. ${[can('lista') ? 'pasas lista' : null, can('dar') ? 'das el entreno' : null, can('editar') ? 'creas y cambias entrenos' : null, can('partidos') ? 'capturas partidos' : null, can('avisos') ? 'mandas avisos' : null].filter(Boolean).join(', ').replace(/^./, (c) => c.toUpperCase())}. No ves notas, evaluaciones ni datos privados.`
+        : `Puedes pasar lista y capturar partidos de los ${plural(n, 'jugador', 'jugadores')} del equipo. No ves notas, evaluaciones ni datos privados.`)),
+    state.role === 'assistant' && (can('dar') || can('editar')) ? h('div', { class: 'cluster' }, h('a', { class: 'btn primary', href: '#/entrenos-ayudante' }, ic('calendar-days', 18), can('dar') ? 'Dar un entreno' : 'Entrenos')) : null,
+    !can('lista') ? null : h('section', { class: 'stack' }, sectionTitle('Pasar lista'),
       today.length || recent.length ? h('div', { class: 'rows' }, [...today, ...recent].map(sessRow)) : empty('No hay entrenamientos de hoy ni recientes', null),
       upcoming.length ? h('p', { class: 'row-sub', style: { margin: 0 } }, `Próximo: ${upcoming.map((s) => `${s.title || 'Entrenamiento'} (${sessionWhen(s)})`).join(', ')}.`) : null,
       upcoming[0] && !today.length && courtBtns(upcoming[0]) ? h('div', { class: 'cluster' }, h('small', { class: 'row-sub' }, 'Ver el plan del próximo:'), courtBtns(upcoming[0])) : null),
-    h('section', { class: 'stack' }, sectionTitle('Partidos', h('button', { class: 'btn ghost sm', type: 'button', onclick: () => matchSheet(null, (m) => { location.hash = `#/partido/${m.id}`; }) }, ic('plus', 16), 'Nuevo')),
+    !can('partidos') ? null : h('section', { class: 'stack' }, sectionTitle('Partidos', h('button', { class: 'btn ghost sm', type: 'button', onclick: () => matchSheet(null, (m) => { location.hash = `#/partido/${m.id}`; }) }, ic('plus', 16), 'Nuevo')),
       live.length ? h('div', { class: 'rows' }, live.map((m) => h('a', { class: 'row', href: `#/partido/${m.id}` },
         h('span', { class: 'row-main' }, h('strong', {}, `Contra ${m.rival}`), h('span', { class: 'row-sub' }, fmtDate(m.match_date, { weekday: 'short', day: 'numeric', month: 'short' }))),
         h('span', { class: 'row-end' }, resultChip(m), h('span', { class: 'btn sm primary' }, 'Capturar')))))

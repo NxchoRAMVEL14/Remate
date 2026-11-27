@@ -87,10 +87,11 @@ function inviteSheet(st) {
       h('button', { class: 'btn', type: 'button', onclick: () => shareText(inviteText(st)) }, ic('share-2', 18), 'Compartir invitación'))),
     actions: [{ label: 'Listo', kind: 'primary' }] });
 }
+import { roleSheet, roleOf, funcName, myStaff } from './ayudantes.js';   // v3.41
 function newStaffSheet() {
   const name = h('input', { type: 'text', maxlength: 60, placeholder: 'Por ejemplo: Profe Luis' });
   openSheet({ title: 'Invitar asistente', body: h('div', { class: 'stack' }, field('Nombre del asistente', name),
-    note('Podrá pasar lista y capturar partidos. No verá notas privadas, evaluaciones, reportes ni tu laboratorio. Puedes quitarle el acceso cuando quieras.')),
+    note('Empieza con la función «Lista y partidos». Después de crear la invitación, toca «Función» para que también pueda dar el entreno o ser tu suplente. No verá notas privadas, evaluaciones, reportes ni tu laboratorio.')),
     actions: [{ label: 'Cancelar' }, { label: 'Crear invitación', kind: 'primary', onClick: () => {
       if (!name.value.trim()) { toast('Escribe su nombre'); return false; }
       const st = add('staff', { group_id: group()?.id, name: name.value.trim() });
@@ -139,7 +140,7 @@ function supportSection() {
   const caps = players().filter((p) => p.captain);
   return h('section', { class: 'stack' }, sectionTitle('Equipo de apoyo'),
     !teamReady() ? note('Para tener asistentes y capitanes, corre en Supabase el instalar.sql de esta versión.', 'warn') : null,
-    h('p', { style: { margin: 0 } }, 'Ayudantes que pueden pasar lista y capturar partidos. Nunca ven notas privadas, evaluaciones, reportes ni tu laboratorio.'),
+    h('p', { style: { margin: 0 } }, 'Ayudantes que te apoyan: a cada asistente le eliges su función (pasar lista y partidos, dar el entreno cuando no puedas, o suplente). Nunca ven notas privadas, evaluaciones, reportes ni tu laboratorio.'),
     h('h3', {}, 'Capitanes'),
     caps.length ? h('div', { class: 'rows' }, caps.map((p) => h('a', { class: 'row', href: `#/jugador/${p.id}` }, h('span', { class: 'row-main' }, h('strong', {}, p.name), h('span', { class: 'row-sub' }, 'Entra con su mismo código')), ic('chevron-right', 18))))
       : h('p', { class: 'row-sub', style: { margin: 0 } }, 'Ninguno todavía.'),
@@ -147,8 +148,10 @@ function supportSection() {
     h('h3', {}, 'Asistentes adultos'),
     staff.length ? h('div', { class: 'rows' }, staff.map((st) => h('div', { class: 'row', style: { flexWrap: 'wrap' } },
       h('span', { class: 'row-main', style: { flex: '1 1 180px' } }, h('strong', {}, st.name),
-        h('span', { class: 'row-sub' }, !st.active ? 'Sin acceso' : st.user_id ? `Activo desde el ${fmtDate(String(st.joined_at || st.created_at).slice(0, 10), { day: 'numeric', month: 'short' })}` : `Invitación pendiente: ${st.invite_code}`)),
+        h('span', { class: 'row-sub' }, !st.active ? 'Sin acceso' : st.user_id ? `Activo desde el ${fmtDate(String(st.joined_at || st.created_at).slice(0, 10), { day: 'numeric', month: 'short' })}` : `Invitación pendiente: ${st.invite_code}`),
+        h('span', { class: 'chip info', style: { marginTop: '4px', alignSelf: 'flex-start' } }, funcName(roleOf(st)))),
       h('span', { class: 'row-end', style: { marginLeft: 'auto' } },
+        h('button', { class: 'btn sm primary', type: 'button', onclick: () => roleSheet(st) }, ic('settings', 16), 'Función'),
         st.active && !st.user_id ? h('button', { class: 'btn sm', type: 'button', onclick: () => inviteSheet(st) }, 'Invitación') : null,
         h('button', { class: 'btn sm', type: 'button', onclick: () => { patch('staff', st.id, { active: !st.active }); toast(st.active ? 'Acceso quitado' : 'Acceso devuelto'); } }, st.active ? 'Quitar acceso' : 'Devolver acceso'),
         h('button', { class: 'btn sm', type: 'button', title: 'Genera un código nuevo; el celular anterior pierde el acceso', onclick: async () => {
@@ -195,7 +198,7 @@ function asistente() {
     h('section', { class: 'stack' }, sectionTitle('Notificaciones'), pushSettings()),
     aboutSection(),
     h('section', { class: 'stack' }, sectionTitle('Cuenta'),
-      h('p', { style: { margin: 0 } }, `Entraste como asistente${state.email ? ` (${state.email})` : ''} de ${group()?.name || 'tu equipo'}. Ves la lista del equipo, pasas lista y capturas partidos; no ves datos privados de los jugadores.`),
+      h('p', { style: { margin: 0 } }, `Tu función: ${funcName(roleOf(myStaff()))}. `, `Entraste como asistente${state.email ? ` (${state.email})` : ''} de ${group()?.name || 'tu equipo'}. Lo que puedes hacer lo elige tu entrenador; nunca ves datos privados de los jugadores.`),
       h('div', { class: 'cluster' }, h('button', { class: 'btn', type: 'button', onclick: () => signOut() }, ic('log-out', 18), 'Cerrar sesión'),
         h('a', { class: 'btn ghost', href: '#/ayuda' }, ic('circle-help', 18), 'Ayuda')))) };
 }

@@ -8,6 +8,7 @@ const LINKS = [['', 'Sin enlace'], ['#/inicio', 'Inicio'], ['#/entrenos', 'Entre
 const appLink = (hash = '') => `${location.origin}${location.pathname}${hash}`;
 export const waLink = (title, body, hash) => `https://wa.me/?text=${encodeURIComponent(`*${title}*${body ? `\n${body}` : ''}\n\nRemate: ${appLink(hash)}\n(Si tienes Remate en tu pantalla de inicio, mejor ábrelo desde el ícono.)`)}`;
 
+import { can } from './ayudantes.js';   // v3.41: el ayudante con permiso también manda avisos
 export function noticeSheet(prefill = {}) {
   const title = h('input', { type: 'text', maxlength: 80, value: prefill.title || '', placeholder: 'Por ejemplo: Mañana entrenamos a las 5' });
   const body = h('textarea', { rows: 3, maxlength: 500, placeholder: 'Detalles (opcional)' }, prefill.body || '');
@@ -100,7 +101,7 @@ export default function avisos(ctx) {
   const list = state.data.notices.slice().sort((a, b) => b.created_at.localeCompare(a.created_at));
   if (!coach) list.slice(0, 10).forEach((n) => markSeen(n.id));
   const el = h('div', { class: 'page' },
-    coach ? h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', onclick: () => noticeSheet() }, ic('megaphone', 18), 'Nuevo aviso')) : null,
+    coach || (ctx.role === 'assistant' && can('avisos')) ? h('div', { class: 'cluster' }, h('button', { class: 'btn primary', type: 'button', onclick: () => noticeSheet() }, ic('megaphone', 18), 'Nuevo aviso')) : null,
     coach && !teamReady() ? note('Para guardar avisos en la app, corre en Supabase el instalar.sql de esta versión.', 'bad') : null,
     list.length ? h('div', { class: 'rows' }, list.map((n) => h('div', { class: 'row' },
       h('span', { class: 'row-main' }, h('strong', {}, n.title), n.body ? h('span', {}, n.body) : null, h('span', { class: 'row-sub' }, fmtDate(n.created_at.slice(0, 10), { weekday: 'short', day: 'numeric', month: 'short' }))),

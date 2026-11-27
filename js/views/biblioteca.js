@@ -52,6 +52,8 @@ export function playersRange(ex) {
   const lo = Number(m[1]), hi = m[2] ? Number(m[2]) : lo;
   return /por (círculo|grupo|cancha|pareja|trío)/i.test(s) ? [lo, Infinity] : [lo, hi];
 }
+// v3.41: para las sugerencias automáticas: que el grupo tenga al menos el mínimo de jugadores del ejercicio.
+export const enoughPlayers = (ex, n) => { if (!n) return true; const r = playersRange(ex); return !r || n >= r[0]; };
 export const fitsPlayers = (ex, n) => { if (!n) return true; const r = playersRange(ex); return !r || (n >= r[0] && n <= r[1]); };
 
 // ---------- Diagrama paso a paso ----------

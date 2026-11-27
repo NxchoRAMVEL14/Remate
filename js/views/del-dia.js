@@ -3,8 +3,9 @@
 // el tema del día rota en un ciclo de 7 y los ejercicios salen de la biblioteca para el nivel elegido.
 // «Usar en mi próximo entreno» lo pone en el siguiente entrenamiento; si va en dos grupos (v3.28), A recibe el de su nivel
 // y B el de su nivel, bloque por bloque (en «alt»). Sin SQL.
+import { enoughPlayers } from './biblioteca.js';   // v3.41
 import { h, ic, toast, openSheet, confirmSheet, todayStr, addDays, fmtDate, append, parseDate, plural } from '../util.js';
-import { state, add, patch, settings, group, teamPlayers } from '../store.js';
+import { state, add, patch, settings, group, teamPlayers, players } from '../store.js';
 import { SKILL_BY_ID } from '../content/skills.js';
 import { getExercise, BUILTIN } from '../content/exercises.js';
 import { warmupFor } from '../content/templates.js';
@@ -42,7 +43,7 @@ export function themeFor(date) {
 // (para no estirar 25 min un ejercicio de 8), y que el fundamento sea el principal. variant rota entre los 3 mejores.
 const fitLv = (e, lv) => (e.levels[0] <= lv && lv <= e.levels[1] ? 0 : Math.min(Math.abs(e.levels[0] - lv), Math.abs(e.levels[1] - lv)));
 function pickFor(skill, level, used, variant, mins) {
-  const ok = BUILTIN.filter((e) => !e.cero && e.skills.includes(skill) && (e.kind === 'tecnica' || e.kind === 'juego') && !used.has(e.id) && fitLv(e, level) <= 1);
+  const ok = BUILTIN.filter((e) => !e.cero && enoughPlayers(e, players().length) && e.skills.includes(skill) && (e.kind === 'tecnica' || e.kind === 'juego') && !used.has(e.id) && fitLv(e, level) <= 1);
   const score = (e) => fitLv(e, level) * 3 + Math.abs(e.min - mins) / 6 + (e.skills[0] !== skill ? 1.2 : 0) + (e.kind === 'juego' ? 0.6 : 0);
   const top = ok.sort((a, b) => score(a) - score(b)).slice(0, 3);
   return top.length ? top[variant % top.length] : pick(skill, level, used, variant);

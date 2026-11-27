@@ -1,5 +1,6 @@
 // Entreno sugerido después de un partido (v3.8): un borrador de entrenamiento con ejercicios para lo que más falló.
 // Son reglas simples sobre la estadística capturada (propuesta de Remate, no un estudio): tú lo revisas y lo ajustas.
+import { enoughPlayers } from './biblioteca.js';   // v3.41
 import { h, ic, toast, openSheet, confirmSheet, todayStr, addDays, parseDate, fmtDate } from '../util.js';
 import { state, add, patch, players, settings, inTeam, teamOf, group, teamName } from '../store.js';
 import { metrics, addCounts, countsFor, playersIn, replay, phaseStats, byRotation, rotLabel, rivalStats, fmtEff, rotate } from '../match-calc.js';
@@ -19,14 +20,14 @@ const span = (e) => e.levels[1] - e.levels[0];
 
 // El ejercicio de técnica (o juego) que mejor le queda al equipo para una habilidad.
 function pickFor(skill, level, used) {
-  const ok = BUILTIN.filter((e) => !e.cero && e.skills.includes(skill) && !used.has(e.id) && (e.kind === 'tecnica' || e.kind === 'juego'));
+  const ok = BUILTIN.filter((e) => !e.cero && enoughPlayers(e, players().length) && e.skills.includes(skill) && !used.has(e.id) && (e.kind === 'tecnica' || e.kind === 'juego'));
   // Primero el que trabaja esa habilidad como principal, luego técnica antes que juego, luego el más ajustado al nivel.
   return ok.sort((a, b) => fit(a, level) - fit(b, level) || (a.skills[0] !== skill) - (b.skills[0] !== skill)
     || (a.kind !== 'tecnica') - (b.kind !== 'tecnica') || span(a) - span(b))[0] || null;
 }
 // El juego final: el que más toca lo que falló.
 function pickGame(level, want, used) {
-  const ok = BUILTIN.filter((e) => !e.cero && e.kind === 'juego' && e.skills.includes('juego') && !used.has(e.id));
+  const ok = BUILTIN.filter((e) => !e.cero && enoughPlayers(e, players().length) && e.kind === 'juego' && e.skills.includes('juego') && !used.has(e.id));
   const hits = (e) => e.skills.filter((s) => want.includes(s)).length;
   return ok.sort((a, b) => fit(a, level) - fit(b, level) || hits(b) - hits(a) || span(a) - span(b))[0] || null;
 }

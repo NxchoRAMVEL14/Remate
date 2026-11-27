@@ -34,7 +34,7 @@ export const KEYS = Object.keys(TABLES);
 const FETCH = {
   coach: KEYS,
   player: ['groups', 'players', 'sessions', 'attendance', 'ratings', 'exams', 'claims', 'customEx', 'matches', 'matchStats', 'homeLogs', 'rsvps', 'playerTests', 'notices', 'tournaments', 'tRsvps', 'calFeeds', 'gymLogs', 'sessionRpe', 'techVideos', 'fitProfiles', 'fitLogs', 'injuries', 'surveys'],
-  assistant: ['staff', 'groups', 'sessions', 'attendance', 'matches', 'matchLogs', 'matchStats', 'rsvps', 'notices', 'tournaments', 'tRsvps', 'calFeeds', 'checkins'],
+  assistant: ['staff', 'groups', 'sessions', 'attendance', 'customEx', 'matches', 'matchLogs', 'matchStats', 'rsvps', 'notices', 'tournaments', 'tRsvps', 'calFeeds', 'checkins'],
 };
 // Lo que solo ve el entrenador (el jugador ni lo pide) y lo que llegó con la fase 2 (puede faltar si aún no corren el SQL nuevo).
 const COACH_ONLY = new Set(['notes', 'matchLogs', 'coachProfile', 'jumpTests', 'jumpSessions', 'coachLogs', 'coachAssess', 'decisions', 'ideas', 'checkins']);
@@ -137,7 +137,7 @@ const NO_CREATED_AT = new Set(['claims', 'coachProfile']);   // esas tablas no t
 
 // ---------- operaciones ----------
 const find = (key, id) => state.data[key].find((r) => r.id === id);
-function ownerId() { return state.role === 'player' ? (state.me?.owner_id || state.user?.id) : state.user?.id; }
+function ownerId() { return state.role === 'player' ? (state.me?.owner_id || state.user?.id) : state.role === 'assistant' ? (group()?.owner_id || state.user?.id) : state.user?.id; }   // v3.41: lo que crea el ayudante es del entrenador
 
 export function add(key, row) {
   const full = { id: uid(), owner_id: ownerId(), ...DEFAULTS[key](), ...row };

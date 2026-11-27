@@ -29,12 +29,12 @@ const fmt = (s) => { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)
 
 // v3.33: { group: 'A' | 'B' } abre la vista de un grupo (para el ayudante); arriba se cambia «Todos | A | B».
 // El entrenador marca «¿Cómo salió?» en cada bloque (se guarda en el plan; el ayudante solo ve).
-export function openCourtMode(session, { group = null } = {}) {
+export function openCourtMode(session, { group = null, rate = false } = {}) {
   const split = !!splitOf(session);   // v3.28: dos grupos
   let view = split && (group === 'A' || group === 'B') ? group : null;
   const plan = (session.plan || []).map((b, i) => ({ b, i })).filter((x) => Number(x.b.min) > 0);
   if (!plan.length) { toast('Este entrenamiento no tiene plan'); return; }
-  const canRate = state.role === 'coach' && !state.viewAs;
+  const canRate = (state.role === 'coach' && !state.viewAs) || (rate && state.role === 'assistant');   // v3.41: el ayudante que da el entreno también califica
   const build = () => plan.map(({ b, i }) => {
     const base = b.ex ? getExercise(b.ex, state.data.customEx) : null, vs = split ? versionsOf(b) : null;
     const ex = view && vs?.[view]?.ex ? vs[view].ex : base;
